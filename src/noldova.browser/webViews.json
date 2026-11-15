@@ -1,0 +1,74 @@
+{
+  "methods": [
+    { "name": "Page.enable" },
+    { "name": "Page.getFrameTree" },
+    { "name": "Page.getNavigationHistory" },
+    { "name": "Page.getLayoutMetrics" },
+    { "name": "Page.createIsolatedWorld", "parameters": {
+      "frameId": { "required": true, "maxLength": 64 },
+      "worldName": { "required": true, "values": ["noldova-browser-changes"] },
+      "grantUniveralAccess": { "required": true, "values": [false] }
+    } },
+    { "name": "Page.captureScreenshot", "parameters": {
+      "format": { "required": true, "values": ["png", "jpeg"] },
+      "quality": { "minimum": 20, "maximum": 80 },
+      "clip": { "required": true, "fields": { "x": {}, "y": {}, "width": { "required": true, "maximum": 4096 }, "height": { "required": true, "maximum": 4096 }, "scale": { "required": true, "maximum": 1 } } },
+      "captureBeyondViewport": { "values": [true, false] }
+    } },
+    { "name": "Runtime.enable" },
+    { "name": "Runtime.disable" },
+    { "name": "Runtime.discardConsoleEntries" },
+    { "name": "Runtime.addBinding", "parameters": {
+      "name": { "required": true, "values": ["noldovaBrowserChanged"] },
+      "executionContextName": { "required": true, "values": ["noldova-browser-changes"] }
+    } },
+    { "name": "Runtime.callFunctionOn", "parameters": {
+      "functionDeclaration": { "required": true, "values": ["function (isOn) {\n  const key = \"noldovaBrowserChanges\";\n  const report = globalThis.noldovaBrowserChanged;\n  if (typeof isOn !== \"boolean\" || typeof report !== \"function\")\n    return false;\n  let state = globalThis[key];\n  if (state === undefined) {\n    state = { isPending: false, stop: null };\n    globalThis[key] = state;\n  }\n  if (!isOn && state.stop !== null) {\n    state.stop();\n    state.stop = null;\n  }\n  if (!isOn || state.stop !== null)\n    return true;\n  const changed = () => {\n    if (state.isPending)\n      return;\n    state.isPending = true;\n    requestAnimationFrame(() => {\n      state.isPending = false;\n      if (state.stop !== null)\n        report(\"\");\n    });\n  };\n  const options = { capture: true, passive: true };\n  const targets = [[document, [\"scroll\", \"load\", \"transitionend\", \"animationend\"]], [window, [\"resize\"]], [visualViewport, [\"resize\", \"scroll\"]],\n    [document.fonts, [\"loadingdone\"]]];\n  for (const [target, names] of targets)\n    for (const name of names)\n      target.addEventListener(name, changed, options);\n  const observer = new MutationObserver(changed);\n  observer.observe(document, { childList: true, subtree: true, attributes: true, characterData: true });\n  state.stop = () => {\n    observer.disconnect();\n    for (const [target, names] of targets)\n      for (const name of names)\n        target.removeEventListener(name, changed, options);\n  };\n  return true;\n}"] },
+      "uniqueContextId": { "required": true, "maxLength": 64 },
+      "arguments": {},
+      "returnByValue": { "required": true, "values": [true] },
+      "silent": { "required": true, "values": [true] }
+    } },
+    { "name": "Log.enable" },
+    { "name": "Accessibility.getFullAXTree", "parameters": { "depth": { "minimum": 1, "maximum": 1 } } },
+    { "name": "Accessibility.getPartialAXTree", "parameters": { "backendNodeId": { "required": true, "minimum": 1 }, "fetchRelatives": { "required": true, "values": [false] } } },
+    { "name": "DOM.getDocument", "parameters": { "depth": { "required": true, "values": [-1] }, "pierce": { "required": true, "values": [true] } } },
+    { "name": "DOM.describeNode", "parameters": { "backendNodeId": { "required": true, "minimum": 1 }, "depth": { "values": [-1] }, "pierce": { "values": [true] } } },
+    { "name": "DOM.scrollIntoViewIfNeeded", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
+    { "name": "DOM.getContentQuads", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
+    { "name": "DOM.getNodeForLocation", "parameters": { "x": { "required": true }, "y": { "required": true }, "includeUserAgentShadowDOM": { "values": [false] } } },
+    { "name": "DOM.focus", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
+    { "name": "Emulation.setDeviceMetricsOverride", "parameters": {
+      "width": { "required": true, "values": [1280] },
+      "height": { "required": true, "values": [800] },
+      "deviceScaleFactor": { "required": true, "values": [0] },
+      "mobile": { "required": true, "values": [false] }
+    } },
+    { "name": "Emulation.clearDeviceMetricsOverride" },
+    { "name": "Input.dispatchMouseEvent", "parameters": {
+      "type": { "required": true, "values": ["mouseMoved", "mousePressed", "mouseReleased"] },
+      "x": { "required": true },
+      "y": { "required": true },
+      "button": { "values": ["left", "middle", "right"] },
+      "clickCount": { "minimum": 1, "maximum": 3 }
+    } },
+    { "name": "Input.dispatchKeyEvent", "parameters": {
+      "type": { "required": true, "values": ["keyDown", "rawKeyDown", "keyUp"] },
+      "key": { "required": true, "maxLength": 32 },
+      "code": { "maxLength": 32 },
+      "windowsVirtualKeyCode": { "minimum": 0, "maximum": 255 },
+      "modifiers": { "minimum": 0, "maximum": 15 },
+      "text": { "maxLength": 2 },
+      "unmodifiedText": { "maxLength": 2 }
+    } },
+    { "name": "Input.insertText", "parameters": { "text": { "required": true, "maxLength": 10000 } } }
+  ],
+  "events": ["Page.loadEventFired", "Page.frameNavigated", "Runtime.consoleAPICalled", "Runtime.exceptionThrown", "Runtime.executionContextCreated",
+    "Runtime.executionContextDestroyed", "Runtime.executionContextsCleared", "Runtime.bindingCalled", "Log.entryAdded"],
+  "newWindows": true,
+  "keys": [
+    { "name": "reload", "keys": ["Mod+R", "F5"], "macKeys": ["Mod+R"] },
+    { "name": "newPage", "keys": ["Mod+T"] },
+    { "name": "focusAddress", "keys": ["Mod+L"] }
+  ]
+}

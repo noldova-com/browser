@@ -1,0 +1,20 @@
+{
+  "id": "browser",
+  "version": "0.0.1",
+  "displayName": "Browser",
+  "description": "Shows web pages as documents in the app's window and lets the app's agents drive them.",
+  "parts": ["runtime", "window"],
+  "dependencies": {},
+  "noldovaDesktop": ">=0.0.1 <0.1.0",
+  "contributes": {
+    "commands": ["browser.openPage"],
+    "documents": ["browser.page"],
+    "events": ["browser.pageActivity"],
+    "statusBarItems": ["browser.agentPages"],
+    "settings": ["browser.linkClick", "browser.linkMiddleClick", "browser.systemSites", "browser.agentTools", "browser.localSites"],
+    "methods": ["browser.allowTypedAddress", "browser.passTypedRedirect", "browser.endTypedRedirects", "browser.readyPage", "browser.rememberPage", "browser.readPage", "browser.forgetPage", "browser.clearBrowsingData", "browser.readAppName", "browser.stopPage", "browser.readActivities", "browser.claimPage", "browser.holdPages", "browser.letGoPage"],
+    "tools": [
+      "browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_press_key", "browser_screenshot", "browser_console", "browser_wait_for"
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-state-inset: 2rem;
+  --nol-browser-state-glyph-size: 2.5rem;
+  --nol-browser-state-text-width: 28rem;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-content: center;
+  justify-items: center;
+  gap: var(--nol-space-2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: var(--nol-browser-state-inset) clamp(var(--nol-space-3), 5%, var(--nol-browser-state-inset));
+  background: var(--nol-panel);
+  text-align: center;
+}
+
+.nol-browser-page-state-glyph {
+  width: var(--nol-browser-state-glyph-size);
+  height: var(--nol-browser-state-glyph-size);
+  color: var(--nol-text-muted);
+  font-size: var(--nol-browser-state-glyph-size);
+}
+
+.nol-browser-page-state-heading {
+  margin: 0;
+  color: var(--nol-text-strong);
+  font-size: var(--nol-text-title);
+  font-weight: var(--nol-weight-emphasis);
+  overflow-wrap: anywhere;
+}
+
+.nol-browser-page-state-detail {
+  max-width: var(--nol-browser-state-text-width);
+  margin: 0;
+  color: var(--nol-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.nol-browser-page-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--nol-space-2);
+  max-width: 100%;
+  margin-block-start: var(--nol-space-1);
+}

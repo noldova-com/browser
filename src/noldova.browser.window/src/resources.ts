@@ -1,0 +1,429 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import { PageAction, type PageActivity, PageActivityState, TypedAddressRefusal } from "@noldova/browser.protocol";
+
+import { AddressRefusal } from "./app/enums/address-refusal.ts";
+import { PageStateAction } from "./app/enums/page-state-action.ts";
+import { PaneState } from "./app/enums/pane-state.ts";
+import { RefusedRequest } from "./app/enums/refused-request.ts";
+import { ZoomStep } from "./app/enums/zoom-step.ts";
+import { PageStateText } from "./app/models/page-state-text.ts";
+import type { PaneStatus } from "./app/models/pane-status.ts";
+import type { RefusedPage } from "./app/models/refused-page.ts";
+
+export class Resources {
+  public static readonly moduleId: string = "browser";
+  public static readonly pageDocument: string = "browser.page";
+  public static readonly openPageCommand: string = "browser.openPage";
+  public static readonly agentPagesItem: string = "browser.agentPages";
+  public static readonly agentPagesSeparator: string = ", ";
+  public static readonly pagesInactive: string = "A page document shows only while Browser's window part is active.";
+  public static readonly openPageTitle: string = "Open a page";
+  public static readonly linkClickSetting: string = "browser.linkClick";
+  public static readonly linkMiddleClickSetting: string = "browser.linkMiddleClick";
+  public static readonly systemSitesSetting: string = "browser.systemSites";
+  public static readonly localSitesSetting: string = "browser.localSites";
+  public static readonly linkProfile: string = "links";
+  public static readonly openPageArguments: string = "browser.openPage needs { profileKey, url?, instance? }: a profile key of lowercase letters, digits and hyphens, the address as text, and the instance as a lowercase UUID.";
+  public static readonly profileKeyPattern: RegExp = /^[a-z0-9][a-z0-9-]{0,63}$/u;
+  public static readonly instancePattern: RegExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+  public static readonly typedAddressAnswer: string = "The runtime part's answer to a typed address isn't one.";
+  public static readonly pageRecordAnswer: string = "The runtime part's page record isn't one.";
+  public static readonly pageClaimAnswer: string = "The runtime part's answer to a page's claim isn't one.";
+  public static readonly heldPagesAnswer: string = "The runtime part's answer to the window's open pages isn't one.";
+  public static readonly appNameAnswer: string = "The runtime part's app name isn't one.";
+  public static readonly pageActivitiesAnswer: string = "The runtime part's answer to the pages' activities isn't one.";
+  public static readonly pageActivityEvent: string = "The runtime part's activity event isn't one.";
+  public static readonly answerRootPath: string = "$";
+  public static readonly paneUnavailable: string = "The pane has no embedded view, or the host closed it.";
+  public static readonly recentInputMilliseconds: number = 5_000;
+  public static readonly redirectLimit: number = 10;
+  public static readonly readyPageLimitMilliseconds: number = 5_000;
+  public static readonly notReadyInTime: string =
+    `A page's view didn't get its workspace's origins within ${Resources.readyPageLimitMilliseconds / 1_000} s, so it goes to its first address anyway.`;
+  public static readonly toolbarLabel: string = "Page";
+  public static readonly back: string = "Back";
+  public static readonly backGlyph: string = "arrow_back";
+  public static readonly forward: string = "Forward";
+  public static readonly forwardGlyph: string = "arrow_forward";
+  public static readonly reload: string = "Reload";
+  public static readonly reloadGlyph: string = "refresh";
+  public static readonly stop: string = "Stop";
+  public static readonly stopGlyph: string = "close";
+  public static readonly address: string = "Address";
+  public static readonly notSecure: string = "Not secure";
+  public static readonly insecureScheme: string = "http:";
+  public static readonly secureScheme: string = "https:";
+  public static readonly more: string = "More";
+  public static readonly moreGlyph: string = "more_horiz";
+  public static readonly idListSeparator: string = " ";
+  public static readonly backwardSelection: "backward" = "backward";
+  public static readonly agentGlyph: string = "smart_toy";
+  public static readonly agentActing: string = "is using this page";
+  public static readonly agentAsking: string = "is waiting for your answer";
+  public static readonly unnamedAgent: string = "A teammate";
+  public static readonly takeOver: string = "Take over";
+  public static readonly stopAgent: string = "Stop";
+  public static readonly markAsking: string = "waiting for your answer";
+  public static readonly markActions: Readonly<Record<PageAction, string>> = {
+    [PageAction.Navigating]: "navigating", [PageAction.Reading]: "reading", [PageAction.Clicking]: "clicking", [PageAction.Typing]: "typing",
+    [PageAction.PressingKey]: "pressing a key", [PageAction.Waiting]: "waiting"
+  };
+  public static readonly secureGlyph: string = "lock";
+  public static readonly insecureGlyph: string = "no_encryption";
+  public static readonly copyGlyph: string = "content_copy";
+  public static readonly editGlyph: string = "edit";
+  public static readonly narrowToolbarWidth: number = 16;
+  public static readonly minimumFieldWidth: number = 2.5;
+  public static readonly securityGap: number = 0.25;
+  public static readonly externalGlyph: string = "open_in_new";
+  public static readonly clearGlyph: string = "delete_sweep";
+  public static readonly clearBrowsingData: string = "Clear browsing data…";
+  public static readonly clearDataTitle: string = "Clear browsing data?";
+  public static readonly clearDataDetail: string = "Sites opened in this workspace forget it: their cookies, sign-ins and stored data are removed, and you sign in to them again.";
+  public static readonly clearData: string = "Clear";
+  public static readonly cancel: string = "Cancel";
+  public static readonly clearDataInitialFocus: string = ".nol-browser-clear-data-cancel";
+  public static readonly copyAddress: string = "Copy address";
+  public static readonly editAddress: string = "Edit address";
+  public static readonly addressCopied: string = "Address copied.";
+  public static readonly addressNotCopied: string = "The address wasn't copied.";
+  public static readonly openExternal: string = "Open in external browser";
+  public static readonly zoom: string = "Zoom";
+  public static readonly zoomGlyph: string = "zoom_in";
+  public static readonly zoomIn: string = "Zoom in";
+  public static readonly zoomInGlyph: string = "add";
+  public static readonly zoomOut: string = "Zoom out";
+  public static readonly zoomOutGlyph: string = "remove";
+  public static readonly resetZoom: string = "Reset to 100%";
+  public static readonly resetZoomGlyph: string = "fit_screen";
+  public static readonly zoomKeys: Readonly<Record<ZoomStep, { readonly other: string; readonly mac: string }>> = {
+    [ZoomStep.In]: { other: "Ctrl+=", mac: "⌘=" }, [ZoomStep.Out]: { other: "Ctrl+-", mac: "⌘-" }, [ZoomStep.Reset]: { other: "Ctrl+0", mac: "⌘0" }
+  };
+  public static readonly leastZoom: number = 0.25;
+  public static readonly greatestZoom: number = 5;
+  public static readonly zoomGroup: string = "-zoom";
+  public static readonly loading: string = "Loading the page";
+  public static readonly loadStarted: string = "Loading the page.";
+  public static readonly loadStopped: string = "Stopped loading the page.";
+  public static readonly loadGroup: string = "-load";
+  public static readonly securityId: string = "nol-browser-toolbar-security-";
+  public static readonly newTab: string = "New tab";
+  public static readonly reloadKey: string = "reload";
+  public static readonly newPageKey: string = "newPage";
+  public static readonly focusAddressKey: string = "focusAddress";
+  public static readonly reloadChord: string = "Mod+R";
+  public static readonly reloadFunctionKey: string = "F5";
+  public static readonly newPageChord: string = "Mod+T";
+  public static readonly focusAddressChord: string = "Mod+L";
+  public static readonly enterKey: string = "Enter";
+  public static readonly escapeKey: string = "Escape";
+  public static readonly macPlatformPrefix: string = "Mac";
+  public static readonly windowsPlatformPrefix: string = "Win";
+  public static readonly macPlatform: string = "darwin";
+  public static readonly windowsPlatform: string = "win32";
+  public static readonly linuxPlatform: string = "linux";
+  public static readonly pageId: string = "nol-browser-page-";
+  public static readonly elsewherePage: PageStateText = new PageStateText("tab", "This page moved to another window",
+    "A page shows in one window at a time. Open it again from where you found it to show it here, or close this tab.");
+  public static readonly forgottenPage: PageStateText = new PageStateText("history", "This page can't open again",
+    "Browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it.");
+  public static readonly pageStateActions: Readonly<Record<PageStateAction, string>> = {
+    [PageStateAction.TryAgain]: "Try again", [PageStateAction.CopyAddress]: "Copy address", [PageStateAction.Back]: "Back", [PageStateAction.Reload]: "Reload",
+    [PageStateAction.Close]: "Close", [PageStateAction.AllowSite]: "Allow this site for the workspace", [PageStateAction.NotNow]: "Not now"
+  };
+  public static readonly refusedRequestNames: Readonly<Record<RefusedRequest, string>> = {
+    [RefusedRequest.Download]: "download",
+    [RefusedRequest.NewWindow]: "newWindow",
+    [RefusedRequest.Permission]: "permission",
+    [RefusedRequest.FileChooser]: "fileChooser",
+    [RefusedRequest.Authentication]: "authentication",
+    [RefusedRequest.Certificate]: "certificate",
+    [RefusedRequest.NestedView]: "nestedView"
+  };
+  public static readonly refusedRequestGlyphs: Readonly<Record<RefusedRequest, string>> = {
+    [RefusedRequest.Download]: "download",
+    [RefusedRequest.NewWindow]: "tab",
+    [RefusedRequest.Permission]: "location_off",
+    [RefusedRequest.FileChooser]: "upload_file",
+    [RefusedRequest.Authentication]: "key_off",
+    [RefusedRequest.Certificate]: "gpp_bad",
+    [RefusedRequest.NestedView]: "web_asset_off"
+  };
+  public static readonly refusedAddressGlyph: string = "error";
+  public static readonly popupGlyph: string = "tab";
+  public static readonly openAsTab: string = "Open as a tab";
+  public static readonly openerGlyph: string = "subdirectory_arrow_right";
+  public static readonly pageErrorGlyph: string = "error";
+  public static readonly pageBlockedGlyph: string = "block";
+  public static readonly thisBrowser: string = "this browser";
+  public static readonly refusedAddresses: Readonly<Record<AddressRefusal, string>> = {
+    [AddressRefusal.NotAnAddress]: "Type a web address, such as example.com.",
+    [AddressRefusal.NotWeb]: "Browser opens only addresses that start with http: or https:.",
+    [AddressRefusal.TooLong]: "This address is too long to open.",
+    [AddressRefusal.Credentials]: "Browser doesn't open addresses with a user name or password.",
+    [AddressRefusal.Local]: "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
+    [AddressRefusal.NeverAllowed]: "Browser never opens this address.",
+    [AddressRefusal.Failed]: "Browser couldn't allow this address's site in the workspace. Try again."
+  };
+  public static readonly noticeId: string = "-notice";
+  public static readonly pageStateSelector: string = "nol-browser-page-state";
+  public static readonly agentBarSelector: string = "nol-browser-agent-bar";
+  public static readonly schemePattern: RegExp = /^[a-z][a-z\d+.-]*$/iu;
+  public static readonly portPattern: RegExp = /^\d/u;
+  public static readonly spacePattern: RegExp = /\s/u;
+  public static readonly webSchemeNames: readonly string[] = ["http", "https"];
+  public static readonly schemeEnd: string = ":";
+  public static readonly defaultScheme: string = "https://";
+  public static readonly localScheme: string = "http://";
+  public static readonly localName: string = "localhost";
+  public static readonly hostLabelSeparator: string = ".";
+  public static readonly ipv6Opening: string = "[";
+  public static readonly siteSeparator: string = ",";
+  public static readonly wildcardPattern: RegExp = /^([^:/?#]+:\/\/)?\*\./u;
+  public static readonly wildcardReplacement: string = "$1";
+  public static readonly trailingDotPattern: RegExp = /\.$/u;
+  public static readonly schemeSeparator: string = "://";
+  public static readonly hostTextPattern: RegExp = /^[^\s/\\:@?#[\]%*]+$/u;
+  public static readonly emptyLabel: string = "..";
+  private static readonly loadFailures: ReadonlyMap<string, string> = new Map<string, string>([
+    ["ERR_NAME_NOT_RESOLVED", "The server couldn't be found (DNS)."],
+    ["ERR_CONNECTION_REFUSED", "The server refused the connection."],
+    ["ERR_CONNECTION_TIMED_OUT", "The server took too long to answer."],
+    ["ERR_TIMED_OUT", "The server took too long to answer."],
+    ["ERR_INTERNET_DISCONNECTED", "This computer isn't connected to the internet."],
+    ["ERR_ADDRESS_UNREACHABLE", "The server's address can't be reached from this network."]
+  ]);
+  private static readonly refusedRequests: Readonly<Record<RefusedRequest, (browser: string) => string>> = {
+    [RefusedRequest.Download]: t => `Downloads aren't available in ${t} yet.`,
+    [RefusedRequest.NewWindow]: t => `${t} didn't open the new window this page asked for.`,
+    [RefusedRequest.Permission]: t => `Site permissions, such as the camera or your location, aren't available in ${t} yet.`,
+    [RefusedRequest.FileChooser]: t => `Opening files from this computer isn't available in ${t} yet.`,
+    [RefusedRequest.Authentication]: t => `Sign-in dialogs aren't available in ${t} yet.`,
+    [RefusedRequest.Certificate]: t => `This page's certificate wasn't accepted, so ${t} didn't open it.`,
+    [RefusedRequest.NestedView]: t => `Pages shown inside other pages aren't available in ${t} yet.`
+  };
+
+  public static formatPageStateText(status: PaneStatus): PageStateText {
+    switch (status.state) {
+      case PaneState.Empty:
+        return new PageStateText("travel_explore", "Type an address to open a page", null);
+      case PaneState.Failed: {
+        const reason: string = `${status.failureReason}`;
+        const why: string = Resources.loadFailures.get(reason) ?? `The page didn't load (${reason}).`;
+        return new PageStateText("cloud_off", `Can't reach ${Resources.hostOf(status.url)}`, `The address may be mistyped, or the site is down. ${why}`);
+      }
+      case PaneState.Refused:
+        return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
+          ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
+          : new PageStateText("block", `Browser doesn't open ${status.refusedOrigin}`, "Its address isn't one Browser opens.");
+      case PaneState.Crashed:
+        return new PageStateText("sentiment_dissatisfied", "This page stopped working", "Its content process ended. Reload to open it again; anything typed into it is lost.");
+      default:
+        return new PageStateText("web_asset_off", "Browser can't show pages here", null);
+    }
+  }
+
+  public static hostOf(url: string): string {
+    return URL.canParse(url) && new URL(url).host !== "" ? new URL(url).host : url;
+  }
+
+  public static formatAgentName(agentName: string): string {
+    return agentName.trim() === "" ? Resources.unnamedAgent : agentName;
+  }
+
+  public static formatAgentMessage(name: string, phrase: string): string {
+    return `${name} ${phrase}`;
+  }
+
+  public static formatUsingPage(agentName: string): string {
+    return Resources.formatAgentMessage(Resources.formatAgentName(agentName), Resources.agentActing);
+  }
+
+  public static formatAgentPages(name: string, count: number): string {
+    return `${name} · ${count} ${count === 1 ? "page" : "pages"} open`;
+  }
+
+  public static formatRefusalText(refused: RefusedPage): PageStateText {
+    return new PageStateText("block", `${Resources.formatAgentName(refused.agentName)} can't open ${Resources.hostOf(refused.url)}`,
+      `This address isn't among the sites this workspace allows. ${Resources.formatAgentName(refused.agentName)} asked to open it; you can allow it, or type it yourself to open it.`);
+  }
+
+  public static formatMarkGlyph(action: PageAction): string {
+    return action === PageAction.Typing ? "keyboard" : "ads_click";
+  }
+
+  public static formatMarkTag(activity: PageActivity): string {
+    return `${Resources.formatAgentName(activity.agentName)} · ${activity.state === PageActivityState.Asking ? Resources.markAsking : Resources.markActions[activity.action]}`;
+  }
+
+  public static formatRingStart(pixels: number): string {
+    return `max(0px, calc(${pixels}px - var(--nol-browser-mark-ring-offset)))`;
+  }
+
+  public static formatRingLength(start: number, length: number): string {
+    return `calc(${length}px + 2 * var(--nol-browser-mark-ring-offset) - max(0px, var(--nol-browser-mark-ring-offset) - ${start}px))`;
+  }
+
+  public static formatTagStart(pixels: number): string {
+    return `max(0px, calc(${pixels}px - var(--nol-browser-mark-tag-offset)))`;
+  }
+
+  public static formatTagTop(pixels: number): string {
+    return `calc(${pixels}px + var(--nol-browser-mark-tag-gap))`;
+  }
+
+  public static formatPointerStart(pixels: number): string {
+    return `calc(${pixels}px - var(--nol-browser-pointer-offset))`;
+  }
+
+  public static formatTabTitle(url: string): string {
+    return url === "" ? Resources.newTab : url;
+  }
+
+  public static formatZoom(factor: number): string {
+    return `${String(Math.round(factor * 100))}%`;
+  }
+
+  public static formatZoomed(factor: number): string {
+    return `Zoom ${Resources.formatZoom(factor)}.`;
+  }
+
+  public static formatLinkRefused(reason: TypedAddressRefusal): string {
+    return `The runtime part refused the link's address (${reason}), so it opens in the system's browser.`;
+  }
+
+  public static formatPageInAnotherWindow(instance: string): string {
+    return `The page ${instance} is open in another window.`;
+  }
+
+  public static formatPageOnOtherWorkspace(instance: string): string {
+    return `The page ${instance} is open on another workspace.`;
+  }
+
+  public static formatPopup(host: string): string {
+    return `${host} tried to open a pop-up window and was stopped.`;
+  }
+
+  public static formatHeldWindow(host: string): string {
+    return `${host} opened a new tab a moment ago, so this window waits here.`;
+  }
+
+  public static formatRefusedRequest(request: RefusedRequest, appName: string | null): string {
+    return Resources.refusedRequests[request](appName === null ? Resources.thisBrowser : `${appName}'s browser`);
+  }
+
+  public static formatNoAppName(error: unknown): string {
+    return `The app's name wasn't read, so notices name no app: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNewPageNotOpened(error: unknown): string {
+    return `The new page didn't open: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatOpenedFrom(title: string): string {
+    return `Opened from ${title}`;
+  }
+
+  public static formatNewWindowNotOpened(error: unknown): string {
+    return `A page's new window didn't open as a page: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatViewNotOpened(error: unknown): string {
+    return `A page's view didn't open, so its tab shows no page: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNotReady(error: unknown): string {
+    return `A page's view didn't get its workspace's origins before its first address: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNotOpened(error: unknown): string {
+    return `A page didn't go to its first address: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatAnswerItemPath(index: number): string {
+    return `${Resources.answerRootPath}.${index}`;
+  }
+
+  public static formatActivityNotRead(error: unknown): string {
+    return `A teammate's call on a page wasn't shown: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatActivitiesNotRead(error: unknown): string {
+    return `The teammates' calls on the pages weren't read again after the runtime started, so the pages show only the calls that start now: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNotStopped(error: unknown): string {
+    return `A teammate's call on a page wasn't stopped: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatOpenPagesNotHeld(error: unknown): string {
+    return `The window's open pages weren't held, so another window may open one of them too: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatOpenPagesNotRead(error: unknown): string {
+    return `The window's open pages weren't read, so another window may open one of them too: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatRedirectNotFollowed(error: unknown): string {
+    return `A typed address's redirect to another site wasn't followed: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatRedirectsNotEnded(error: unknown): string {
+    return `A typed address's redirects weren't ended: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNotLetGo(error: unknown): string {
+    return `A page the window claimed wasn't let go, so another window may not open it until this window closes: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatNotKept(error: unknown): string {
+    return `A page's record wasn't kept or forgotten, so the window may not restore it: ${Resources.kindOf(error)}.`;
+  }
+
+  public static formatIgnoredSites(places: readonly number[]): string {
+    return `The sites that always open in the system's browser ignore the entries that aren't hosts, at ${places.join(", ")} in the list.`;
+  }
+
+  public static formatRefusedSites(entries: readonly string[]): string {
+    const named: string = entries.map(t => `"${t}"`).join(", ");
+    return `${named} ${entries.length === 1 ? "isn't a host" : "aren't hosts"}. Enter hosts separated by commas, such as example.com.`;
+  }
+
+  public static formatRefusedLocalSites(entries: readonly string[]): string {
+    const named: string = entries.map(t => `"${t}"`).join(", ");
+    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.`;
+  }
+
+  public static formatSubdomainSuffix(host: string): string {
+    return `.${host}`;
+  }
+
+  public static formatDefaultSchemeAddress(entry: string): string {
+    return `${Resources.defaultScheme}${entry}`;
+  }
+
+  public static formatHostAddress(host: string): string {
+    return `${Resources.defaultScheme}${host}/`;
+  }
+
+  public static formatLocalAddress(typed: string): string {
+    return `${Resources.localScheme}${typed}`;
+  }
+
+  public static formatLoaded(page: string): string {
+    return `${page} loaded.`;
+  }
+
+  private static kindOf(error: unknown): string {
+    if (error instanceof Error)
+      return error.name;
+    return typeof error;
+  }
+}

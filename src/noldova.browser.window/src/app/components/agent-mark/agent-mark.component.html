@@ -1,0 +1,18 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+@if (box(); as box) {
+  <div class="nol-browser-agent-mark-ring" [style.left]="ringStart(box.x)" [style.top]="ringStart(box.y)" [style.width]="ringLength(box.x, box.width)" [style.height]="ringLength(box.y, box.height)"></div>
+  <span class="nol-browser-agent-mark-tag" [style.left]="tagStart(box.x)" [style.top]="tagTop(box.y + box.height)"><span
+    class="nol-browser-agent-mark-glyph material-symbols-rounded">{{ glyph() }}</span><span class="nol-browser-agent-mark-text">{{ tag() }}</span></span>
+}
+@if (point(); as point) {
+  <svg class="nol-browser-agent-mark-pointer" [style.left]="pointerStart(point.x)" [style.top]="pointerStart(point.y)" viewBox="0 0 18 18" focusable="false">
+    <path d="M2 2 L2 15 L5.6 11.7 L8 17 L10.3 16 L8 10.9 L13 10.9 Z" />
+  </svg>
+}

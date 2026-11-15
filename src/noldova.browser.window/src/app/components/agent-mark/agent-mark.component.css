@@ -1,0 +1,93 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-pointer-edge: #1F2328;
+  --nol-browser-mark-ring-width: 0.125rem;
+  --nol-browser-mark-ring-radius: 0.625rem;
+  --nol-browser-mark-tag-height: 1.25rem;
+  --nol-browser-mark-tag-padding: 0.375rem;
+  --nol-browser-mark-glyph-size: 0.875rem;
+  --nol-browser-pointer-size: 1.125rem;
+  --nol-browser-pointer-edge-width: 1.2;
+  --nol-browser-mark-ring-offset: 0.25rem;
+  --nol-browser-mark-tag-offset: 0.125rem;
+  --nol-browser-mark-tag-gap: 0.375rem;
+  --nol-browser-pointer-offset: 0.125rem;
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nol-browser-agent-mark-ring {
+  position: absolute;
+  box-sizing: border-box;
+  border: var(--nol-browser-mark-ring-width) solid var(--nol-button);
+  border-radius: var(--nol-browser-mark-ring-radius);
+}
+
+.nol-browser-agent-mark-tag {
+  position: absolute;
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: var(--nol-space-1);
+  max-width: 100%;
+  height: var(--nol-browser-mark-tag-height);
+  padding: 0 var(--nol-browser-mark-tag-padding);
+  border-radius: var(--nol-radius-small);
+  background: var(--nol-button);
+  color: var(--nol-button-text);
+  font-size: var(--nol-text-label);
+  font-weight: var(--nol-weight-emphasis);
+  white-space: nowrap;
+}
+
+.nol-browser-agent-mark-glyph {
+  flex: none;
+  font-size: var(--nol-browser-mark-glyph-size);
+  line-height: 1;
+}
+
+.nol-browser-agent-mark-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nol-browser-agent-mark-pointer {
+  position: absolute;
+  width: var(--nol-browser-pointer-size);
+  height: var(--nol-browser-pointer-size);
+  fill: var(--nol-button-text);
+  stroke: var(--nol-browser-pointer-edge);
+  stroke-width: var(--nol-browser-pointer-edge-width);
+  stroke-linejoin: round;
+}
+
+@media (forced-colors: active) {
+  :host {
+    --nol-browser-pointer-edge: Canvas;
+  }
+
+  .nol-browser-agent-mark-ring {
+    border-color: Highlight;
+  }
+
+  .nol-browser-agent-mark-tag {
+    border: var(--nol-border-width) solid Highlight;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .nol-browser-agent-mark-pointer {
+    fill: Highlight;
+  }
+}

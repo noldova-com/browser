@@ -1,0 +1,195 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-rem-probe: 1rem;
+  --nol-browser-toolbar-height: 2.5rem;
+  --nol-browser-toolbar-gap: 0.125rem;
+  --nol-browser-toolbar-button-gap: max(var(--nol-browser-toolbar-gap), calc(24.5px - 1.5rem));
+  --nol-browser-progress-height: 2px;
+
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nol-browser-toolbar-unit {
+  position: absolute;
+  width: var(--nol-browser-rem-probe);
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.nol-browser-toolbar-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--nol-browser-toolbar-gap);
+  box-sizing: border-box;
+  height: var(--nol-browser-toolbar-height);
+  padding: 0 var(--nol-field-padding);
+}
+
+.nol-browser-toolbar-buttons {
+  display: flex;
+  flex: none;
+  gap: var(--nol-browser-toolbar-button-gap);
+}
+
+.nol-browser-toolbar-address {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--nol-field-padding);
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--nol-field-height);
+  margin: 0 var(--nol-space-1);
+  padding: 0 var(--nol-space-2);
+  overflow: hidden;
+  border: var(--nol-border-width) solid var(--nol-input-border);
+  border-radius: var(--nol-radius-small);
+  background: var(--nol-input);
+  color: var(--nol-input-text);
+  white-space: nowrap;
+}
+
+.nol-browser-toolbar-address-editing {
+  border-color: var(--nol-accent);
+  outline: var(--nol-border-width) solid var(--nol-accent);
+  outline-offset: calc(var(--nol-border-width) * -2);
+
+  @media (forced-colors: active) {
+    outline: calc(var(--nol-border-width) * 2) solid Highlight;
+    outline-offset: 0;
+  }
+}
+
+.nol-browser-toolbar-address-invalid {
+  border-color: var(--nol-error);
+  outline-color: var(--nol-error);
+
+  @media (forced-colors: active) {
+    padding-inline: calc(var(--nol-space-2) - var(--nol-border-width));
+    border-width: calc(var(--nol-border-width) * 2);
+    border-style: dashed;
+    border-color: CanvasText;
+  }
+}
+
+.nol-browser-toolbar-glyph {
+  flex: none;
+  width: var(--nol-icon);
+  height: var(--nol-icon);
+  font-size: var(--nol-icon);
+}
+
+.nol-browser-toolbar-security {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--nol-warning);
+}
+
+.nol-browser-toolbar-words {
+  margin-inline-start: var(--nol-space-1);
+}
+
+.nol-browser-toolbar-address-compact .nol-browser-toolbar-words {
+  width: 0;
+  margin-inline-start: 0;
+  overflow: hidden;
+}
+
+.nol-browser-toolbar-place {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.nol-browser-toolbar-field,
+.nol-browser-toolbar-shown {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.nol-browser-toolbar-field {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.nol-browser-toolbar-address:not(.nol-browser-toolbar-address-editing):has(.nol-browser-toolbar-shown) .nol-browser-toolbar-field {
+  color: transparent;
+  forced-color-adjust: none;
+}
+
+.nol-browser-toolbar-shown {
+  display: flex;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.nol-browser-toolbar-host {
+  flex: none;
+  color: var(--nol-text-strong);
+}
+
+.nol-browser-toolbar-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nol-text-muted);
+  text-overflow: ellipsis;
+}
+
+.nol-browser-toolbar-field::selection {
+  background: var(--nol-text-selection);
+  color: var(--nol-text-selection-foreground);
+}
+
+.nol-browser-toolbar-address:not(.nol-browser-toolbar-address-editing):has(.nol-browser-toolbar-shown) .nol-browser-toolbar-field::selection {
+  background: transparent;
+  color: transparent;
+}
+
+.nol-browser-toolbar-progress {
+  flex: none;
+  block-size: var(--nol-browser-progress-height);
+}
+
+.nol-browser-toolbar-narrow .nol-browser-toolbar-address {
+  display: none;
+}
+
+.nol-browser-toolbar-narrow .nol-browser-toolbar-address + * {
+  margin-inline-start: auto;
+}
+
+.nol-browser-toolbar-mark {
+  margin-inline-end: var(--nol-browser-toolbar-gap);
+  color: var(--nol-warning);
+}
+
+.nol-browser-toolbar-revealed .nol-browser-toolbar-buttons,
+.nol-browser-toolbar-revealed .nol-browser-toolbar-mark,
+.nol-browser-toolbar-revealed .nol-browser-toolbar-more {
+  display: none;
+}
+
+.nol-browser-toolbar-revealed .nol-browser-toolbar-address {
+  display: flex;
+  gap: var(--nol-space-1);
+  margin-inline: 0;
+  padding-inline: var(--nol-space-1);
+}

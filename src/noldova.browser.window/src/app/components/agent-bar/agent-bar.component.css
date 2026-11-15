@@ -1,0 +1,56 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-agent-message-basis: 6rem;
+
+  display: block;
+  flex: none;
+}
+
+.nol-browser-agent-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nol-space-2);
+  box-sizing: border-box;
+  padding: var(--nol-space-1) var(--nol-space-2) var(--nol-space-1) var(--nol-space-3);
+  border-top: var(--nol-border-width) solid var(--nol-accent);
+  background: var(--nol-hover-widget);
+  color: var(--nol-text);
+}
+
+.nol-browser-agent-bar-glyph {
+  flex: none;
+  color: var(--nol-accent);
+}
+
+.nol-browser-agent-bar-message {
+  flex: 1 1 var(--nol-browser-agent-message-basis);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nol-browser-agent-bar-name {
+  font-weight: var(--nol-weight-strong);
+}
+
+.nol-browser-agent-bar-action {
+  flex: none;
+}
+
+@media (forced-colors: active) {
+  .nol-browser-agent-bar-row {
+    border: var(--nol-border-width) solid CanvasText;
+  }
+
+  .nol-browser-agent-bar-glyph {
+    color: CanvasText;
+  }
+}

@@ -1,0 +1,72 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+<span #unit class="nol-browser-toolbar-unit" aria-hidden="true"></span>
+<div class="nol-browser-toolbar-row" [class.nol-browser-toolbar-narrow]="isNarrow()" [class.nol-browser-toolbar-revealed]="isNarrow() && isRevealed()">
+  <div class="nol-browser-toolbar-buttons" nolToolbar [nolToolbarLabel]="resources.toolbarLabel">
+    <button nol-toolbar-button nolToolbarItem type="button" [label]="resources.back" [icon]="resources.backGlyph" [isUnavailable]="!status().canGoBack"
+      [nolTooltip]="resources.back" [nolTooltipSide]="below" (click)="goBack()"></button>
+    <button nol-toolbar-button nolToolbarItem type="button" [label]="resources.forward" [icon]="resources.forwardGlyph" [isUnavailable]="!status().canGoForward"
+      [nolTooltip]="resources.forward" [nolTooltipSide]="below" (click)="goForward()"></button>
+    <button #reload nol-toolbar-button nolToolbarItem type="button" [label]="isLoading() ? resources.stop : resources.reload"
+      [icon]="isLoading() ? resources.stopGlyph : resources.reloadGlyph" [isUnavailable]="!hasPage()" [nolTooltip]="isLoading() ? resources.stop : resources.reload"
+      [nolTooltipSide]="below" (click)="reloadOrStop()"></button>
+  </div>
+  <div class="nol-browser-toolbar-address" [class.nol-browser-toolbar-address-editing]="isEditing()" [class.nol-browser-toolbar-address-invalid]="isRefused()"
+    [class.nol-browser-toolbar-address-compact]="isCompact()">
+    @if (isInsecure()) {
+      <span class="nol-browser-toolbar-security" [id]="securityId" [nolTooltip]="resources.notSecure" [nolTooltipDisabled]="!isCompact()" [nolTooltipSide]="below"><span
+        class="nol-browser-toolbar-glyph material-symbols-rounded" aria-hidden="true">{{ resources.insecureGlyph }}</span><span #words class="nol-browser-toolbar-words">{{ resources.notSecure }}</span></span>
+    } @else if (isSecure()) {
+      <span class="nol-browser-toolbar-glyph material-symbols-rounded" aria-hidden="true">{{ resources.secureGlyph }}</span>
+    }
+    <span #place class="nol-browser-toolbar-place" [nolTooltip]="shown()" [nolTooltipTruncated]="true" [nolTooltipDisabled]="isEditing() || shown() === ''" [nolTooltipSide]="below"
+      nolTooltipBeside=".nol-browser-toolbar-address">
+      <input #addressField type="text" class="nol-browser-toolbar-field" data-truncates spellcheck="false" autocomplete="off" [value]="address()"
+        [attr.aria-label]="addressLabel()" [attr.aria-describedby]="describedBy()" [attr.aria-invalid]="isRefused() ? 'true' : null"
+        (pointerdown)="pressField()" (mouseup)="releaseField($event)" (focus)="startEditing()" (blur)="stopEditing()" (input)="edit()" (keydown)="pressFieldKey($event)">
+      @if (!isEditing() && shownHost(); as host) {
+        <span class="nol-browser-toolbar-shown" aria-hidden="true"><span
+          class="nol-browser-toolbar-host">{{ host }}</span><span class="nol-browser-toolbar-path" data-truncates>{{ pathAfter(host) }}</span></span>
+      }
+    </span>
+  </div>
+  @if (isNarrow() && isInsecure()) {
+    <span class="nol-browser-toolbar-mark nol-browser-toolbar-glyph material-symbols-rounded" role="img" [attr.aria-label]="resources.notSecure" [nolTooltip]="resources.notSecure"
+      [nolTooltipSide]="below">{{ resources.insecureGlyph }}</span>
+  }
+  <button #more nol-toolbar-button type="button" class="nol-browser-toolbar-more" [label]="resources.more" [icon]="resources.moreGlyph" [nolMenuTriggerFor]="moreMenu" [nolMenuAlignment]="end"
+    [nolTooltip]="resources.more" [nolTooltipSide]="below"></button>
+</div>
+<ng-template #moreMenu>
+  <nol-menu class="nol-browser-toolbar-menu">
+    @if (isNarrow()) {
+      <button nol-menu-item [label]="resources.editAddress" [icon]="resources.editGlyph" (triggered)="focusAddress()"></button>
+    }
+    <button nol-menu-item [label]="resources.copyAddress" [icon]="resources.copyGlyph" [disabled]="!hasPage()" (triggered)="copyAddress()"></button>
+    <button nol-menu-item [label]="resources.openExternal" [icon]="resources.externalGlyph" [disabled]="!canOpenExternal()" (triggered)="openExternal()"></button>
+    <button nol-menu-item [label]="resources.zoom" [icon]="resources.zoomGlyph" [value]="zoomPercent()" [isShowingChevron]="false" [disabled]="!isAvailable()"
+      [nolMenuTriggerFor]="zoomMenu"></button>
+    <button nol-menu-item [label]="resources.clearBrowsingData" [icon]="resources.clearGlyph" [disabled]="!isAvailable()" (triggered)="clearBrowsingData.emit()"></button>
+  </nol-menu>
+</ng-template>
+<ng-template #zoomMenu>
+  <nol-menu class="nol-browser-toolbar-zoom-menu">
+    <button nol-menu-item [label]="resources.zoomIn" [icon]="resources.zoomInGlyph" [shortcut]="zoomKeys[zoomSteps.In]" [disabled]="zoom() >= resources.greatestZoom"
+      (triggered)="zoomIn()"></button>
+    <button nol-menu-item [label]="resources.zoomOut" [icon]="resources.zoomOutGlyph" [shortcut]="zoomKeys[zoomSteps.Out]" [disabled]="zoom() <= resources.leastZoom"
+      (triggered)="zoomOut()"></button>
+    <button nol-menu-item [label]="resources.resetZoom" [icon]="resources.resetZoomGlyph" [shortcut]="zoomKeys[zoomSteps.Reset]" [disabled]="zoom() === 1"
+      (triggered)="resetZoom()"></button>
+  </nol-menu>
+</ng-template>
+<div class="nol-browser-toolbar-progress">
+  @if (isLoading()) {
+    <nol-progress [label]="resources.loading" />
+  }
+</div>

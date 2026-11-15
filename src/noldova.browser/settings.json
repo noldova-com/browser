@@ -1,0 +1,81 @@
+{
+  "settings": [
+    {
+      "name": "browser.linkClick",
+      "title": "Open a link you click",
+      "description": "Where a link you click in the app opens. Ctrl+click, Cmd+click on macOS, opens it in the other place.",
+      "type": {
+        "kind": "Choice",
+        "options": [
+          { "value": "InApp", "title": "In the app's browser" },
+          { "value": "System", "title": "In your browser" }
+        ]
+      },
+      "default": "InApp",
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Links"
+    },
+    {
+      "name": "browser.linkMiddleClick",
+      "title": "Middle-click a link",
+      "description": "Whether a middle click on a link opens it like Ctrl+click, Cmd+click on macOS, or like a click.",
+      "type": {
+        "kind": "Choice",
+        "options": [
+          { "value": "Modified", "title": "Like Ctrl+click" },
+          { "value": "Plain", "title": "Like a click" }
+        ]
+      },
+      "default": "Modified",
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Links"
+    },
+    {
+      "name": "browser.systemSites",
+      "title": "Always open in your browser",
+      "description": "Sites whose links always open in your browser, such as those you're signed in to there: hosts separated by commas, such as github.com, each with its subdomains.",
+      "type": {
+        "kind": "Text",
+        "maxLength": 4000,
+        "checked": true
+      },
+      "default": "",
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Links"
+    },
+    {
+      "name": "browser.agentTools",
+      "title": "Let agents use the browser",
+      "description": "Whether agents can open, read and act on pages with the browser's tools. While it's off, each of their calls is refused before it asks you anything or touches a page.",
+      "type": {
+        "kind": "Boolean"
+      },
+      "default": true,
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Agents"
+    },
+    {
+      "name": "browser.localSites",
+      "title": "Sites on this computer or network",
+      "description": "Sites on this computer or its network that you and agents may open, such as a development server: their addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173. No other address on this computer or network opens.",
+      "type": {
+        "kind": "Text",
+        "maxLength": 4000,
+        "checked": true
+      },
+      "default": "",
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Sites"
+    }
+  ]
+}

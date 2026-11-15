@@ -1,0 +1,36 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--nol-panel);
+}
+
+.nol-browser-page-area {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nol-browser-page-view {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  box-sizing: border-box;
+  min-height: 0;
+  position: relative;
+  margin: 0 var(--nol-space-1) var(--nol-space-1);
+  overflow: hidden;
+  border-radius: var(--nol-radius-small);
+}

@@ -1,0 +1,35 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+<span class="nol-browser-page-state-glyph material-symbols-rounded" aria-hidden="true">{{ text().glyph }}</span>
+<h2 class="nol-browser-page-state-heading">{{ text().heading }}</h2>
+@if (text().detail; as detail) {
+  <p class="nol-browser-page-state-detail">{{ detail }}</p>
+}
+@if (isForgotten() || isElsewhere()) {
+  <div class="nol-browser-page-state-actions">
+    <button nol-button type="button" class="nol-browser-page-state-action" [nolTooltip]="labels[action.Close]"
+      [nolTooltipTruncated]="true" (click)="closed.emit()">{{ labels[action.Close] }}</button>
+  </div>
+} @else if (refusal(); as refusal) {
+  <div class="nol-browser-page-state-actions">
+    <button nol-button type="button" class="nol-browser-page-state-action" [nolTooltip]="labels[action.AllowSite]"
+      [nolTooltipTruncated]="true" (click)="refusalAnswered.emit(refusal.url)">{{ labels[action.AllowSite] }}</button>
+    <button nol-button type="button" class="nol-browser-page-state-action" [variant]="secondary" [nolTooltip]="labels[action.NotNow]"
+      [nolTooltipTruncated]="true" (click)="refusalAnswered.emit(null)">{{ labels[action.NotNow] }}</button>
+  </div>
+} @else if (controller(); as controller) {
+  @if (actions().length > 0) {
+    <div class="nol-browser-page-state-actions">
+      @for (shown of actions(); track $index; let first = $first) {
+        <button nol-button type="button" class="nol-browser-page-state-action" [variant]="first ? primary : secondary"
+          [nolTooltip]="labels[shown]" [nolTooltipTruncated]="true" (click)="act(controller, shown)">{{ labels[shown] }}</button>
+      }
+    </div>
+  }
+}

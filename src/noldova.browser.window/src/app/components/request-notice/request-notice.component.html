@@ -1,0 +1,17 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+@if (notice(); as notice) {
+  <div class="nol-browser-request-notice-bar">
+    <span class="nol-browser-request-notice-glyph material-symbols-rounded" aria-hidden="true">{{ notice.glyph }}</span>
+    <p class="nol-browser-request-notice-message" [attr.id]="messageId()">{{ notice.message }}</p>
+    @if (notice.action; as action) {
+      <button nol-button type="button" class="nol-browser-request-notice-action" [variant]="secondary" (click)="act()">{{ action }}</button>
+    }
+  </div>
+}

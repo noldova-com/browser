@@ -1,0 +1,44 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-notice-message-basis: 5rem;
+
+  display: block;
+  flex: none;
+}
+
+.nol-browser-request-notice-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nol-space-2);
+  box-sizing: border-box;
+  margin: 0 var(--nol-space-1) var(--nol-space-1);
+  padding: var(--nol-field-padding) var(--nol-space-3);
+  border: var(--nol-border-width) solid var(--nol-card-border);
+  border-radius: var(--nol-radius-small);
+  background: var(--nol-raised);
+}
+
+.nol-browser-request-notice-glyph {
+  flex: none;
+  color: var(--nol-warning);
+}
+
+.nol-browser-request-notice-message {
+  flex: 1 1 var(--nol-browser-notice-message-basis);
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nol-browser-request-notice-action {
+  flex: none;
+  margin-inline-start: auto;
+}

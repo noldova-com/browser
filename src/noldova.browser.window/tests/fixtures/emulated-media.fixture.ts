@@ -1,0 +1,32 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import type {} from "@vitest/browser-playwright";
+import { cdp } from "vitest/browser";
+
+export class EmulatedMediaFixture {
+  private static readonly DEFAULTS: ReadonlyMap<string, string> = new Map([
+    ["prefers-color-scheme", "light"], ["prefers-contrast", "no-preference"], ["prefers-reduced-motion", "no-preference"], ["forced-colors", "none"]
+  ]);
+  private static readonly features: Map<string, string> = new Map(EmulatedMediaFixture.DEFAULTS);
+
+  public static emulateAsync(name: string, value: string): Promise<unknown> {
+    EmulatedMediaFixture.features.set(name, value);
+    return EmulatedMediaFixture.sendAsync();
+  }
+
+  public static resetAsync(): Promise<unknown> {
+    for (const [name, value] of EmulatedMediaFixture.DEFAULTS)
+      EmulatedMediaFixture.features.set(name, value);
+    return EmulatedMediaFixture.sendAsync();
+  }
+
+  private static sendAsync(): Promise<unknown> {
+    return cdp().send("Emulation.setEmulatedMedia", { features: [...EmulatedMediaFixture.features].map(([name, value]) => ({ name, value })) });
+  }
+}

@@ -1,0 +1,16 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+<div class="nol-browser-agent-bar-row">
+  <span class="nol-browser-agent-bar-glyph material-symbols-rounded" aria-hidden="true">{{ resources.agentGlyph }}</span>
+  <p class="nol-browser-agent-bar-message"><b class="nol-browser-agent-bar-name">{{ name() }}</b> {{ phrase() }}</p>
+  @if (isActing()) {
+    <button nol-button type="button" class="nol-browser-agent-bar-action" [variant]="secondary" [size]="compact" (click)="tookOver.emit()">{{ resources.takeOver }}</button>
+    <button nol-button type="button" class="nol-browser-agent-bar-action" [variant]="secondary" [size]="compact" (click)="stopped.emit()">{{ resources.stopAgent }}</button>
+  }
+</div>

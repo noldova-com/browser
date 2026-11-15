@@ -1,0 +1,13 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+<nol-dialog [title]="resources.clearDataTitle" (dismissed)="answered.emit(false)">
+  <p nolDialogDescription>{{ resources.clearDataDetail }}</p>
+  <button nol-button nolDialogAction type="button" class="nol-browser-clear-data-clear" [danger]="true" (click)="answered.emit(true)">{{ resources.clearData }}</button>
+  <button nol-button nolDialogAction type="button" class="nol-browser-clear-data-cancel" [variant]="secondary" (click)="answered.emit(false)">{{ resources.cancel }}</button>
+</nol-dialog>
