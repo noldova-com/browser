@@ -209,6 +209,24 @@ describe("PaneStatus", () => {
     ]).toEqual([RefusedRequest.Permission, RefusedRequest.Permission, RefusedRequest.Permission, null, null]);
   });
 
+  it("keeps a refused request that arrives during a load through that load's states and its failure, and a load that starts after it clears it", () => {
+    const loading: PaneStatus = PaneStatus.empty.apply(state("https://one.example/", "", true));
+    const refused: PaneStatus = loading.apply(new ViewRequestRefusalEvent(RefusedRequest.Authentication, "https://one.example"));
+    const committed: PaneStatus = refused.apply(state("https://one.example/private", "Private", true));
+    const stopped: PaneStatus = committed.apply(state("https://one.example/private", "Private", false));
+    const failed: PaneStatus = refused.apply(new ViewLoadFailureEvent("https://one.example/", -202, "ERR_CERT_AUTHORITY_INVALID"));
+    const held: PaneStatus = loading.refuseRequest(RefusedRequest.NewWindow, "https://ads.example/").apply(state("https://one.example/", "One", true));
+
+    expect([committed.refusedRequest, stopped.refusedRequest, failed.refusedRequest, failed.state, held.refusedTarget]).toEqual([
+      RefusedRequest.Authentication, RefusedRequest.Authentication, RefusedRequest.Authentication, PaneState.Failed, "https://ads.example/"
+    ]);
+    expect([
+      stopped.apply(state("https://two.example/", "", true)).refusedRequest,
+      failed.apply(state("https://two.example/", "", true)).refusedRequest,
+      stopped.apply(new ViewLoadFailureEvent("https://two.example/", -2, "ERR_FAILED")).refusedRequest
+    ]).toEqual([null, null, null]);
+  });
+
   it("dismisses its refused request and keeps the rest, and stays the same with none", () => {
     const refused: PaneStatus = loaded.apply(new ViewRequestRefusalEvent(RefusedRequest.FileChooser, "https://one.example"));
 

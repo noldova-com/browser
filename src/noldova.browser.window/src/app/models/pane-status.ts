@@ -72,13 +72,13 @@ export class PaneStatus {
       return new PaneStatus(PaneState.Refused, this.url, this.title, state.canGoBack, state.canGoForward, null, this.refusedOrigin, this.refusedRequest, this.refusedTarget, null,
         this.popup);
     if (state.isLoading)
-      return new PaneStatus(PaneState.Loading, state.address, state.title, state.canGoBack, state.canGoForward, null, null, null, null, null, null);
+      return new PaneStatus(PaneState.Loading, state.address, state.title, state.canGoBack, state.canGoForward, null, null, this.loadRequest(), this.loadTarget(), null, null);
     return new PaneStatus(this.state === PaneState.Loading ? PaneState.Loaded : this.state, state.address, state.title, state.canGoBack, state.canGoForward, this.failureReason,
       this.refusedOrigin, this.refusedRequest, this.refusedTarget, this.refusedAddress, this.popup, this.replaced);
   }
 
   public fail(failure: ViewLoadFailureEvent): PaneStatus {
-    return new PaneStatus(PaneState.Failed, failure.address, this.title, this.canGoBack, this.canGoForward, failure.description, null, null, null, null, null);
+    return new PaneStatus(PaneState.Failed, failure.address, this.title, this.canGoBack, this.canGoForward, failure.description, null, this.loadRequest(), this.loadTarget(), null, null);
   }
 
   public crash(): PaneStatus {
@@ -136,5 +136,13 @@ export class PaneStatus {
   public offerPopup(popup: PopupOffer): PaneStatus {
     const base: PaneStatus = this.replaced ?? this;
     return new PaneStatus(base.state, base.url, base.title, base.canGoBack, base.canGoForward, base.failureReason, base.refusedOrigin, null, null, null, popup);
+  }
+
+  private loadRequest(): RefusedRequest | null {
+    return this.state === PaneState.Loading ? this.refusedRequest : null;
+  }
+
+  private loadTarget(): string | null {
+    return this.state === PaneState.Loading ? this.refusedTarget : null;
   }
 }
