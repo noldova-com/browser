@@ -828,7 +828,7 @@ describe("Pages", () => {
   it("takes the working mark away when a load fails, is refused or is stopped, so a failed or refused page shows its glyph alone", async () => {
     const tab = await openAsync();
     const view = viewOf(tab);
-    const working: string[][] = [];
+    const working: (readonly string[])[] = [];
 
     loading(view, "https://docs.exmaple.com/", true);
     working.push(context.working);
