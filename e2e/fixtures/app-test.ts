@@ -16,9 +16,10 @@ import { TestApp } from "./test-app.ts";
 
 export { expect } from "playwright/test";
 
-export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; waitsForStart: boolean; servers: FixtureServers; loopbackProxy: RecordingProxy; app: TestApp; guard: LoopbackGuard }>({
+export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; waitsForStart: boolean; expectedViolations: readonly string[]; servers: FixtureServers; loopbackProxy: RecordingProxy; app: TestApp; guard: LoopbackGuard }>({
   dataFiles: [{}, { option: true }],
   waitsForStart: [true, { option: true }],
+  expectedViolations: [[], { option: true }],
   servers: async ({}, use) => {
     const servers = new FixtureServers();
     try {
@@ -49,10 +50,10 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await app.quitAsync();
     }
   },
-  guard: [async ({ servers, loopbackProxy, app }, use) => {
+  guard: [async ({ servers, loopbackProxy, app, expectedViolations }, use) => {
     const guard = new LoopbackGuard(servers, loopbackProxy, app.viewRequests);
     await use(guard);
     await expect.poll(() => app.viewRequests.inFlightAsync(), { message: "A view's request was still in flight at the test's end." }).toEqual([]);
-    expect(await guard.takeViolationsAsync(), "A view's request left loopback.").toEqual([]);
+    expect(await guard.takeViolationsAsync(), "The guard's violations differ from the ones the test expects.").toEqual(expectedViolations);
   }, { auto: true }]
 });

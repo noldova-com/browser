@@ -9,8 +9,12 @@
 import { expect, test } from "../fixtures/app-test.ts";
 
 test.describe("the no-request-leaves-loopback guard", () => {
-  test("fails a run whose view requests a host that is none of its fixture servers", async ({ app, servers, loopbackProxy }) => {
-    test.fail(true, "The guard fails this run at its end, since the page's image goes to outside.example through the recording proxy.");
+  test.use({ expectedViolations: [
+    "The recording proxy received GET http://outside.example/pixel.png.",
+    "A view's request to http://outside.example/pixel.png ended with net::ERR_EMPTY_RESPONSE."
+  ] });
+
+  test("reports a view's request to a host that is none of its fixture servers", async ({ app, servers, loopbackProxy }) => {
     const allowed = await servers.startAsync("allowed.localhost", { "/": "<!doctype html><title>Outside image</title><img src=\"http://outside.example/pixel.png\" alt=\"\">" });
     await app.allowLocalSitesAsync([allowed.origin]);
 
