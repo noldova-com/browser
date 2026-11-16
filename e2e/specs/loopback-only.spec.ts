@@ -9,18 +9,14 @@
 import { expect, test } from "../fixtures/app-test.ts";
 
 test.describe("the no-request-leaves-loopback guard", () => {
-  test("fails a run whose view requests a host that is none of its fixture servers", async ({ app, servers, guard }) => {
-    const outside = "http://outside.example/pixel.png";
-    const allowed = await servers.startAsync("allowed.localhost", { "/": `<!doctype html><title>Outside image</title><img src="${outside}" alt="">` });
+  test("fails a run whose view requests a host that is none of its fixture servers", async ({ app, servers, loopbackProxy }) => {
+    test.fail(true, "The guard fails this run at its end, since the page's image goes to outside.example through the recording proxy.");
+    const allowed = await servers.startAsync("allowed.localhost", { "/": "<!doctype html><title>Outside image</title><img src=\"http://outside.example/pixel.png\" alt=\"\">" });
     await app.allowLocalSitesAsync([allowed.origin]);
 
     await app.openPageAsync(allowed.url("/"));
 
-    let violations: readonly string[] = [];
-    await expect.poll(async () => {
-      violations = [...violations, ...await guard.takeViolationsAsync()];
-      return violations.some(t => t.includes("outside.example"));
-    }, { message: "The guard never reported the page's request to outside.example." }).toBe(true);
-    expect(violations).toContain("The recording proxy received GET http://outside.example/pixel.png.");
+    await expect.poll(() => loopbackProxy.peek(), { message: "The recording proxy never received the page's request to outside.example." })
+      .toContain("GET http://outside.example/pixel.png");
   });
 });

@@ -7,3 +7,4 @@
  */
 
 declare var noldovaViewRequests: { url: string; error: string | null }[] | undefined;
+declare var noldovaViewRequestsInFlight: Map<number, string> | undefined;

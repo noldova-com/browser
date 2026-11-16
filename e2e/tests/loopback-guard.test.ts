@@ -41,6 +41,15 @@ describe("LoopbackGuard", () => {
     return { guard: new LoopbackGuard(servers, started, requests), requests, proxy: started, origin: server.origin };
   }
 
+  async function sendThroughAsync(started: RecordingProxy): Promise<void> {
+    const address = new URL(started.address);
+    await new Promise<void>(resolve => {
+      const sent = request({ host: address.hostname, port: address.port, path: "http://outside.example/pixel.png" });
+      sent.once("error", () => resolve());
+      sent.end();
+    });
+  }
+
   it("passes a fixture server's request, by its name or its address, a request the base refused and a request with no network", async () => {
     const { guard, requests, origin } = await startAsync();
     const port = new URL(origin).port;
@@ -63,14 +72,17 @@ describe("LoopbackGuard", () => {
 
   it("reports each request the recording proxy received, once", async () => {
     const { guard, proxy: started } = await startAsync();
-    const address = new URL(started.address);
-    await new Promise<void>(resolve => {
-      const sent = request({ host: address.hostname, port: address.port, path: "http://outside.example/pixel.png" });
-      sent.once("error", () => resolve());
-      sent.end();
-    });
+    await sendThroughAsync(started);
 
     expect(await guard.takeViolationsAsync()).toEqual(["The recording proxy received GET http://outside.example/pixel.png."]);
     expect(await guard.takeViolationsAsync()).toEqual([]);
+  });
+
+  it("lets a peek at the recording proxy leave its records for the guard", async () => {
+    const { guard, proxy: started } = await startAsync();
+    await sendThroughAsync(started);
+
+    expect(started.peek()).toEqual(["GET http://outside.example/pixel.png"]);
+    expect(await guard.takeViolationsAsync()).toEqual(["The recording proxy received GET http://outside.example/pixel.png."]);
   });
 });
