@@ -100,7 +100,7 @@ Its look follows the app's design, whose rules this section writes out.
   Such a tab holds nothing here, so a later run that opens its `instance` claims it again, and once this window has the page the tab opens its view, at the address the record keeps.
   The module opens no page by itself.
 - **Title:** each page's instance is a new UUID unless the app picked one, and its tab is titled with its address, or "New tab" without one, until the page has a title; then the page's title, or its address while it has none.
-  Noldova Desktop's working mark shows on the tab while the page loads.
+  Noldova Desktop's working mark, its spinner, shows on the tab while the page loads, and leaves when the load ends, fails, is refused or is stopped, so a failed or refused page shows its glyph alone.
   A page that can't be reached shows the `error` glyph before its title in the failure tone, and a refused page its `block` glyph in the tab's own colour, each with the state's heading as its description, such as "Can't reach docs.example.com"; the tab loses it once the page loads again, and a page that stopped working shows none.
 - **Records:** the window part has the runtime part keep each open page's workspace and last address in the module's database, under its instance, with the request `browser.rememberPage`, when the page opens and each time its address changes; `browser.forgetPage` deletes the record when the person closes the page's document.
   A failed request is logged and changes nothing on the page.
@@ -197,7 +197,7 @@ Its look follows the app's design, whose rules this section writes out.
   Allow goes to the address as the person's own, as typing it does, so the runtime part keeps its origin for the workspace before the page loads; Not now gives the page back as it was; either moves the focus to the toolbar, and the page's next load also takes the state away.
 
 **Not yet:**
-- The page's favicon on its tab waits for an event that tells the window part a page's favicon, which Noldova Desktop doesn't have; the tab row's new-page button comes next.
+- The page's favicon on its tab waits for a Noldova Desktop release with the web view's `Favicon` event, which 0.0.2 doesn't have; the tab row's new-page button comes next.
 - The menu's Find on page, which the design shows, isn't built yet; Noldova Desktop's find calls are there for it.
 - Stop and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
   Until then the bar offers neither while the call's permission card asks, since Noldova Desktop withdraws a card only when the call itself is aborted.
