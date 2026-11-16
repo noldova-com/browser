@@ -21,7 +21,21 @@ import { HangLimits } from "./hang-limits.ts";
 import type { LaunchSetting } from "./launch-settings.ts";
 import { TestAppLayout } from "./test-app-layout.ts";
 import { ViewPages } from "./view-pages.ts";
-import { ViewRequests } from "./view-requests.ts";
+import { type ViewRequest, ViewRequests } from "./view-requests.ts";
+
+class AppRun {
+  public readonly application: ElectronApplication;
+  public readonly window: Page;
+  public readonly viewRequests: ViewRequests;
+  public readonly viewPages: ViewPages;
+
+  public constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, viewPages: ViewPages) {
+    this.application = application;
+    this.window = window;
+    this.viewRequests = viewRequests;
+    this.viewPages = viewPages;
+  }
+}
 
 export class TestApp {
   private static readonly PROFILE_KEY: string = "e2e";
@@ -32,27 +46,32 @@ export class TestApp {
   private static readonly WINDOW: string = "nol-window";
   private static readonly SETTINGS_BUTTON: string = ".nol-window-row-settings";
 
-  public readonly window: Page;
   public readonly dataDirectory: string;
   public readonly deviceDirectory: string;
-  public readonly viewRequests: ViewRequests;
-  public readonly viewPages: ViewPages;
-  private readonly application: ElectronApplication;
+  private readonly settings: readonly LaunchSetting[];
   private readonly testInfo: TestInfo;
   private readonly output: string[] = [];
+  private run: AppRun;
 
-  private constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, viewPages: ViewPages, dataDirectory: string, deviceDirectory: string, testInfo: TestInfo) {
-    this.application = application;
+  private constructor(run: AppRun, dataDirectory: string, deviceDirectory: string, settings: readonly LaunchSetting[], testInfo: TestInfo) {
+    this.run = run;
     this.testInfo = testInfo;
-    this.window = window;
-    this.viewRequests = viewRequests;
-    this.viewPages = viewPages;
+    this.settings = settings;
     this.dataDirectory = dataDirectory;
     this.deviceDirectory = deviceDirectory;
-    const child = application.process();
-    child.stdout?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
-    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
-    window.on("console", message => this.output.push(`[window ${message.type()}] ${message.text()}\n`));
+    this.listen(run);
+  }
+
+  public get window(): Page {
+    return this.run.window;
+  }
+
+  public get viewRequests(): ViewRequests {
+    return this.run.viewRequests;
+  }
+
+  public get viewPages(): ViewPages {
+    return this.run.viewPages;
   }
 
   public static async launchAsync(testInfo: TestInfo, dataFiles: Readonly<Record<string, string>>, settings: readonly LaunchSetting[]): Promise<TestApp> {
@@ -66,14 +85,34 @@ export class TestApp {
     testInfo.annotations.push({ type: "app folders", description: root });
     for (const setting of settings)
       testInfo.annotations.push({ type: "launch setting", description: `${setting.arguments.join(" ")}: ${setting.reason}` });
+    return new TestApp(await TestApp.startAsync(dataDirectory, deviceDirectory, settings, []), dataDirectory, deviceDirectory, settings, testInfo);
+  }
+
+  private static async startAsync(dataDirectory: string, deviceDirectory: string, settings: readonly LaunchSetting[], carried: readonly ViewRequest[]): Promise<AppRun> {
     const application = await _electron.launch({
       executablePath: (await readFile(TestAppLayout.EXECUTABLE_RECORD, "utf8")).trim(),
       args: [TestAppLayout.DEVELOPMENT_PACKAGE, `--data-dir=${dataDirectory}`, `--device-dir=${deviceDirectory}`, ...settings.flatMap(t => t.arguments)],
       cwd: TestAppLayout.APP_FOLDER
     });
-    const viewRequests = await ViewRequests.watchAsync(application);
+    const viewRequests = await ViewRequests.watchAsync(application, carried);
     const viewPages = await ViewPages.watchAsync(application);
-    return new TestApp(application, await application.firstWindow(), viewRequests, viewPages, dataDirectory, deviceDirectory, testInfo);
+    return new AppRun(application, await application.firstWindow(), viewRequests, viewPages);
+  }
+
+  public async restartAsync(): Promise<void> {
+    await expect.poll(() => this.viewRequests.inFlightAsync(), { message: "A view's request was still in flight before the restart." }).toEqual([]);
+    const carried = await this.viewRequests.takeAsync();
+    await this.quitAsync();
+    this.run = await TestApp.startAsync(this.dataDirectory, this.deviceDirectory, this.settings, carried);
+    this.listen(this.run);
+    await this.waitForStartAsync();
+  }
+
+  private listen(run: AppRun): void {
+    const child = run.application.process();
+    child.stdout?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
+    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
+    run.window.on("console", message => this.output.push(`[window ${message.type()}] ${message.text()}\n`));
   }
 
   public async waitForStartAsync(): Promise<void> {
@@ -85,8 +124,8 @@ export class TestApp {
     await this.setSettingAsync("browser.localSites", origins.join(","));
   }
 
-  public async openPageAsync(url: string): Promise<void> {
-    await this.requestAsync("agent-double.openPage", { profileKey: TestApp.PROFILE_KEY, url, instance: randomUUID() });
+  public async openPageAsync(url: string, profileKey: string = TestApp.PROFILE_KEY): Promise<void> {
+    await this.requestAsync("agent-double.openPage", { profileKey, url, instance: randomUUID() });
   }
 
   public async requestAsync(method: string, payload: JsonValue): Promise<JsonValue> {
@@ -155,16 +194,16 @@ export class TestApp {
     const files = existsSync(logs) ? (await readdir(logs)).sort() : [];
     for (const file of files)
       await this.testInfo.attach(file, { path: path.join(logs, file), contentType: "text/plain" });
-    await this.testInfo.attach(TestApp.OUTPUT_NAME, { body: this.output.join(""), contentType: "text/plain" });
+    await this.testInfo.attach(TestApp.OUTPUT_NAME, { body: this.output.splice(0).join(""), contentType: "text/plain" });
   }
 
   private async closeAsync(): Promise<void> {
-    const child = this.application.process();
+    const child = this.run.application.process();
     if (child.exitCode !== null || child.signalCode !== null)
       return;
 
     const exited = once(child, "exit");
-    const closing = this.application.close().catch(() => undefined);
+    const closing = this.run.application.close().catch(() => undefined);
     const limit = AbortSignal.timeout(HangLimits.APP_CLOSES_AFTER_ITS_QUIT_MS);
     const isClosed = await Promise.race([exited.then(() => true), once(limit, "abort").then(() => false)]);
     if (isClosed) {

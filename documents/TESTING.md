@@ -213,6 +213,8 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
 - A test reads each view's address, title and whether it is loading, and the addresses its view committed, from the main process with `e2e/fixtures/view-pages.ts`, and may run a fixture page's own script in its view; the page itself gets no test hook.
+  It reads each view's session, cookies and storage folder there too, and the cookies of the app's window and default sessions.
+- A test may restart the app on the same data and device folders; the requests recorded before the restart stay in the record the loopback guard reads at the test's end.
 
 ### Fixture servers
 
@@ -228,7 +230,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts` and `denials.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
+**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts`, `denials.spec.ts` and `isolation.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
 Each asserts that the view stays at its last allowed address, done loading, with no navigation committed in the view or in a subframe, that the main process's record shows no request for the target that the base didn't refuse, since the base refuses a page's own navigation before its request and a redirect at its request, and that no fixture server received a request for another host; for a top-level start other than going back, it also asserts that the page started the navigation, by the page's own `navigate` event.
 So that those records can't pass empty, each start's page also has an allowed control frame, and the test asserts that the view committed the start page, that a subframe committed the control frame, and that the record shows the start page loaded.
 On macOS, which doesn't route `127.0.0.2`, the "Loopback range" row has no fixture server at that address, and the main process's record alone proves its refusal.
@@ -320,6 +322,15 @@ The same file has a named test for each of the relay's other refusals and limits
 - cookies, local storage and IndexedDB written under one profile key are absent under another key and in the app's window;
 - clearing a profile key empties its storage, and a key keeps its storage across a restart of the app;
 - the view's session is never the app's default session, and its partition's name holds the module's id and the profile key.
+
+Each `isolation.spec.ts` test is titled with its item.
+- The globals test checks the base's bridge, `desktop`, and Node's and Electron's names, such as `require`, `process` and `ipcRenderer`, after checking that the app's window has the bridge.
+- The protocol test fetches, and loads as an image, an address on the base's shared-file protocol, `desktop-file:`, which the page must fail to reach.
+  Both would fail even on a session that served the protocol, since the scheme lacks the fetch privilege and the address names no grant, so the main process also checks that no view's session handles `desktop-file:`, with the window's session, which does, as the control.
+- The WebRTC test gathers the candidates of a data channel's offer, with no STUN server, and finds none: under the policy the view gathers no host candidate, while without it Chromium would gather host candidates whose `.local` names hide the address, so a test for address literals alone would pass without the policy.
+- The storage tests write a cookie that outlives the session, a local storage item and an IndexedDB record, and read all three back.
+  A second profile key's page reads none of them; the main process finds the cookie only in the first key's session, not in the window's or the default session.
+  Clearing goes through the pane's Clear browsing data… and its dialog, as the person does, and the next page's read is polled until it finds nothing; the restart quits the app and launches it again on the same folders.
 
 The security model's [Denied by default](SECURITY-MODEL.md#denied-by-default) list owns the default denials.
 `denials.spec.ts` has one test for each item of that list, titled with the item: the camera, the microphone, location, notifications, clipboard reading, USB, serial, HID, Bluetooth, every other permission the engine can ask for, screen capture, downloads, new windows and pop-ups, file choosers, authentication prompts, certificate errors and embedded `<webview>` elements.
