@@ -67,7 +67,7 @@ export class FixtureServer {
   }
 
   public redirect(path: string, location: string): void {
-    this.redirects.set(path, location);
+    this.redirects.set(path, new URL(location).href);
   }
 
   public url(path: string): string {

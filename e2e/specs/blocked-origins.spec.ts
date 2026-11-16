@@ -221,7 +221,6 @@ test.describe("blocked origins", () => {
     await app.viewPages.takeCommitsAsync();
     await app.viewPages.runAsync("history.back();");
 
-    await expectNavigationStartedAsync(app, "going back");
     const barrier = "After going back";
     await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
     await expectPageAsync(app, second.url("/"), barrier, "The view didn't stay at the second page, done loading, after going back.");

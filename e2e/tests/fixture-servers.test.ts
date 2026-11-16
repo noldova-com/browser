@@ -31,6 +31,15 @@ describe("FixtureServers", () => {
       .toEqual([200, "<p>Added</p>", 302, "http://other.localhost/", 404]);
   });
 
+  it("redirects to a host outside ASCII by its punycode form", async () => {
+    const server = await servers.startAsync("allowed.localhost", {});
+    server.redirect("/go", "http://аllowed.localhost/");
+
+    const redirected = await fetch(`http://127.0.0.1:${server.port}/go`, { redirect: "manual" });
+
+    expect(redirected.headers.get("location")).toBe("http://xn--llowed-2nf.localhost/");
+  });
+
   it("lists every server's requests, with the host each named", async () => {
     const first = await servers.startAsync("first.localhost", { "/": "<p>First</p>" });
     const second = await servers.startAsync("second.localhost", { "/": "<p>Second</p>" });
