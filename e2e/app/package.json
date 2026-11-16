@@ -6,6 +6,7 @@
     "modulePackagePrefix": "@browser-test/app.",
     "modules": [
       "agent-double",
+      "relay-double",
       {
         "id": "browser",
         "package": "@noldova/browser"
