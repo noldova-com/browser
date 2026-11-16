@@ -23,6 +23,8 @@ interface INavigationStart {
 const ALLOWED_TITLE = "Allowed";
 const ALLOWED_PAGE = `<!doctype html><title>${ALLOWED_TITLE}</title><p>Allowed fixture page</p>`;
 const ADDRESS_FIELD = ".nol-browser-toolbar-field";
+const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
+const SRCDOC = "about:srcdoc";
 const NOTICE_MESSAGE = ".nol-browser-request-notice-message";
 const NOT_WEB_MESSAGE = "Browser opens only addresses that start with http: or https:.";
 const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -31,7 +33,6 @@ const REFUSED_SCHEMES: readonly IRefusedScheme[] = [
   { name: "file:", address: JSON.stringify("file:///") },
   { name: "data:", address: JSON.stringify("data:text/html,<title>Data page</title>") },
   { name: "blob:", address: "URL.createObjectURL(new Blob([\"<title>Blob page</title>\"], { type: \"text/html\" }))" },
-  { name: "about:srcdoc", address: JSON.stringify("about:srcdoc") },
   { name: "view-source:", address: "`view-source:${location.href}`" },
   { name: "devtools:", address: JSON.stringify("devtools://devtools/bundled/inspector.html") },
   { name: "chrome:", address: JSON.stringify("chrome://version/") },
@@ -70,6 +71,29 @@ test.describe("schemes", () => {
         await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, "The view never loaded the allowed page again.");
       }
     });
+
+  test("ends a top-level about:srcdoc in the engine's error page, loading nothing", async ({ app, servers }) => {
+    const allowed = await servers.startAsync("allowed.localhost", { "/": ALLOWED_PAGE, "/again": ALLOWED_PAGE });
+    await app.allowLocalSitesAsync([allowed.origin]);
+    await app.openPageAsync(allowed.url("/"));
+    await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+    const field = app.window.locator(ADDRESS_FIELD);
+
+    for (const start of STARTS) {
+      const requests = allowed.requests.length;
+
+      await app.viewPages.runAsync(start.script(JSON.stringify(SRCDOC)));
+
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as a failed load.`).toHaveText(`Can't reach ${SRCDOC}`);
+      await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
+        .toEqual([[SRCDOC, false]]);
+      expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
+
+      await field.fill(allowed.url("/again"));
+      await field.press("Enter");
+      await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, `The allowed page didn't load again after ${SRCDOC} from ${start.name}.`);
+    }
+  });
 
   test("lets a subresource use data: and blob:", async ({ app, servers }) => {
     const allowed = await servers.startAsync("allowed.localhost", { "/": `<!doctype html><title>${ALLOWED_TITLE}</title><img id="data" src="${PIXEL}" alt="">` });
