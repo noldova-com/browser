@@ -98,6 +98,6 @@ export class FixtureServers {
   }
 
   public async closeAsync(): Promise<void> {
-    await Promise.all(this.started.map(t => t.closeAsync()));
+    await Promise.all(this.started.splice(0).map(t => t.closeAsync()));
   }
 }
