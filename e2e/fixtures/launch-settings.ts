@@ -24,6 +24,8 @@ export class LaunchSettings {
       new LaunchSetting(["--disable-gpu"], "GPU acceleration off, as in the base's workflows, so a run draws the same on a runner with no GPU."),
       new LaunchSetting(["--disable-software-rasterizer"], "No software stand-in for the GPU, as in the base's workflows."),
       new LaunchSetting(["--force-color-profile=srgb"], "One color profile on every runner, as in the base's workflows."),
+      new LaunchSetting(["--use-fake-device-for-media-stream"],
+        "Gives the engine a stand-in camera and microphone, so a refused camera or microphone is the base's refusal rather than a runner with no device; it grants nothing."),
       new LaunchSetting([`--host-resolver-rules=${LaunchSettings.HOST_RESOLVER_RULES}`],
         "Maps the fixture servers' .test names to 127.0.0.1 and fails every other lookup; localhost, .localhost names and 127.0.0.1, where the recording proxy listens, keep the engine's own loopback."),
       new LaunchSetting([`--proxy-server=${proxy}`],

@@ -8,7 +8,10 @@
 
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer as createSecureServer } from "node:https";
 import type { AddressInfo } from "node:net";
+
+import type { TestCertificate } from "./test-certificate.ts";
 
 export class FixtureRequest {
   public readonly host: string;
@@ -23,37 +26,44 @@ export class FixtureRequest {
 class FixturePage {
   public readonly body: string;
   public readonly headers: Readonly<Record<string, string>>;
+  public readonly status: number;
 
-  public constructor(body: string, headers: Readonly<Record<string, string>>) {
+  public constructor(body: string, headers: Readonly<Record<string, string>>, status: number) {
     this.body = body;
     this.headers = headers;
+    this.status = status;
   }
 }
 
 export class FixtureServer {
   private static readonly LOOPBACK: string = "127.0.0.1";
   private static readonly HTML: string = "text/html; charset=utf-8";
+  private static readonly OK: number = 200;
 
   public readonly name: string;
   public readonly address: string;
+  private readonly scheme: string;
   private readonly server: Server;
   private readonly pages: Map<string, FixturePage>;
   private readonly redirects: Map<string, string> = new Map();
   private readonly received: FixtureRequest[] = [];
 
-  private constructor(name: string, address: string, pages: Readonly<Record<string, string>>) {
+  private constructor(name: string, address: string, pages: Readonly<Record<string, string>>, certificate: TestCertificate | null) {
     this.name = name;
     this.address = address;
-    this.pages = new Map(Object.entries(pages).map(([path, body]) => [path, new FixturePage(body, {})]));
-    this.server = createServer((request, response) => this.answer(request, response));
+    this.pages = new Map(Object.entries(pages).map(([path, body]) => [path, new FixturePage(body, {}, FixtureServer.OK)]));
+    const listener = (request: IncomingMessage, response: ServerResponse): void => this.answer(request, response);
+    this.scheme = certificate === null ? "http" : "https";
+    this.server = certificate === null ? createServer(listener) : createSecureServer({ key: certificate.key, cert: certificate.certificate }, listener);
     this.server.on("upgrade", (request, socket) => {
       this.received.push(new FixtureRequest(request.headers.host ?? "", request.url ?? ""));
       socket.destroy();
     });
   }
 
-  public static async startAsync(name: string, pages: Readonly<Record<string, string>>, address: string = FixtureServer.LOOPBACK): Promise<FixtureServer> {
-    const server = new FixtureServer(name, address, pages);
+  public static async startAsync(name: string, pages: Readonly<Record<string, string>>, address: string = FixtureServer.LOOPBACK,
+    certificate: TestCertificate | null = null): Promise<FixtureServer> {
+    const server = new FixtureServer(name, address, pages, certificate);
     server.server.listen(0, address);
     await once(server.server, "listening");
     return server;
@@ -67,7 +77,7 @@ export class FixtureServer {
   }
 
   public get origin(): string {
-    return `http://${this.name}:${this.port}`;
+    return `${this.scheme}://${this.name}:${this.port}`;
   }
 
   public get hosts(): readonly string[] {
@@ -78,8 +88,8 @@ export class FixtureServer {
     return [...this.received];
   }
 
-  public serve(path: string, body: string, headers: Readonly<Record<string, string>> = {}): void {
-    this.pages.set(path, new FixturePage(body, headers));
+  public serve(path: string, body: string, headers: Readonly<Record<string, string>> = {}, status: number = FixtureServer.OK): void {
+    this.pages.set(path, new FixturePage(body, headers, status));
   }
 
   public redirect(path: string, location: string): void {
@@ -110,7 +120,7 @@ export class FixtureServer {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { "content-type": FixtureServer.HTML, "cache-control": "no-store", ...page.headers }).end(page.body);
+    response.writeHead(page.status, { "content-type": FixtureServer.HTML, "cache-control": "no-store", ...page.headers }).end(page.body);
   }
 }
 
@@ -125,8 +135,8 @@ export class FixtureServers {
     return this.started.flatMap(t => t.requests);
   }
 
-  public async startAsync(name: string, pages: Readonly<Record<string, string>>, address?: string): Promise<FixtureServer> {
-    const server = await FixtureServer.startAsync(name, pages, address);
+  public async startAsync(name: string, pages: Readonly<Record<string, string>>, address?: string, certificate?: TestCertificate): Promise<FixtureServer> {
+    const server = await FixtureServer.startAsync(name, pages, address, certificate);
     this.started.push(server);
     return server;
   }
