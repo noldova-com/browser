@@ -45,6 +45,10 @@ export class RecordingProxy {
     return `http://${RecordingProxy.LOOPBACK}:${address.port}`;
   }
 
+  public peek(): readonly string[] {
+    return [...this.recorded];
+  }
+
   public take(): readonly string[] {
     return this.recorded.splice(0);
   }

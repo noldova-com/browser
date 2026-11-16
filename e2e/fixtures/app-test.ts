@@ -32,6 +32,7 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
     const proxy = await RecordingProxy.startAsync();
     try {
       await use(proxy);
+      expect(proxy.take(), "The recording proxy received a request after the guard read it, while the app quit.").toEqual([]);
     }
     finally {
       await proxy.closeAsync();
@@ -51,6 +52,7 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
   guard: [async ({ servers, loopbackProxy, app }, use) => {
     const guard = new LoopbackGuard(servers, loopbackProxy, app.viewRequests);
     await use(guard);
+    await expect.poll(() => app.viewRequests.inFlightAsync(), { message: "A view's request was still in flight at the test's end." }).toEqual([]);
     expect(await guard.takeViolationsAsync(), "A view's request left loopback.").toEqual([]);
   }, { auto: true }]
 });
