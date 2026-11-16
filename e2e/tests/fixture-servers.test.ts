@@ -6,6 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { once } from "node:events";
+import { connect } from "node:net";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { FixtureRequest, FixtureServers } from "../fixtures/fixture-servers.ts";
@@ -38,6 +41,27 @@ describe("FixtureServers", () => {
     const redirected = await fetch(`http://127.0.0.1:${server.port}/go`, { redirect: "manual" });
 
     expect(redirected.headers.get("location")).toBe("http://xn--llowed-2nf.localhost/");
+  });
+
+  it("answers a page with the headers it was served with, over the default ones", async () => {
+    const server = await servers.startAsync("allowed.localhost", {});
+    server.serve("/cached", "cached", { "cache-control": "max-age=600" });
+
+    const cached = await fetch(`http://127.0.0.1:${server.port}/cached`);
+
+    expect([cached.headers.get("cache-control"), cached.headers.get("content-type"), await cached.text()]).toEqual(["max-age=600", "text/html; charset=utf-8", "cached"]);
+  });
+
+  it("records a WebSocket upgrade as a request and closes its socket", async () => {
+    const server = await servers.startAsync("allowed.localhost", {});
+    const socket = connect(server.port, "127.0.0.1");
+    socket.on("error", () => undefined);
+    await once(socket, "connect");
+
+    socket.write(["GET /ws HTTP/1.1", `Host: allowed.localhost:${server.port}`, "Connection: Upgrade", "Upgrade: websocket", "", ""].join("\r\n"));
+    await once(socket, "close");
+
+    expect(server.requests).toEqual([new FixtureRequest(`allowed.localhost:${server.port}`, "/ws")]);
   });
 
   it("lists every server's requests, with the host each named", async () => {
