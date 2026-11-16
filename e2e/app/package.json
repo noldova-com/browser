@@ -1,0 +1,70 @@
+{
+  "name": "browser-test-app",
+  "version": "0.0.1",
+  "desktop": {
+    "protocolVersion": 1,
+    "modulePackagePrefix": "@browser-test/app.",
+    "modules": [
+      "agent-double",
+      {
+        "id": "browser",
+        "package": "@noldova/browser"
+      }
+    ],
+    "product": {
+      "name": "Browser Test",
+      "publisher": "Noldova",
+      "slug": "browser-test",
+      "applicationId": "com.noldova.browsertest",
+      "developmentApplicationId": "com.noldova.browsertest.development",
+      "dataFolder": ".noldova/browser-test",
+      "deviceFolders": {
+        "windows": "Noldova/BrowserTest",
+        "macos": "Noldova/BrowserTest",
+        "linux": "noldova/browser-test"
+      },
+      "dataDirectoryVariable": "BROWSER_TEST_DATA_DIR",
+      "icons": "assets/icons",
+      "releaseRepository": "noldova-com/browser",
+      "permissionsModule": "agent-double"
+    },
+    "supportedTargets": [],
+    "signedPlatforms": [
+      "windows",
+      "macos"
+    ]
+  },
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "npm@11.20.0",
+  "engines": {
+    "node": "26.13.1",
+    "npm": "11.20.0"
+  },
+  "workspaces": [
+    "src/browser-test.window.app"
+  ],
+  "scripts": {
+    "install:app": "noldova-desktop-build install",
+    "build:app": "noldova-desktop-build build",
+    "desktop-tools": "noldova-desktop-build desktop-tools"
+  },
+  "dependencies": {
+    "@noldova/context.core": "0.0.8",
+    "@noldova/context.exceptions": "0.0.8",
+    "@noldova/context.json": "0.0.8",
+    "@noldova/context.text": "0.0.8",
+    "@noldova/desktop.cli": "0.0.1",
+    "@noldova/desktop.electron": "0.0.1",
+    "@noldova/desktop.protocol": "0.0.1",
+    "@noldova/desktop.runtime": "0.0.1"
+  },
+  "devDependencies": {
+    "@noldova/desktop.build": "0.0.1",
+    "@types/node": "26.6.6",
+    "electron": "44.9.1",
+    "electron-builder": "26.16.1",
+    "typescript": "6.0.3"
+  }
+}
