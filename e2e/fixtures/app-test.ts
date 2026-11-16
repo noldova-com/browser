@@ -51,7 +51,7 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
     }
   },
   guard: [async ({ servers, loopbackProxy, app, expectedViolations }, use) => {
-    const guard = new LoopbackGuard(servers, loopbackProxy, app.viewRequests);
+    const guard = new LoopbackGuard(servers, loopbackProxy, { takeAsync: () => app.viewRequests.takeAsync() });
     await use(guard);
     await expect.poll(() => app.viewRequests.inFlightAsync(), { message: "A view's request was still in flight at the test's end." }).toEqual([]);
     expect(await guard.takeViolationsAsync(), "The guard's violations differ from the ones the test expects.").toEqual(expectedViolations);

@@ -31,12 +31,14 @@ export class ViewRequest {
 
 export class ViewRequests {
   private readonly application: ElectronApplication;
+  private readonly carried: ViewRequest[];
 
-  private constructor(application: ElectronApplication) {
+  private constructor(application: ElectronApplication, carried: readonly ViewRequest[]) {
     this.application = application;
+    this.carried = [...carried];
   }
 
-  public static async watchAsync(application: ElectronApplication): Promise<ViewRequests> {
+  public static async watchAsync(application: ElectronApplication, carried: readonly ViewRequest[] = []): Promise<ViewRequests> {
     await application.evaluate(({ app }) => {
       const records: { url: string; error: string | null; address: string | null }[] = [];
       const inFlight = new Map<number, string>();
@@ -60,7 +62,7 @@ export class ViewRequests {
         });
       });
     });
-    return new ViewRequests(application);
+    return new ViewRequests(application, carried);
   }
 
   public async inFlightAsync(): Promise<readonly string[]> {
@@ -69,7 +71,7 @@ export class ViewRequests {
 
   public async peekAsync(): Promise<readonly ViewRequest[]> {
     const records = await this.application.evaluate(() => [...globalThis.noldovaViewRequests ?? []]);
-    return records.map(t => new ViewRequest(t.url, t.error));
+    return [...this.carried, ...records.map(t => new ViewRequest(t.url, t.error))];
   }
 
   public async addressesAsync(url: string): Promise<readonly (string | null)[]> {
@@ -78,6 +80,6 @@ export class ViewRequests {
 
   public async takeAsync(): Promise<readonly ViewRequest[]> {
     const records = await this.application.evaluate(() => globalThis.noldovaViewRequests?.splice(0) ?? []);
-    return records.map(t => new ViewRequest(t.url, t.error));
+    return [...this.carried.splice(0), ...records.map(t => new ViewRequest(t.url, t.error))];
   }
 }
