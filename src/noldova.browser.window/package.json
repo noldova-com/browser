@@ -1,6 +1,6 @@
 {
   "name": "@noldova/browser.window",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "The browser module's window part: the page documents that show web pages in the window, the command that opens one, the status-bar item that says each agent's open pages, their controller and the tracker of the place the page shows in.",
   "type": "module",
   "license": "MIT",
