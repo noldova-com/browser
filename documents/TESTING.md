@@ -202,7 +202,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 - **The relay double,** `e2e/app/src/modules/relay-double`, opens one web view on a document of its own and sends the calls a test names through Noldova Desktop's relay, under a copy of the module's `webViews.json`, so the relay judges them as it judges the module's; the module's own code sends only what its tools need, and has no way to send anything else.
 - **Each double's opening** goes from its runtime part to its window part as an event, and Noldova Desktop keeps no event for a window part that isn't listening yet.
   The window's Settings button, which a test waits for before it starts, can be enabled before every window part has activated, so each runtime part holds an opening until its window part has subscribed and said so through `agent-double.listen` or `relay-double.listen`.
-  `doubles.spec.ts` asks each double to open before the window's parts activate, and the page must still open.
+  `doubles.spec.ts` asks each double to open before the window's parts activate, and the page must still open; `e2e/tests/held-event.test.ts` checks the hold itself over Noldova Desktop's own event channel.
 - **`npm run test:e2e`** type-checks `e2e` and runs `e2e/specs` with Playwright, one test at a time, each test in an app of its own with new data and device folders, which it quits through Noldova Desktop's command line.
 
 - Playwright drives the app as the base's desktop UI automation does.
