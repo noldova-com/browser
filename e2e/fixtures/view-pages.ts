@@ -21,8 +21,14 @@ interface IViewDebugger {
   sendCommand(method: "Runtime.evaluate", params: { expression: string; returnByValue: boolean }, sessionId: string): Promise<{ result: { value?: unknown } }>;
 }
 
+interface IViewSession {
+  readonly cookies: { get(filter: { url: string }): Promise<{ name: string }[]> };
+  getStoragePath(): string | null;
+}
+
 interface IViewPageContents {
   getType(): string;
+  readonly session: IViewSession;
   readonly debugger: IViewDebugger;
   getURL(): string;
   getTitle(): string;
@@ -58,6 +64,20 @@ export class AppSurfaces {
   public constructor(windows: number, contents: readonly string[]) {
     this.windows = windows;
     this.contents = contents;
+  }
+}
+
+export class ViewSession {
+  public readonly url: string;
+  public readonly storagePath: string | null;
+  public readonly isDefault: boolean;
+  public readonly isWindows: boolean;
+
+  public constructor(url: string, storagePath: string | null, isDefault: boolean, isWindows: boolean) {
+    this.url = url;
+    this.storagePath = storagePath;
+    this.isDefault = isDefault;
+    this.isWindows = isWindows;
   }
 }
 
@@ -113,6 +133,32 @@ export class ViewPages {
       contents: webContents.getAllWebContents().map((t: IViewPageContents) => t.getType()).sort()
     }));
     return new AppSurfaces(surfaces.windows, surfaces.contents);
+  }
+
+  public async sessionsAsync(): Promise<readonly ViewSession[]> {
+    const sessions = await this.application.evaluate(({ BrowserWindow, session, webContents }): { url: string; storagePath: string | null; isDefault: boolean; isWindows: boolean }[] => {
+      const windows: IViewSession[] = BrowserWindow.getAllWindows().map((t: { webContents: IViewPageContents }) => t.webContents.session);
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
+      return views.map(t => ({ url: t.getURL(), storagePath: t.session.getStoragePath(), isDefault: t.session === session.defaultSession, isWindows: windows.includes(t.session) }));
+    });
+    return sessions.map(t => new ViewSession(t.url, t.storagePath, t.isDefault, t.isWindows));
+  }
+
+  public async viewCookiesAsync(pageUrl: string, url: string): Promise<readonly string[]> {
+    return this.application.evaluate(async ({ webContents }, request: { pageUrl: string; url: string }): Promise<string[]> => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === request.pageUrl);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${request.pageUrl}, not one.`);
+      return (await view.session.cookies.get({ url: request.url })).map(t => t.name);
+    }, { pageUrl, url });
+  }
+
+  public async appCookiesAsync(url: string): Promise<readonly string[]> {
+    return this.application.evaluate(async ({ BrowserWindow, session }, href: string): Promise<string[]> => {
+      const sessions: IViewSession[] = [session.defaultSession, ...BrowserWindow.getAllWindows().map((t: { webContents: IViewPageContents }) => t.webContents.session)];
+      return (await Promise.all(sessions.map(t => t.cookies.get({ url: href })))).flat().map(t => t.name);
+    }, url);
   }
 
   public async downloadsFolderAsync(): Promise<string> {
