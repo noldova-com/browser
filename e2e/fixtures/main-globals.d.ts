@@ -10,3 +10,4 @@ declare var noldovaViewRequests: { url: string; error: string | null; address: s
 declare var noldovaViewRequestsInFlight: Map<number, string> | undefined;
 declare var noldovaViewCommits: string[] | undefined;
 declare var noldovaViewFrameCommits: string[] | undefined;
+declare var noldovaViewChoosers: string[] | undefined;
