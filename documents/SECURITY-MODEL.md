@@ -87,7 +87,8 @@ A WebSocket is the exception: `ws:` and `wss:` connect only to allowed origins, 
 1. **Scheme:** only `https:` and `http:` load, `about:blank` is the empty page, and a subframe may also load `about:srcdoc`, which takes its parent's origin.
    Every other scheme is refused before the allowed origins are consulted: `data:`, `blob:`, any other `about:` page, `view-source:` and `devtools:`, besides those the address checks refuse.
    A page's own top-level navigation to `about:srcdoc` isn't refused by the base today: the engine ends it in its own error page, which replaces the view's page and loads nothing ([desktop#109](https://github.com/noldova-com/desktop/issues/109)).
-   A page's own `javascript:` link or location runs as that page's script, as in every browser: it runs in the page's own document and loads nothing, so the page keeps its address and origin. A `javascript:` address typed into the pane, or given to the agent's navigate tool, is refused and runs nothing.
+   A page's own `javascript:` link or location runs as that page's script, as in every browser: it runs in the page's own document and loads nothing, so the page keeps its address and origin.
+   A `javascript:` address typed into the pane, or given to the agent's navigate tool, is refused and runs nothing.
    Subframes take these checks too, so a `data:` or `blob:` frame is refused in the preview, even on an allowed page.
 2. **Origin:** the URL's origin must equal an allowed origin.
 
