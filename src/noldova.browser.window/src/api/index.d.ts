@@ -1079,6 +1079,7 @@ export declare class PaneStatus {
   /**
    * Gives the status after the page's state: its address, title and history; while loading it gives `Loading` and clears a failure, a refusal or a crash,
    * unless a refusal holds the load at the page's address, and once loading stops it turns `Loading` into `Loaded` and keeps any other state.
+   * A refused request that came while `Loading` stays through the rest of that load; a load that starts after it clears it.
    *
    * @param state The page's state.
    * @returns The new status.
@@ -1092,7 +1093,8 @@ export declare class PaneStatus {
   public show(state: ViewStateEvent): PaneStatus;
 
   /**
-   * Gives the status after a load failed: `Failed`, with the failed address and the failure's description, and no refusal or pop-up.
+   * Gives the status after a load failed: `Failed`, with the failed address and the failure's description, and no refusal or pop-up, except a refused
+   * request that came while that load was `Loading`.
    *
    * @param failure The failed load.
    * @returns The new status.
@@ -1137,9 +1139,9 @@ export declare class PaneStatus {
   public refuse(origin: string, holdsRefusedLoad?: boolean): PaneStatus;
 
   /**
-   * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads.
+   * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads and a refused request's notice goes.
    *
-   * @returns The new status, which holds no load; this same status when it held none.
+   * @returns The new status, which holds no load and has no refused request; this same status when it held none and had none.
    * @example
    * ```ts
    * import { PaneStatus } from "@noldova/browser.window";
