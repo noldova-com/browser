@@ -103,6 +103,12 @@ const ROWS: readonly IRefusedRow[] = [
     addresses: (_allowed, other) => [`${other.name}:${other.port}`, `localhost:${other.port}`, `127.0.0.1:${other.port}`, `[::1]:${other.port}`]
   },
   {
+    name: "Trailing dot on a refused host",
+    kinds: EVERY_KIND,
+    localSites: (allowed, other) => [allowed.origin, `http://localhost:${other.port}`],
+    addresses: (_allowed, other) => [`localhost.:${other.port}`, `127.0.0.1.:${other.port}`, "169.254.169.254."]
+  },
+  {
     name: "Subresource on a private address",
     kinds: EVERY_KIND,
     localSites: allowed => [allowed.origin],
@@ -156,6 +162,7 @@ test.describe("subresources", () => {
       if (kind.isSeenByPage)
         expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
       await expectRefusedAsync(app, kind, target, how, since, allowed.url(CONTROL_FRAME));
+      await expect.poll(() => allowed.requests.map(t => t.path), { message: `The allowed server never received the first hop of ${how}.` }).toContain(path);
     }
 
     expect(other.requests, "The other origin's fixture server received a request.").toEqual([]);
@@ -200,6 +207,8 @@ test.describe("subresources", () => {
     await app.viewPages.runAsync(`fetch(${JSON.stringify(allowed.url("/cached"))}).then(t => t.text())`);
 
     expect(allowed.requests.filter(t => t.path === "/cached"), "The second load came from a cache.").toHaveLength(2);
+    await expect.poll(() => app.viewRequests.addressesAsync(allowed.url("/cached")), { message: "The main process's record doesn't show each load's connected address." })
+      .toEqual([allowed.address, allowed.address]);
   });
 
   test("Service worker", async ({ app, servers }) => {

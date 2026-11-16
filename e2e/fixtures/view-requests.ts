@@ -10,7 +10,7 @@ import type { ElectronApplication } from "playwright/test";
 
 interface IViewWebRequest {
   onSendHeaders(listener: (details: { id: number; url: string }) => void): void;
-  onCompleted(listener: (details: { id: number; url: string }) => void): void;
+  onCompleted(listener: (details: { id: number; url: string; ip?: string }) => void): void;
   onErrorOccurred(listener: (details: { id: number; url: string; error: string }) => void): void;
 }
 
@@ -38,7 +38,7 @@ export class ViewRequests {
 
   public static async watchAsync(application: ElectronApplication): Promise<ViewRequests> {
     await application.evaluate(({ app }) => {
-      const records: { url: string; error: string | null }[] = [];
+      const records: { url: string; error: string | null; address: string | null }[] = [];
       const inFlight = new Map<number, string>();
       globalThis.noldovaViewRequests = records;
       globalThis.noldovaViewRequestsInFlight = inFlight;
@@ -52,11 +52,11 @@ export class ViewRequests {
         });
         contents.session.webRequest.onCompleted(details => {
           inFlight.delete(details.id);
-          records.push({ url: details.url, error: null });
+          records.push({ url: details.url, error: null, address: details.ip ?? null });
         });
         contents.session.webRequest.onErrorOccurred(details => {
           inFlight.delete(details.id);
-          records.push({ url: details.url, error: details.error });
+          records.push({ url: details.url, error: details.error, address: null });
         });
       });
     });
@@ -70,6 +70,10 @@ export class ViewRequests {
   public async peekAsync(): Promise<readonly ViewRequest[]> {
     const records = await this.application.evaluate(() => [...globalThis.noldovaViewRequests ?? []]);
     return records.map(t => new ViewRequest(t.url, t.error));
+  }
+
+  public async addressesAsync(url: string): Promise<readonly (string | null)[]> {
+    return this.application.evaluate((_electron, href) => (globalThis.noldovaViewRequests ?? []).filter(t => t.url === href && t.error === null).map(t => t.address), url);
   }
 
   public async takeAsync(): Promise<readonly ViewRequest[]> {
