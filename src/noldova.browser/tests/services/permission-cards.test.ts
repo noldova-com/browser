@@ -33,7 +33,7 @@ describe("PermissionCards", () => {
     expect([
       PermissionCards.clickTitle(facts([node("BUTTON", [["type", "button"]])]), new ShownElement("button", "Choose\n  Team", false), "https://docs.example.com"),
       PermissionCards.clickTitle(facts([FORM, submit], [FORM, submit], "Create your\nTeam account"), new ShownElement("button", "Create", false), "https://docs.example.com")
-    ]).toEqual(["Click \"Choose Team\" on docs.example.com", "Submit the form \"Create your Team account\""]);
+    ]).toEqual(["Click \"Choose Team\" on docs.example.com", "Submit the form \"Create your Team account\" on docs.example.com"]);
   });
 
   it("titles typing by the field, and typing that submits its form by the form", () => {
@@ -44,7 +44,7 @@ describe("PermissionCards", () => {
       PermissionCards.typeTitle(facts([FORM, field]), shown, false, "https://docs.example.com"),
       PermissionCards.typeTitle(facts([field]), shown, true, "https://docs.example.com"),
       PermissionCards.typeTitle(facts([FORM, field], [FORM, field], "Sign up"), shown, true, "https://docs.example.com")
-    ]).toEqual(["Type into the Team name field on docs.example.com", "Type into the Team name field on docs.example.com", "Submit the form \"Sign up\""]);
+    ]).toEqual(["Type into the Team name field on docs.example.com", "Type into the Team name field on docs.example.com", "Submit the form \"Sign up\" on docs.example.com"]);
   });
 
   it("titles a key by its chord and the site's host, and an Enter that submits its form by the form", () => {
@@ -54,12 +54,12 @@ describe("PermissionCards", () => {
       PermissionCards.keyTitle(null, "Enter", "Enter", "https://docs.example.com"),
       PermissionCards.keyTitle(facts([FORM, field]), "a", "Control+a", "https://docs.example.com"),
       PermissionCards.keyTitle(facts([FORM, field], [FORM, field], "Search"), "Enter", "Enter", "https://docs.example.com")
-    ]).toEqual(["Press Enter on docs.example.com", "Press Control+a on docs.example.com", "Submit the form \"Search\""]);
+    ]).toEqual(["Press Enter on docs.example.com", "Press Control+a on docs.example.com", "Submit the form \"Search\" on docs.example.com"]);
   });
 
-  it("says the page by its title on one line and its URL, or its URL alone when it has no title", () => {
+  it("says the page by its URL first, then its title on one line, or its URL alone when it has no title", () => {
     expect([PermissionCards.page("https://docs.example.com/", "Plans\n and pricing"), PermissionCards.page("https://docs.example.com/", " ")]).toEqual([
-      { label: "Page", kind: PermissionDetailKind.Text, value: "\"Plans and pricing\", https://docs.example.com/" },
+      { label: "Page", kind: PermissionDetailKind.Text, value: "https://docs.example.com/, \"Plans and pricing\"" },
       { label: "Page", kind: PermissionDetailKind.Text, value: "https://docs.example.com/" }
     ]);
   });
@@ -113,6 +113,41 @@ describe("PermissionCards", () => {
       { label: "From", kind: PermissionDetailKind.Text, value: "https://docs.example.com/" },
       { label: "To", kind: PermissionDetailKind.Text, value: "https://status.example.net/" }
     ]);
+  });
+
+  it("cuts a long element name at 80 characters, so the title still names the host, and a long form name the same way", () => {
+    const name: string = "Pay ".repeat(60);
+    const submit: NodeFacts = node("BUTTON", [["type", "submit"]]);
+    const click: string = PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", name, false), "https://docs.example.com");
+    const form: string = PermissionCards.clickTitle(facts([FORM, submit], [FORM, submit], name), new ShownElement("button", "Pay", false), "https://docs.example.com");
+
+    expect([click, form]).toEqual([`Click "${"Pay ".repeat(19)}Pay…" on docs.example.com`, `Submit the form "${"Pay ".repeat(19)}Pay…" on docs.example.com`]);
+    expect(PermissionCards.element(facts([node("BUTTON")]), new ShownElement("button", name, false))[0]?.value).toBe(`"${"Pay ".repeat(19)}Pay…", button`);
+  });
+
+  it("cuts a name to the room the title leaves beside a long host, and never inside a character", () => {
+    const host: string = `${"a".repeat(150)}.example.com`;
+    const title: string = PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", "\u{1F600}".repeat(40), false), `https://${host}`);
+
+    expect([title.length, title]).toEqual([199, `Click "${"\u{1F600}".repeat(12)}…" on ${host}`]);
+  });
+
+  it("cuts a long page title at 300 characters after the URL, so the URL shows whole", () => {
+    const value: string | undefined = PermissionCards.page("https://docs.example.com/", "Title ".repeat(100)).value;
+
+    expect(value).toBe(`https://docs.example.com/, "${"Title ".repeat(49)}Title…"`);
+  });
+
+  it("takes out the format characters page text may hide its direction or words with, from names, titles and field names", () => {
+    const name: string = "Pay‮​moc.liame‬";
+    const form: readonly NodeFacts[] = [FORM, node("INPUT", [["type", "text"], ["name", "co­upon"]])];
+
+    expect([
+      PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", name, false), "https://docs.example.com"),
+      PermissionCards.element(facts([node("BUTTON")]), new ShownElement("button", name, false))[0]?.value,
+      PermissionCards.page("https://docs.example.com/", "⁧Cart⁩").value,
+      PermissionCards.sends(facts(null, form))[0]?.value
+    ]).toEqual(["Click \"Paymoc.liame\" on docs.example.com", "\"Paymoc.liame\", button", "https://docs.example.com/, \"Cart\"", "coupon"]);
   });
 
   it("cuts a detail over its limit with an ellipsis, so it ends at the limit", () => {

@@ -307,17 +307,19 @@ Each request names the action, `browser.<name>`, its subject, its exact details 
 A request's subject is the page's origin, which Noldova Desktop keeps an answer by, and its card says what the agent is about to touch and where, with no Origin row, since the title and Page already name the site:
 
 - **Title:** the element by its accessible name and the site by its host, such as `Click "Choose Team" on docs.example.com`, `Type into the Password field on docs.example.com` or `Press Escape on docs.example.com`; an element with no name is named by its role, `Click the checkbox on docs.example.com`, and one with no role of its own as an element.
-  A click, an Enter or a key that submits a form names the form instead, `Submit the form "Create your Team account"`, by its `aria-labelledby` elements' text, its `aria-label` or its `title`, or `Submit a form on docs.example.com` when it has none.
+  A click, an Enter or a key that submits a form names the form instead, `Submit the form "Create your Team account" on docs.example.com`, by its `aria-labelledby` elements' text, its `aria-label` or its `title`, or `Submit a form on docs.example.com` when it has none.
   A navigation names the host: `Open a page on docs.example.com` within the workspace's sites, and `Open status.example.net` for a new one.
-  Every title is one line, and one over 200 characters is cut with an ellipsis.
-- **Page:** the page's title and URL, for a click, typing or a key.
+  Every title is one line of at most 200 characters, and the host always fits: the name is cut to what the title leaves beside it, at most 80 characters.
+- **Page:** the page's URL, then its title, cut at 300 characters, for a click, typing or a key.
 - **Button, Link, Field or Element:** the element's name and its role, such as `"Password", textbox`, with Goes to and the address a link leads to; an element the browser can't read, such as one in another site's frame, is an Element that says so.
 - **Key:** the key and its modifiers, for a key.
 - **Text:** the text the agent types, shown as the agent's words; on a high-risk request, such as one into a secret field, only its length, such as "10 characters, hidden", so the text never reaches the card, and Then says that Enter submits.
 - **Sends:** for a click, an Enter or a key that submits a form, the names of the fields the form sends, its buttons left out.
 - **From and To:** for a navigation, the page's URL and the URL it goes to.
 
-The names, the page's title and the form's name are the page's own and may say anything, while the roles, the host and the URLs are what the browser reads; each item over 2,000 characters is cut with an ellipsis.
+The names, the page's title, the form's name and the fields' names are the page's own and may say anything, while the roles, the host and the URLs are what the browser reads.
+So each piece of page text is cut on its own, with an ellipsis, after the parts the browser reads, and loses its Unicode format characters (`Cf`), such as the bidirectional overrides and isolates and zero-width spaces a page could use to reorder or hide what the card says; a long or crafted name or title can't push the host or the URL out of view.
+Each item over 2,000 characters is cut with an ellipsis.
 
 Each tool that may change the page classifies its action before it acts, and every call of it raises exactly one request with that risk level.
 A read-only tool whose maximum risk is Low, which only reads the page, raises none: Noldova Desktop runs its call without one and refuses any request it raises.

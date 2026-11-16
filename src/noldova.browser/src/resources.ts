@@ -120,6 +120,8 @@ export class Resources {
   public static readonly linkRole: string = "link";
   public static readonly buttonRole: string = "button";
   public static readonly maximumDetailLength: number = 2000;
+  public static readonly maximumNameLength: number = 80;
+  public static readonly maximumPageTitleLength: number = 300;
   public static readonly notVisible: string = "The element has no box on the page, so it can't be clicked; take a new snapshot.";
   public static readonly notVisibleCode: string = "browser.notVisible";
   public static readonly covered: string = "Another element covers the element at its centre, so nothing was clicked; take a new snapshot.";
@@ -535,7 +537,7 @@ export class Resources {
   }
 
   public static formatSubmitTitle(formName: string, host: string): string {
-    return formName === "" ? `Submit a form on ${host}` : `Submit the form "${formName}"`;
+    return formName === "" ? `Submit a form on ${host}` : `Submit the form "${formName}" on ${host}`;
   }
 
   public static formatPressKeyTitle(chord: string, host: string): string {
@@ -546,8 +548,8 @@ export class Resources {
     return name === "" ? Resources.formatRole(role) : `"${name}", ${Resources.formatRole(role)}`;
   }
 
-  public static formatPage(title: string, url: string): string {
-    return title === "" ? url : `"${title}", ${url}`;
+  public static formatPage(url: string, title: string): string {
+    return title === "" ? url : `${url}, "${title}"`;
   }
 
   public static formatHidden(count: number): string {

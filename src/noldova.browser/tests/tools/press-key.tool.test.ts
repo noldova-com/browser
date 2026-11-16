@@ -56,7 +56,7 @@ describe("PressKeyTool", () => {
     expect(bench.permissions.requests[0]).toMatchObject({
       action: "browser.pressKey",
       title: "Press a on shop.test",
-      details: [{ label: "Page", value: "\"Cart\", https://shop.test/cart/" }, { label: "Key", kind: PermissionDetailKind.Text, value: "a" }, { label: "Field", value: "textbox" }],
+      details: [{ label: "Page", value: "https://shop.test/cart/, \"Cart\"" }, { label: "Key", kind: PermissionDetailKind.Text, value: "a" }, { label: "Field", value: "textbox" }],
       risk: ToolRisk.Medium
     });
     expect(keyEvents()).toEqual([

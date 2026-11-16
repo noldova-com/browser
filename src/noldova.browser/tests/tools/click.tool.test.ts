@@ -68,7 +68,7 @@ describe("ClickTool", () => {
       subject: ShopPage.ORIGIN,
       title: "Click \"Help\" on shop.test",
       details: [
-        { label: "Page", kind: PermissionDetailKind.Text, value: "\"Cart\", https://shop.test/cart/" },
+        { label: "Page", kind: PermissionDetailKind.Text, value: "https://shop.test/cart/, \"Cart\"" },
         { label: "Link", kind: PermissionDetailKind.Text, value: "\"Help\", link" },
         { label: "Goes to", kind: PermissionDetailKind.Text, value: "https://shop.test/help" }
       ],
@@ -105,7 +105,7 @@ describe("ClickTool", () => {
     expect(bench.permissions.requests[0]).toMatchObject({ title: "Submit a form on shop.test", risk: ToolRisk.Medium, isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny], labels: { [PermissionOption.AllowAlways]: "Allow for this chat" } });
     expect(bench.permissions.requests[0]?.details).toEqual([
-      { label: "Page", kind: PermissionDetailKind.Text, value: "\"Cart\", https://shop.test/cart/" },
+      { label: "Page", kind: PermissionDetailKind.Text, value: "https://shop.test/cart/, \"Cart\"" },
       { label: "Button", kind: PermissionDetailKind.Text, value: "\"Pay\", button" },
       { label: "Sends", kind: PermissionDetailKind.Text, value: "coupon" }
     ]);
@@ -119,7 +119,7 @@ describe("ClickTool", () => {
 
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SIGN_IN) }));
 
-    expect(bench.permissions.requests[0]).toMatchObject({ action: "browser.clickSecret", title: "Submit the form \"Sign in to the shop\"", risk: ToolRisk.High, isAsking: true,
+    expect(bench.permissions.requests[0]).toMatchObject({ action: "browser.clickSecret", title: "Submit the form \"Sign in to the shop\" on shop.test", risk: ToolRisk.High, isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.Deny], labels: {} });
     expect(bench.permissions.requests[0]?.details.at(-1)).toEqual({ label: "Sends", kind: PermissionDetailKind.Text, value: "pin" });
     expect(mouseEvents().length).toBe(3);
@@ -188,7 +188,7 @@ describe("ClickTool", () => {
 
     expect(bench.permissions.requests[0]).toMatchObject({
       title: "Click the element on shop.test",
-      details: [{ label: "Page", value: "\"Cart\", https://shop.test/cart/" }, { label: "Element", value: "An element the browser can't read, such as one in another site's frame" }],
+      details: [{ label: "Page", value: "https://shop.test/cart/, \"Cart\"" }, { label: "Element", value: "An element the browser can't read, such as one in another site's frame" }],
       risk: ToolRisk.Medium
     });
   });

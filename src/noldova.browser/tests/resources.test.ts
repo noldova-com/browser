@@ -58,7 +58,7 @@ describe("Resources", () => {
 
   it("titles a submit by the form's name, or by the site when the form has none", () => {
     expect([Resources.formatSubmitTitle("Create your Team account", "docs.example.com"), Resources.formatSubmitTitle("", "docs.example.com")])
-      .toEqual(["Submit the form \"Create your Team account\"", "Submit a form on docs.example.com"]);
+      .toEqual(["Submit the form \"Create your Team account\" on docs.example.com", "Submit a form on docs.example.com"]);
   });
 
   it("titles a navigation within the workspace's sites and to a new one by the host", () => {

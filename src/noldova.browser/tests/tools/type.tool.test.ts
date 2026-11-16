@@ -58,7 +58,7 @@ describe("TypeTool", () => {
       subject: ShopPage.ORIGIN,
       title: "Type into the Search field on shop.test",
       details: [
-        { label: "Page", kind: PermissionDetailKind.Text, value: "\"Cart\", https://shop.test/cart/" },
+        { label: "Page", kind: PermissionDetailKind.Text, value: "https://shop.test/cart/, \"Cart\"" },
         { label: "Field", kind: PermissionDetailKind.Text, value: "\"Search\", searchbox" },
         { label: "Text", kind: PermissionDetailKind.AgentText, value: "red shoes" }
       ],
