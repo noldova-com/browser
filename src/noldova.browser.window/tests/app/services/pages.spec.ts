@@ -826,6 +826,7 @@ describe("Pages", () => {
   });
 
   it("takes the working mark away when a load fails, is refused or is stopped, so a failed or refused page shows its glyph alone", async () => {
+    surface().script("https://docs.example.com/slow", { kind: "pending" });
     const tab = await openAsync();
     const view = viewOf(tab);
     const working: (readonly string[])[] = [];
@@ -838,10 +839,9 @@ describe("Pages", () => {
     working.push(context.working);
     tab.controller.refuseNavigation("https://refused.example");
     working.push(context.working);
-    loading(view, "https://docs.example.com/", true);
+    await tab.controller.navigateAsync("https://docs.example.com/slow");
     working.push(context.working);
     await tab.controller.stopAsync();
-    loading(view, "https://docs.example.com/", false);
     working.push(context.working);
 
     expect(working).toEqual([[tab.id], [], [tab.id], [], [tab.id], []]);
