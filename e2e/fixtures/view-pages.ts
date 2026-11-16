@@ -12,35 +12,70 @@ interface IViewPageContents {
   getType(): string;
   getURL(): string;
   getTitle(): string;
+  isLoading(): boolean;
+  executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
+  on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
 }
 
 interface IViewPageRecord {
   url: string;
   title: string;
+  isLoading: boolean;
 }
 
 export class ViewPage {
   public readonly url: string;
   public readonly title: string;
+  public readonly isLoading: boolean;
 
-  public constructor(url: string, title: string) {
+  public constructor(url: string, title: string, isLoading: boolean = false) {
     this.url = url;
     this.title = title;
+    this.isLoading = isLoading;
   }
 }
 
 export class ViewPages {
   private readonly application: ElectronApplication;
 
-  public constructor(application: ElectronApplication) {
+  private constructor(application: ElectronApplication) {
     this.application = application;
+  }
+
+  public static async watchAsync(application: ElectronApplication): Promise<ViewPages> {
+    await application.evaluate(({ app }) => {
+      const commits: string[] = [];
+      globalThis.noldovaViewCommits = commits;
+      app.on("web-contents-created", (_event: unknown, contents: IViewPageContents) => {
+        if (contents.getType() !== "webview")
+          return;
+        contents.on("did-navigate", (_navigated: unknown, url: string) => {
+          commits.push(url);
+        });
+      });
+    });
+    return new ViewPages(application);
   }
 
   public async listAsync(): Promise<readonly ViewPage[]> {
     const records = await this.application.evaluate(({ webContents }): IViewPageRecord[] => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
-      return views.map(t => ({ url: t.getURL(), title: t.getTitle() }));
+      return views.map(t => ({ url: t.getURL(), title: t.getTitle(), isLoading: t.isLoading() }));
     });
-    return records.map(t => new ViewPage(t.url, t.title));
+    return records.map(t => new ViewPage(t.url, t.title, t.isLoading));
+  }
+
+  public async takeCommitsAsync(): Promise<readonly string[]> {
+    return this.application.evaluate(() => globalThis.noldovaViewCommits?.splice(0) ?? []);
+  }
+
+  public async runAsync(script: string): Promise<string> {
+    return this.application.evaluate(async ({ webContents }, code: string): Promise<string> => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views, not one.`);
+      return String(await view.executeJavaScript(code, true));
+    }, script);
   }
 }

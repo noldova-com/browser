@@ -41,12 +41,12 @@ export class TestApp {
   private readonly testInfo: TestInfo;
   private readonly output: string[] = [];
 
-  private constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, dataDirectory: string, deviceDirectory: string, testInfo: TestInfo) {
+  private constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, viewPages: ViewPages, dataDirectory: string, deviceDirectory: string, testInfo: TestInfo) {
     this.application = application;
     this.testInfo = testInfo;
     this.window = window;
     this.viewRequests = viewRequests;
-    this.viewPages = new ViewPages(application);
+    this.viewPages = viewPages;
     this.dataDirectory = dataDirectory;
     this.deviceDirectory = deviceDirectory;
     const child = application.process();
@@ -72,7 +72,8 @@ export class TestApp {
       cwd: TestAppLayout.APP_FOLDER
     });
     const viewRequests = await ViewRequests.watchAsync(application);
-    return new TestApp(application, await application.firstWindow(), viewRequests, dataDirectory, deviceDirectory, testInfo);
+    const viewPages = await ViewPages.watchAsync(application);
+    return new TestApp(application, await application.firstWindow(), viewRequests, viewPages, dataDirectory, deviceDirectory, testInfo);
   }
 
   public async waitForStartAsync(): Promise<void> {
