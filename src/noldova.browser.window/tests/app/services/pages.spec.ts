@@ -825,6 +825,28 @@ describe("Pages", () => {
     ]);
   });
 
+  it("takes the working mark away when a load fails, is refused or is stopped, so a failed or refused page shows its glyph alone", async () => {
+    surface().script("https://docs.example.com/slow", { kind: "pending" });
+    const tab = await openAsync();
+    const view = viewOf(tab);
+    const working: (readonly string[])[] = [];
+
+    loading(view, "https://docs.exmaple.com/", true);
+    working.push(context.working);
+    view.emit(new ViewLoadFailureEvent("https://docs.exmaple.com/", -105, "ERR_NAME_NOT_RESOLVED"));
+    working.push(context.working);
+    loading(view, "https://docs.example.com/", true);
+    working.push(context.working);
+    tab.controller.refuseNavigation("https://refused.example");
+    working.push(context.working);
+    await tab.controller.navigateAsync("https://docs.example.com/slow");
+    working.push(context.working);
+    await tab.controller.stopAsync();
+    working.push(context.working);
+
+    expect(working).toEqual([[tab.id], [], [tab.id], [], [tab.id], []]);
+  });
+
   it("says on its tab that a page can't be reached, in the failure colour, or isn't opened, in the tab's own, once each, and nothing once it stops working or loads again", async () => {
     const tab = await openAsync();
     const view = viewOf(tab);
