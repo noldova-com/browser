@@ -76,8 +76,14 @@ async function requestAsync(app: TestApp, kind: ISubresourceKind, url: string): 
   return app.viewPages.runAsync(`window.requestAsync(${JSON.stringify(kind.name)}, ${JSON.stringify(url)})`);
 }
 
-async function expectRefusedAsync(app: TestApp, url: string, how: string): Promise<void> {
+async function expectRefusedAsync(app: TestApp, kind: ISubresourceKind, url: string, how: string, since: number): Promise<void> {
   const href = new URL(url).href;
+  if (kind === FRAME) {
+    await expect.poll(async () => (await app.viewPages.listAsync()).map(t => t.isLoading), { message: `The view never finished loading after ${how}.` }).toEqual([false]);
+    expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
+    expect((await app.viewRequests.peekAsync()).slice(since).filter(t => t.url === href && t.error !== REFUSED), `The main process's record shows ${how} not refused.`).toEqual([]);
+    return;
+  }
   await expect.poll(async () => (await app.viewRequests.peekAsync()).filter(t => t.url === href).map(t => t.error),
     { message: `The main process's record never showed ${how} refused.` }).toEqual([REFUSED]);
 }
@@ -119,10 +125,11 @@ test.describe("subresources", () => {
         for (const kind of row.kinds) {
           const url = kind.url(address);
           const how = `${kind.name} to ${url}`;
+          const since = (await app.viewRequests.peekAsync()).length;
           const outcome = await requestAsync(app, kind, url);
           if (kind.isSeenByPage)
             expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
-          await expectRefusedAsync(app, url, how);
+          await expectRefusedAsync(app, kind, url, how, since);
         }
 
       expect(other.requests, "The other origin's fixture server received a request.").toEqual([]);
@@ -137,10 +144,11 @@ test.describe("subresources", () => {
       const path = `/redirect-${kind.name}`;
       allowed.redirect(path, target);
       const how = `${kind.name} redirected to ${target}`;
+      const since = (await app.viewRequests.peekAsync()).length;
       const outcome = await requestAsync(app, kind, allowed.url(path));
       if (kind.isSeenByPage)
         expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
-      await expectRefusedAsync(app, target, how);
+      await expectRefusedAsync(app, kind, target, how, since);
     }
 
     expect(other.requests, "The other origin's fixture server received a request.").toEqual([]);
@@ -195,7 +203,7 @@ test.describe("subresources", () => {
     const outcome = await app.viewPages.runAsync("navigator.serviceWorker.register(\"/sw.js\").then(() => \"registered\", () => \"failed\")");
 
     expect(outcome, "The service worker registered.").toBe("failed");
-    await expectRefusedAsync(app, allowed.url("/sw.js"), "the service worker's script");
+    await expectRefusedAsync(app, FETCH, allowed.url("/sw.js"), "the service worker's script", 0);
     expect(allowed.requests.filter(t => t.path === "/sw.js"), "The allowed server received the service worker's script.").toEqual([]);
   });
 });
