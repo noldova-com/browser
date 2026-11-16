@@ -206,6 +206,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 - The production security settings stay as they are: the view's sandbox and context isolation stay on, and the view has no preload.
 - Each launch setting that differs from production is recorded with its reason in `e2e/fixtures/launch-settings.ts`, and each test lists them in its report:
   - GPU acceleration off, with no software stand-in, and one color profile, as in the base's workflows.
+  - A stand-in camera and microphone, which grant nothing, so a refused camera or microphone is the base's refusal rather than a runner with no device.
   - Host resolver rules that map the fixture servers' `.test` names to `127.0.0.1` and fail every other lookup, while `localhost`, `.localhost` names and `127.0.0.1`, where the recording proxy listens, keep the engine's own loopback.
   - A proxy on loopback for every address that isn't loopback, which records each request and answers none, so a request to an address literal that the base fails to refuse never leaves the machine, with `.test` names left out of it, as loopback addresses are, so they reach their fixture servers.
   - On macOS, no windows restored from an earlier run.
@@ -219,14 +220,15 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 - A fixture origin a test allows is a `.localhost` name on its own server, such as `allowed.localhost`, so origins are matched by host as well as by port and scheme.
 - Fixture servers listen on loopback, so each fixture origin a test allows has an exact entry in the fixture host app's Sites on this computer or network setting, which takes a `.localhost` name as a local entry and refuses any other name, as the [security model](SECURITY-MODEL.md) says.
 - A `.test` name, such as `blocked.test`, which the host resolver rules map to `127.0.0.1`, is a name that isn't local and resolves to this computer, which the base refuses whatever the allowed origins hold.
-- A test that needs HTTPS serves it with a certificate made for that run; a certificate the view doesn't trust is one of the [default denials](#isolation-and-default-denials).
+- A test that needs HTTPS serves it with a self-signed certificate made for that run by the runner's `openssl` command line, in a temporary folder removed once the certificate is read, so no key is committed or left on disk; the test fails, rather than skips, when `openssl` is missing.
+  A certificate the view doesn't trust is one of the [default denials](#isolation-and-default-denials).
 - **No request leaves loopback:** the harness records, from the main process, every request of each view's session, as each ends, and each test fails at its end when the recording proxy received a request, or when a view's request named a host that is not one of its fixture servers and wasn't refused by the base before it left the app.
   The guard reads once no view's request is in flight, and the recording proxy is read again after the app quits, so a late request fails the run too.
   `e2e/fixtures/loopback-guard.ts` holds the guard, which requires at a test's end exactly the violations the test's `expectedViolations` option names, none by default; `loopback-only.spec.ts` names the ones its page's request causes, so the test passes only when the guard reports them, word for word.
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts` and `relay-refusals.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
+**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts` and `denials.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
 Each asserts that the view stays at its last allowed address, done loading, with no navigation committed in the view or in a subframe, that the main process's record shows no request for the target that the base didn't refuse, since the base refuses a page's own navigation before its request and a redirect at its request, and that no fixture server received a request for another host; for a top-level start other than going back, it also asserts that the page started the navigation, by the page's own `navigate` event.
 So that those records can't pass empty, each start's page also has an allowed control frame, and the test asserts that the view committed the start page, that a subframe committed the control frame, and that the record shows the start page loaded.
 On macOS, which doesn't route `127.0.0.2`, the "Loopback range" row has no fixture server at that address, and the main process's record alone proves its refusal.
@@ -324,6 +326,14 @@ The security model's [Denied by default](SECURITY-MODEL.md#denied-by-default) li
 The test of "every other permission the engine can ask for" asks for a permission outside the list, MIDI with system-exclusive access, so a handler that only lists the named permissions fails it.
 A check fails when an item has no test, or a test names none.
 Each test asserts that the view refuses with no prompt and no file written; a download is tried by an attachment response and by a link's `download` attribute, and a new window by `window.open` and by a link that targets one.
+- The page sees the refusal: the request's promise rejects or resolves as denied, `window.open` returns `null`, the file input stays empty, and a refused sign-in shows the server's own 401 page with no second request.
+- Where the engine answers a permission query, it reports the item as denied, so a refusal for another reason, such as clipboard reading in a page without focus, doesn't pass the test.
+- No prompt: the app's windows and contents read from the main process are the same before and after, and the downloads folder doesn't change.
+- The pane shows Browser's notice for each request the base reports: a site permission, screen capture, a download, a file chooser and a sign-in; a new window shows the pane's pop-up offer.
+  The base refuses a USB, serial, HID or Bluetooth chooser with no report, so those tests check the page's refusal and that nothing opened.
+  A certificate error reports a refusal and then fails the load, so the pane shows the failed load rather than a notice, and the fixture server receives no request.
+- An embedded `<webview>` element stays an unknown element in the page, since the view has no `<webview>` support, and asks for nothing.
+- A download is tried from a freshly loaded page each time, since a page load clears the pane's notice; the test then finds no file with its name under the downloads folder or the app's folders.
 
 ## Serial tests
 

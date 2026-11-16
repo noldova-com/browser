@@ -51,6 +51,16 @@ export class ViewPage {
   }
 }
 
+export class AppSurfaces {
+  public readonly windows: number;
+  public readonly contents: readonly string[];
+
+  public constructor(windows: number, contents: readonly string[]) {
+    this.windows = windows;
+    this.contents = contents;
+  }
+}
+
 export class ChildTarget {
   public readonly sessionId: string;
   public readonly url: string;
@@ -95,6 +105,18 @@ export class ViewPages {
       return views.map(t => ({ url: t.getURL(), title: t.getTitle(), isLoading: t.isLoading() }));
     });
     return records.map(t => new ViewPage(t.url, t.title, t.isLoading));
+  }
+
+  public async surfacesAsync(): Promise<AppSurfaces> {
+    const surfaces = await this.application.evaluate(({ BrowserWindow, webContents }): { windows: number; contents: string[] } => ({
+      windows: BrowserWindow.getAllWindows().length,
+      contents: webContents.getAllWebContents().map((t: IViewPageContents) => t.getType()).sort()
+    }));
+    return new AppSurfaces(surfaces.windows, surfaces.contents);
+  }
+
+  public async downloadsFolderAsync(): Promise<string> {
+    return this.application.evaluate(({ app }): string => app.getPath("downloads"));
   }
 
   public async takeCommitsAsync(): Promise<readonly string[]> {
