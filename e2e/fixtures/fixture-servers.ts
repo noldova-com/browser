@@ -26,12 +26,13 @@ export class FixtureServer {
 
   public readonly name: string;
   private readonly server: Server;
-  private readonly pages: Readonly<Record<string, string>>;
+  private readonly pages: Map<string, string>;
+  private readonly redirects: Map<string, string> = new Map();
   private readonly received: FixtureRequest[] = [];
 
   private constructor(name: string, pages: Readonly<Record<string, string>>) {
     this.name = name;
-    this.pages = pages;
+    this.pages = new Map(Object.entries(pages));
     this.server = createServer((request, response) => this.answer(request, response));
   }
 
@@ -61,6 +62,14 @@ export class FixtureServer {
     return [...this.received];
   }
 
+  public serve(path: string, page: string): void {
+    this.pages.set(path, page);
+  }
+
+  public redirect(path: string, location: string): void {
+    this.redirects.set(path, location);
+  }
+
   public url(path: string): string {
     return `${this.origin}${path}`;
   }
@@ -75,7 +84,12 @@ export class FixtureServer {
   private answer(request: IncomingMessage, response: ServerResponse): void {
     const path = request.url ?? "";
     this.received.push(new FixtureRequest(request.headers.host ?? "", path));
-    const page = this.pages[path];
+    const location = this.redirects.get(path);
+    if (location !== undefined) {
+      response.writeHead(302, { location, "cache-control": "no-store" }).end();
+      return;
+    }
+    const page = this.pages.get(path);
     if (page === undefined) {
       response.writeHead(404).end();
       return;
@@ -89,6 +103,10 @@ export class FixtureServers {
 
   public get hosts(): ReadonlySet<string> {
     return new Set(this.started.flatMap(t => t.hosts));
+  }
+
+  public get requests(): readonly FixtureRequest[] {
+    return this.started.flatMap(t => t.requests);
   }
 
   public async startAsync(name: string, pages: Readonly<Record<string, string>>): Promise<FixtureServer> {

@@ -1,0 +1,225 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import { expect, test } from "../fixtures/app-test.ts";
+import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
+import type { TestApp } from "../fixtures/test-app.ts";
+import { ViewPage } from "../fixtures/view-pages.ts";
+
+interface INavigationStart {
+  readonly name: string;
+  readonly isTopLevel: boolean;
+  startAsync(app: TestApp, allowed: FixtureServer, target: string): Promise<string>;
+}
+
+interface ITargetContext {
+  readonly servers: FixtureServers;
+  readonly allowed: FixtureServer;
+}
+
+interface IBlockedRow {
+  readonly name: string;
+  readonly starts: readonly INavigationStart[];
+  readonly localSites?: (context: ITargetContext) => readonly string[];
+  targetsAsync(context: ITargetContext): Promise<readonly string[]>;
+}
+
+const ALLOWED_TITLE = "Allowed";
+const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
+
+function page(body: string): string {
+  return `<!doctype html><title>${ALLOWED_TITLE}</title>${body}`;
+}
+
+async function expectPageAsync(app: TestApp, url: string, title: string, message: string): Promise<void> {
+  await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
+}
+
+async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
+  const url = allowed.url(path);
+  allowed.serve(path, page(body));
+  await app.viewPages.runAsync(`location.href = ${JSON.stringify(url)};`);
+  await expectPageAsync(app, url, ALLOWED_TITLE, `The view never loaded ${url}.`);
+  await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept a refusal after loading ${url}.`).toHaveCount(0);
+  return url;
+}
+
+const LINK: INavigationStart = {
+  name: "a link",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => {
+    const url = await goAsync(app, allowed, "/link");
+    await app.viewPages.runAsync(`{ const link = document.createElement("a"); link.href = ${JSON.stringify(target)}; document.body.append(link); link.click(); }`);
+    return url;
+  }
+};
+
+const FORM: INavigationStart = {
+  name: "a form",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => {
+    const url = await goAsync(app, allowed, "/form");
+    await app.viewPages.runAsync(`{ const form = document.createElement("form"); form.method = "post"; form.action = ${JSON.stringify(target)}; document.body.append(form); form.submit(); }`);
+    return url;
+  }
+};
+
+const LOCATION: INavigationStart = {
+  name: "the page's script",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => {
+    const url = await goAsync(app, allowed, "/location");
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(target)};`);
+    return url;
+  }
+};
+
+const META_REFRESH: INavigationStart = {
+  name: "a meta refresh",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => goAsync(app, allowed, "/meta", `<meta http-equiv="refresh" content="0;url=${target}">`)
+};
+
+const REDIRECT: INavigationStart = {
+  name: "a server redirect",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => {
+    const url = await goAsync(app, allowed, "/before-redirect");
+    allowed.redirect("/go", target);
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(allowed.url("/go"))};`);
+    return url;
+  }
+};
+
+const SUBFRAME: INavigationStart = {
+  name: "a subframe",
+  isTopLevel: false,
+  startAsync: async (app, allowed, target) => goAsync(app, allowed, "/frame", `<iframe src="${target}"></iframe>`)
+};
+
+const TOP_FROM_SUBFRAME: INavigationStart = {
+  name: "an allowed subframe's link to the top",
+  isTopLevel: true,
+  startAsync: async (app, allowed, target) => {
+    allowed.serve("/inner", page(`<a target="_top" href="${target}">Out</a>`));
+    const url = await goAsync(app, allowed, "/frame-top", `<iframe src="${allowed.url("/inner")}"></iframe>`);
+    await expect.poll(() => app.viewPages.runAsync("String(document.querySelector(\"iframe\")?.contentDocument?.querySelector(\"a\") !== null)"),
+      { message: "The allowed subframe never showed its link." }).toBe("true");
+    await app.viewPages.runAsync("document.querySelector(\"iframe\").contentDocument.querySelector(\"a\").click();");
+    return url;
+  }
+};
+
+const EVERY_START: readonly INavigationStart[] = [LINK, FORM, LOCATION, META_REFRESH, REDIRECT, SUBFRAME, TOP_FROM_SUBFRAME];
+
+async function otherAsync(context: ITargetContext): Promise<string> {
+  const other = await context.servers.startAsync("other.localhost", { "/": page("") });
+  return other.url("/");
+}
+
+const ROWS: readonly IBlockedRow[] = [
+  { name: "Origin not allowed", starts: [LINK], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Redirect out of the allowed origins", starts: [REDIRECT], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Meta refresh out", starts: [META_REFRESH], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Script sets the location", starts: [LOCATION], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Form submission out", starts: [FORM], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Subframe out", starts: [SUBFRAME], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Subframe navigates the top", starts: [TOP_FROM_SUBFRAME], targetsAsync: async context => [await otherAsync(context)] },
+  { name: "Scheme change", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`https://${allowed.name}:${allowed.port}/`] },
+  {
+    name: "Port change",
+    starts: EVERY_START,
+    targetsAsync: async ({ servers, allowed }) => [(await servers.startAsync(allowed.name, { "/": page("") })).url("/")]
+  },
+  { name: "Subdomain without a wildcard", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://a.${allowed.name}:${allowed.port}/`] },
+  {
+    name: "Look-alike host",
+    starts: EVERY_START,
+    targetsAsync: async ({ servers, allowed }) => {
+      const other = await servers.startAsync("other.localhost", { "/": page("") });
+      return [`http://${allowed.name}.${other.name}:${other.port}/`, `http://bad${allowed.name}:${allowed.port}/`];
+    }
+  },
+  {
+    name: "Credentials",
+    starts: EVERY_START,
+    targetsAsync: async ({ servers, allowed }) => {
+      const other = await servers.startAsync("other.localhost", { "/": page("") });
+      return [`http://user@${allowed.name}:${allowed.port}/`, `http://${allowed.name}@${other.name}:${other.port}/`];
+    }
+  },
+  { name: "Trailing dot", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://${allowed.name}.:${allowed.port}/`] },
+  { name: "Punycode look-alike", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://а${allowed.name.slice(1)}:${allowed.port}/`] },
+  {
+    name: "IP literal for an allowed name",
+    starts: EVERY_START,
+    targetsAsync: async ({ allowed }) => [`http://127.0.0.1:${allowed.port}/`, `http://2130706433:${allowed.port}/`]
+  },
+  {
+    name: "Loopback",
+    starts: EVERY_START,
+    targetsAsync: async ({ allowed }) => [`http://localhost:${allowed.port}/`, `http://127.0.0.1:${allowed.port}/`, `http://[::1]:${allowed.port}/`]
+  },
+  {
+    name: "Loopback, another port",
+    starts: EVERY_START,
+    localSites: ({ allowed }) => [allowed.origin, `http://localhost:${allowed.port}`],
+    targetsAsync: async ({ servers }) => [(await servers.startAsync("localhost", { "/": page("") })).url("/")]
+  }
+];
+
+test.describe("blocked origins", () => {
+  for (const row of ROWS)
+    test(row.name, async ({ app, servers }) => {
+      const allowed = await servers.startAsync("allowed.localhost", { "/": page("") });
+      const context: ITargetContext = { servers, allowed };
+      const targets = await row.targetsAsync(context);
+      await app.allowLocalSitesAsync(row.localSites?.(context) ?? [allowed.origin]);
+      await app.openPageAsync(allowed.url("/"));
+      await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+      const allowedHost = `${allowed.name}:${allowed.port}`;
+
+      for (const target of targets)
+        for (const start of row.starts) {
+          const stays = await start.startAsync(app, allowed, target);
+          const how = `${target} from ${start.name}`;
+          await app.viewPages.takeCommitsAsync();
+
+          if (start.isTopLevel)
+            await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${how} as refused.`).toHaveText(`Browser doesn't open ${new URL(target).origin}`);
+          const barrier = `After ${how}`;
+          await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
+
+          await expectPageAsync(app, stays, barrier, `The view didn't stay at ${stays}, done loading, after ${how}.`);
+          expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${how}.`).toEqual([]);
+          expect(servers.requests.filter(t => t.host !== allowedHost), `A fixture server received a request for ${how}.`).toEqual([]);
+        }
+    });
+
+  test("History entry no longer allowed", async ({ app, servers }) => {
+    const first = await servers.startAsync("first.localhost", { "/": page("") });
+    const second = await servers.startAsync("second.localhost", { "/": page("") });
+    await app.allowLocalSitesAsync([first.origin, second.origin]);
+    await app.openPageAsync(first.url("/"));
+    await expectPageAsync(app, first.url("/"), ALLOWED_TITLE, "The view never showed the first allowed page.");
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(second.url("/"))};`);
+    await expectPageAsync(app, second.url("/"), ALLOWED_TITLE, "The view never showed the second allowed page.");
+    const firstRequests = first.requests.length;
+
+    await app.allowLocalSitesAsync([second.origin]);
+    await app.viewPages.takeCommitsAsync();
+    await app.viewPages.runAsync("history.back();");
+
+    await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the history entry as refused.").toHaveText(`Browser doesn't open ${first.origin}`);
+    const barrier = "After going back";
+    await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
+    await expectPageAsync(app, second.url("/"), barrier, "The view didn't stay at the second page, done loading, after going back.");
+    expect(await app.viewPages.takeCommitsAsync(), "The view committed the history entry.").toEqual([]);
+    expect(first.requests.length, "The first page's server received a request for the history entry.").toBe(firstRequests);
+  });
+});

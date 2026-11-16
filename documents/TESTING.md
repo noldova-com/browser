@@ -225,7 +225,8 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts` and `schemes.spec.ts` exist, and `navigation.spec.ts` with its test that an allowed origin loads; each other workflow, and the rest of `navigation.spec.ts`, comes in its own pull request.
+**Not yet:** of these workflows, `loopback-only.spec.ts` and `schemes.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "Loopback, another port", without "Loopback range" and the IPv6 forms, and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()`.
+The bridge's navigate, back and forward come with the agent tools; each other workflow, the rest of `navigation.spec.ts` and the other navigation rows come in their own pull requests.
 
 | Workflow | What it proves |
 |---|---|
