@@ -304,9 +304,9 @@ Each test sends its call through [the relay double](#the-fixture-host-app) to it
 The calls come from the double under a copy of the module's `webViews.json`, not from the module itself, whose own calls the unit tests of its scripted views check.
 
 The same file has a named test for each of the relay's other refusals and limits:
-- `child target session`: a declared call that names a cross-site frame's session is refused; the test attaches to that frame's target from the main process and reads its address through the session first, so the session exists and is the child's;
-- `foreign view id`: a call to the module's own open view, from the double, is refused as `NotOwned`, which a view that doesn't exist wouldn't be;
-- `time limit`: a declared call to a page whose main thread the test holds, with the shortest limit the relay takes, 1 millisecond, ends as `TimedOut`, and the page answers again once the test releases it;
+- `child target session`: a declared call that names a cross-site frame's session is refused, and a declared call after it is answered; the test attaches to that frame's target from the main process and reads its address through the session first, so the session exists and is the child's;
+- `foreign view id`: a call to the module's own open view, from the double, is refused as `NotOwned`, which a view that doesn't exist wouldn't be, the module's page is unchanged, and declared calls on the double's own view are answered before and after;
+- `time limit`: a declared call with a 1-second limit, which the free page answers within, ends as `TimedOut` once the test holds the page's main thread, and the page answers again once the test releases it, which it does whatever the call's outcome;
 - `size limit`: a whole-document read of a page whose markup the test makes one byte longer than the relay's 4 MiB reply bound ends as `TooLarge`.
 
 ### Isolation and default denials

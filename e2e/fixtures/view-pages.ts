@@ -142,6 +142,16 @@ export class ViewPages {
     }, sessionId);
   }
 
+  public async runAtAsync(url: string, script: string): Promise<string> {
+    return this.application.evaluate(async ({ webContents }, request: { url: string; code: string }): Promise<string> => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === request.url);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
+      return String(await view.executeJavaScript(request.code, true));
+    }, { url, code: script });
+  }
+
   public async runAsync(script: string): Promise<string> {
     return this.application.evaluate(async ({ webContents }, code: string): Promise<string> => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");

@@ -15,6 +15,11 @@ import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
+interface IDoubleView {
+  readonly server: FixtureServer;
+  readonly view: number;
+}
+
 interface IRefusedCall {
   readonly title: string;
   readonly method: string;
@@ -29,7 +34,7 @@ const NOT_OWNED = "NotOwned";
 const TIMED_OUT = "TimedOut";
 const TOO_LARGE = "TooLarge";
 const CALL_LIMIT = 5000;
-const SHORTEST_LIMIT = 1;
+const FREE_PAGE_LIMIT = 1000;
 const RELAY_REPLY_LIMIT = 4 * 1024 * 1024;
 const CONTROL_METHOD = "Page.getLayoutMetrics";
 const WHOLE_DOCUMENT: JsonObject = { depth: -1, pierce: true };
@@ -102,15 +107,15 @@ async function openDoubleViewAsync(app: TestApp): Promise<number> {
 }
 
 async function openDoubleAsync(app: TestApp, servers: FixtureServers, body: string, extraOrigins: readonly string[] = [],
-  prepare: (server: FixtureServer) => void = () => undefined): Promise<FixtureServer> {
+  prepare: (server: FixtureServer) => void = () => undefined): Promise<IDoubleView> {
   const server = await servers.startAsync("relay.localhost", { "/": body });
   prepare(server);
-  await openDoubleViewAsync(app);
+  const view = await openDoubleViewAsync(app);
   await app.requestAsync("relay-double.allow", { origins: [server.origin, ...extraOrigins] });
   await app.requestAsync("relay-double.navigate", { url: server.url("/") });
-  await expect.poll(() => app.viewPages.listAsync(), { message: "The relay double's view never showed its page." }).toEqual([new ViewPage(server.url("/"), PAGE_TITLE)]);
+  await expect.poll(() => app.viewPages.listAsync(), { message: "The relay double's view never showed its page." }).toContainEqual(new ViewPage(server.url("/"), PAGE_TITLE));
   expect(await sendAsync(app, CONTROL_METHOD), `The relay didn't answer the declared ${CONTROL_METHOD}, so the double's refusals prove nothing.`).toBe(ANSWERED);
-  return server;
+  return { server, view };
 }
 
 test.describe("relay refusals", () => {
@@ -141,6 +146,7 @@ test.describe("relay refusals", () => {
       .toBe(NOT_ALLOWED);
 
     expect(await app.viewPages.runAsync(PAGE_STATE), "The page changed after the refused call.").toBe(before);
+    expect(await sendAsync(app, CONTROL_METHOD), "The relay stopped answering after the refused call.").toBe(ANSWERED);
     await app.viewPages.detachChildAsync(target.sessionId);
   });
 
@@ -149,9 +155,13 @@ test.describe("relay refusals", () => {
     await app.allowLocalSitesAsync([browserPage.origin]);
     await app.openPageAsync(browserPage.url("/"));
     await expect.poll(() => app.viewPages.listAsync(), { message: "The browser never showed its page." }).toEqual([new ViewPage(browserPage.url("/"), PAGE_TITLE)]);
-    const own = await openDoubleViewAsync(app);
+    const before = await app.viewPages.runAtAsync(browserPage.url("/"), PAGE_STATE);
+    const { view } = await openDoubleAsync(app, servers, page());
 
-    expect(await sendAsync(app, CONTROL_METHOD, {}, CALL_LIMIT, String(own - 1)), "The relay didn't refuse a call to the browser's view as another module's.").toBe(NOT_OWNED);
+    expect(await sendAsync(app, CONTROL_METHOD, {}, CALL_LIMIT, String(view - 1)), "The relay didn't refuse a call to the browser's view as another module's.").toBe(NOT_OWNED);
+
+    expect(await app.viewPages.runAtAsync(browserPage.url("/"), PAGE_STATE), "The browser's page changed after the refused call.").toBe(before);
+    expect(await sendAsync(app, CONTROL_METHOD), "The relay stopped answering the double's own view after the refused call.").toBe(ANSWERED);
   });
 
   test("time limit", async ({ app, servers }) => {
@@ -160,16 +170,21 @@ test.describe("relay refusals", () => {
       + `window.holdPage = () => { setTimeout(() => { while (Atomics.load(flag, 0) === 0) {} document.title = ${JSON.stringify(RELEASED_TITLE)}; }, 0); return "holding"; };`;
     const worker = "onmessage = event => { const flag = new Int32Array(event.data); const poll = () => fetch(\"/release\", { cache: \"no-store\" })"
       + ".then(t => t.ok ? Atomics.store(flag, 0, 1) : setTimeout(poll, 50), () => setTimeout(poll, 50)); poll(); };";
-    const server = await openDoubleAsync(app, servers, page(holding), [], t => {
+    const { server } = await openDoubleAsync(app, servers, page(holding), [], t => {
       t.serve("/", page(holding), isolated);
       t.serve("/worker.js", worker, { ...isolated, "content-type": "text/javascript" });
     });
     expect(await app.viewPages.runAsync("String(crossOriginIsolated)"), "The held page didn't load cross-origin isolated.").toBe("true");
+    expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT, FREE_PAGE_LIMIT), `The free page didn't answer within ${FREE_PAGE_LIMIT} ms.`).toBe(ANSWERED);
 
-    expect(await app.viewPages.runAsync("window.holdPage()"), "The page didn't start holding its main thread.").toBe("holding");
-    expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT, SHORTEST_LIMIT), "A call the held page couldn't answer didn't end at its time limit.").toBe(TIMED_OUT);
+    try {
+      expect(await app.viewPages.runAsync("window.holdPage()"), "The page didn't start holding its main thread.").toBe("holding");
+      expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT, FREE_PAGE_LIMIT), "A call the held page couldn't answer didn't end at its time limit.").toBe(TIMED_OUT);
+    }
+    finally {
+      server.serve("/release", "released");
+    }
 
-    server.serve("/release", "released");
     await expect.poll(() => app.viewPages.listAsync(), { message: "The page never left its held main thread." }).toEqual([new ViewPage(server.url("/"), RELEASED_TITLE)]);
     expect(await sendAsync(app, CONTROL_METHOD), "The relay didn't answer once the page was released.").toBe(ANSWERED);
   });
