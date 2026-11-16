@@ -326,10 +326,11 @@ The same file has a named test for each of the relay's other refusals and limits
 Each `isolation.spec.ts` test is titled with its item.
 - The globals test checks the base's bridge, `desktop`, and Node's and Electron's names, such as `require`, `process` and `ipcRenderer`, after checking that the app's window has the bridge.
 - The protocol test fetches, and loads as an image, an address on the base's shared-file protocol, `desktop-file:`, which the page must fail to reach.
+  Both would fail even on a session that served the protocol, since the scheme lacks the fetch privilege and the address names no grant, so the main process also checks that no view's session handles `desktop-file:`, with the window's session, which does, as the control.
 - The WebRTC test gathers the candidates of a data channel's offer, with no STUN server, and finds none: under the policy the view gathers no host candidate, while without it Chromium would gather host candidates whose `.local` names hide the address, so a test for address literals alone would pass without the policy.
 - The storage tests write a cookie that outlives the session, a local storage item and an IndexedDB record, and read all three back.
   A second profile key's page reads none of them; the main process finds the cookie only in the first key's session, not in the window's or the default session.
-  Clearing goes through the pane's Clear browsing data… and its dialog, as the person does; the restart quits the app and launches it again on the same folders.
+  Clearing goes through the pane's Clear browsing data… and its dialog, as the person does, and the next page's read is polled until it finds nothing; the restart quits the app and launches it again on the same folders.
 
 The security model's [Denied by default](SECURITY-MODEL.md#denied-by-default) list owns the default denials.
 `denials.spec.ts` has one test for each item of that list, titled with the item: the camera, the microphone, location, notifications, clipboard reading, USB, serial, HID, Bluetooth, every other permission the engine can ask for, screen capture, downloads, new windows and pop-ups, file choosers, authentication prompts, certificate errors and embedded `<webview>` elements.

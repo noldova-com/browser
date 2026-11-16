@@ -23,6 +23,7 @@ interface IViewDebugger {
 
 interface IViewSession {
   readonly cookies: { get(filter: { url: string }): Promise<{ name: string }[]> };
+  readonly protocol: { isProtocolHandled(scheme: string): boolean };
   getStoragePath(): string | null;
 }
 
@@ -82,6 +83,16 @@ export class ViewSession {
     this.storagePath = storagePath;
     this.isDefault = isDefault;
     this.isWindows = isWindows;
+  }
+}
+
+export class ProtocolHandlers {
+  public readonly views: readonly boolean[];
+  public readonly windows: readonly boolean[];
+
+  public constructor(views: readonly boolean[], windows: readonly boolean[]) {
+    this.views = views;
+    this.windows = windows;
   }
 }
 
@@ -173,6 +184,17 @@ export class ViewPages {
       const sessions: IViewSession[] = [session.defaultSession, ...BrowserWindow.getAllWindows().map((t: { webContents: IViewPageContents }) => t.webContents.session)];
       return (await Promise.all(sessions.map(t => t.cookies.get({ url: href })))).flat().map(t => t.name);
     }, url);
+  }
+
+  public async protocolHandlersAsync(scheme: string): Promise<ProtocolHandlers> {
+    const handlers = await this.application.evaluate(({ BrowserWindow, webContents }, name: string): { views: boolean[]; windows: boolean[] } => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
+      return {
+        views: views.map(t => t.session.protocol.isProtocolHandled(name)),
+        windows: BrowserWindow.getAllWindows().map((t: { webContents: IViewPageContents }) => t.webContents.session.protocol.isProtocolHandled(name))
+      };
+    }, scheme);
+    return new ProtocolHandlers(handlers.views, handlers.windows);
   }
 
   public async downloadsFolderAsync(): Promise<string> {

@@ -11,7 +11,7 @@ import path from "node:path";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
-import { ViewPage, ViewSession } from "../fixtures/view-pages.ts";
+import { ProtocolHandlers, ViewPage, ViewSession } from "../fixtures/view-pages.ts";
 
 const PAGE_TITLE = "Isolation";
 const PROFILE_KEY = "e2e";
@@ -21,7 +21,8 @@ const PARTITIONS_FOLDER = "Partitions";
 const COOKIE = "isolation";
 const WRITTEN = JSON.stringify([`${COOKIE}=written`, "written", "written"]);
 const EMPTY = JSON.stringify(["", null, null]);
-const APP_FILE = "desktop-file://0123456789abcdef/";
+const APP_SCHEME = "desktop-file";
+const APP_FILE = `${APP_SCHEME}://0123456789abcdef/`;
 const PAGE_PATHS: readonly string[] = ["/", "/other", "/cleared", "/kept"];
 
 const APP_GLOBALS: readonly string[] = ["desktop", "require", "process", "module", "exports", "Buffer", "global", "electron", "ipcRenderer", "__dirname", "__filename", "setImmediate"];
@@ -104,6 +105,8 @@ test.describe("isolation", () => {
 
     expect(await app.viewPages.runAsync(`fetch(${JSON.stringify(APP_FILE)}).then(() => "loaded", () => "failed")`), "The page fetched the app's shared-file protocol.").toBe("failed");
     expect(await app.viewPages.runAsync(`window.loadAsync(${JSON.stringify(APP_FILE)})`), "The page loaded an image from the app's shared-file protocol.").toBe("failed");
+    expect(await app.viewPages.protocolHandlersAsync(APP_SCHEME), "A view's session serves the app's shared-file protocol, or the window's doesn't, so the check proves nothing.")
+      .toEqual(new ProtocolHandlers([false], [true]));
   });
 
   test("a page that gathers WebRTC ICE candidates learns no local or private address from them", async ({ app, servers }) => {
@@ -139,7 +142,7 @@ test.describe("isolation", () => {
     await expect.poll(() => app.viewPages.viewCookiesAsync(allowed.url("/"), allowed.origin), { message: "Clearing the profile key never removed its cookie." }).toEqual([]);
     await app.viewPages.runAsync(`location.href = "/cleared"; "started"`);
     await expect.poll(() => app.viewPages.listAsync(), { message: "The view never showed the page after clearing." }).toEqual([new ViewPage(allowed.url("/cleared"), PAGE_TITLE)]);
-    expect(await app.viewPages.runAsync("window.readAsync()"), "Clearing the profile key left its storage.").toBe(EMPTY);
+    await expect.poll(() => app.viewPages.runAsync("window.readAsync()"), { message: "Clearing the profile key left its storage." }).toBe(EMPTY);
   });
 
   test("a profile key keeps its storage across a restart of the app", async ({ app, servers }) => {
