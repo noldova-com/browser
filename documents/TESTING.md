@@ -275,6 +275,7 @@ For a row that loads, such as another public origin or a loopback origin with a 
 
 `schemes.spec.ts` proves that a navigation loads only `https:`, `http:` and `about:blank`.
 Every other scheme, `file:`, `data:`, `blob:`, `about:srcdoc`, `view-source:`, `devtools:`, the browser's internal `chrome:` pages and the app's own `desktop-file:` protocol, is refused from a link and from the page's script, with the page's own origin allowed, since the base reads the scheme before the allow list.
+A page's own `javascript:` link and location run in the page's own document: the test asserts that the script ran, that the view keeps its address and origin, and that it committed no navigation; a `javascript:` address typed into the pane's address field is refused with the pane's message and runs nothing.
 The engine refuses most of them before the base sees the navigation, so the pane shows no refusal; each test sets the page's title after the navigation starts, through the same channel, and asserts that the view stays at its last allowed address with that title, done loading, and committed no navigation.
 A subresource may still use `data:` and `blob:`, which never leave the page, and the test proves that they load; a subframe by `srcdoc`, `data:` or `blob:` follows its row of the [blocked-origin table](#blocked-origins).
 

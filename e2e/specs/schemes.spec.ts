@@ -22,6 +22,9 @@ interface INavigationStart {
 
 const ALLOWED_TITLE = "Allowed";
 const ALLOWED_PAGE = `<!doctype html><title>${ALLOWED_TITLE}</title><p>Allowed fixture page</p>`;
+const ADDRESS_FIELD = ".nol-browser-toolbar-field";
+const NOTICE_MESSAGE = ".nol-browser-request-notice-message";
+const NOT_WEB_MESSAGE = "Browser opens only addresses that start with http: or https:.";
 const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 const REFUSED_SCHEMES: readonly IRefusedScheme[] = [
@@ -84,5 +87,42 @@ test.describe("schemes", () => {
     })()`);
 
     expect(widths, "The data: image and its blob: copy didn't both load.").toBe("1 1");
+  });
+
+  test("runs a page's own javascript: URL in its own document, loading nothing", async ({ app, servers }) => {
+    const allowed = await servers.startAsync("allowed.localhost", { "/": ALLOWED_PAGE });
+    await app.allowLocalSitesAsync([allowed.origin]);
+    await app.openPageAsync(allowed.url("/"));
+    await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+
+    for (const start of STARTS) {
+      const ran = `Ran from ${start.name}`;
+      await app.viewPages.takeCommitsAsync();
+
+      await app.viewPages.runAsync(start.script(JSON.stringify(`javascript:void (document.title = ${JSON.stringify(ran)})`)));
+
+      await expectPageAsync(app, allowed.url("/"), ran, `The javascript: URL from ${start.name} didn't run in the allowed page's own document.`);
+      expect(await app.viewPages.runAsync("location.origin"), `The page's origin changed after the javascript: URL from ${start.name}.`).toBe(allowed.origin);
+      expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for the javascript: URL from ${start.name}.`).toEqual([]);
+    }
+  });
+
+  test("refuses a javascript: address typed into the pane, running nothing", async ({ app, servers }) => {
+    const allowed = await servers.startAsync("allowed.localhost", { "/": ALLOWED_PAGE });
+    await app.allowLocalSitesAsync([allowed.origin]);
+    await app.openPageAsync(allowed.url("/"));
+    await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+    await app.viewPages.takeCommitsAsync();
+
+    const field = app.window.locator(ADDRESS_FIELD);
+    await field.fill("javascript:document.title='Typed'");
+    await field.press("Enter");
+
+    await expect(app.window.locator(NOTICE_MESSAGE), "The pane never refused the typed javascript: address.").toHaveText(NOT_WEB_MESSAGE);
+    expect(await app.viewPages.runAsync("document.title"), "The typed javascript: address ran in the page.").toBe(ALLOWED_TITLE);
+    const barrier = "After the typed address";
+    await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
+    await expectPageAsync(app, allowed.url("/"), barrier, "The view left the allowed page after the typed javascript: address.");
+    expect(await app.viewPages.takeCommitsAsync(), "The view committed a navigation for the typed javascript: address.").toEqual([]);
   });
 });
