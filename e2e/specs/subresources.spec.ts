@@ -122,6 +122,14 @@ const ROWS: readonly IRefusedRow[] = [
   }
 ];
 
+async function expectFailedAsync(app: TestApp, url: string): Promise<void> {
+  for (const kind of [FETCH, IMAGE, SCRIPT]) {
+    const outcome = await requestAsync(app, kind, url);
+    expect(outcome, `The page didn't see ${kind.name} to ${url} fail.`).toBe("failed");
+    expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === null), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
+  }
+}
+
 async function startAsync(servers: FixtureServers): Promise<{ allowed: FixtureServer; other: FixtureServer }> {
   const allowed = await servers.startAsync("allowed.localhost", { "/": page(), [CONTROL_FRAME]: page() });
   const other = await servers.startAsync("other.localhost", {});
@@ -172,12 +180,14 @@ test.describe("subresources", () => {
     const { allowed } = await startAsync(servers);
     await openAllowedAsync(app, allowed, [allowed.origin]);
 
-    for (const kind of [FETCH, IMAGE, SCRIPT]) {
-      const url = "file:///a.png";
-      const outcome = await requestAsync(app, kind, url);
-      expect(outcome, `The page didn't see ${kind.name} to ${url} fail.`).toBe("failed");
-      expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === null), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
-    }
+    await expectFailedAsync(app, "file:///a.png");
+  });
+
+  test("Subresource on the app's window URL", async ({ app, servers }) => {
+    const { allowed } = await startAsync(servers);
+    await openAllowedAsync(app, allowed, [allowed.origin]);
+
+    await expectFailedAsync(app, app.window.url());
   });
 
   test("Local entry on a loopback address", async ({ app, servers }) => {

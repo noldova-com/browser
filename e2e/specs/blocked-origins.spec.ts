@@ -19,6 +19,7 @@ interface INavigationStart {
 }
 
 interface ITargetContext {
+  readonly app: TestApp;
   readonly servers: FixtureServers;
   readonly allowed: FixtureServer;
 }
@@ -231,14 +232,15 @@ const ROWS: readonly IBlockedRow[] = [
     starts: EVERY_START,
     localSites: ({ allowed }) => [allowed.origin, "http://[::ffff:a9fe:a9fe]"],
     targetsAsync: async () => ["http://[::ffff:169.254.169.254]/"]
-  }
+  },
+  { name: "The app's window URL", starts: EVERY_START, targetsAsync: async ({ app }) => [app.window.url()] }
 ];
 
 test.describe("blocked origins", () => {
   for (const row of ROWS)
     test(row.name, async ({ app, servers }) => {
       const allowed = await servers.startAsync("allowed.localhost", { "/": page("") });
-      const context: ITargetContext = { servers, allowed };
+      const context: ITargetContext = { app, servers, allowed };
       const targets = await row.targetsAsync(context);
       await app.allowLocalSitesAsync(row.localSites?.(context) ?? [allowed.origin]);
       await app.openPageAsync(allowed.url("/"));
