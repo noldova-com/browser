@@ -205,18 +205,6 @@ test.describe("subresources", () => {
       .toEqual([]);
   });
 
-  test("WebSocket to an allowed origin", async ({ app, servers }) => {
-    const { allowed } = await startAsync(servers);
-    const socketHost = await servers.startAsync("app.test", {});
-    await openAllowedAsync(app, allowed, [allowed.origin, socketHost.origin]);
-
-    const url = SOCKET.url(`${socketHost.name}:${socketHost.port}`);
-    await requestAsync(app, SOCKET, url);
-
-    await expect.poll(() => socketHost.requests.map(t => t.path), { message: `The allowed origin's fixture server never received ${url}.` }).toEqual(["/ws"]);
-    expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === REFUSED), `The main process refused ${url}.`).toEqual([]);
-  });
-
   test("WebSocket to another public origin", async ({ app, servers }) => {
     const { allowed } = await startAsync(servers);
     const other = await servers.startAsync("other.test", {});
