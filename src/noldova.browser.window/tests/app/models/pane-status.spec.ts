@@ -227,6 +227,14 @@ describe("PaneStatus", () => {
     ]).toEqual([null, null, null]);
   });
 
+  it("drops a refused request that came during a load when the person or an agent starts a navigation before that load ends", () => {
+    const refused: PaneStatus = PaneStatus.empty.apply(state("https://one.example/", "", true)).refuseRequest(RefusedRequest.NewWindow, "https://ads.example/");
+    const navigating: PaneStatus = refused.navigate();
+
+    expect([navigating.refusedRequest, navigating.refusedTarget, navigating.state, navigating.url]).toEqual([null, null, PaneState.Loading, "https://one.example/"]);
+    expect(navigating.apply(state("https://two.example/", "", true)).refusedRequest).toBeNull();
+  });
+
   it("dismisses its refused request and keeps the rest, and stays the same with none", () => {
     const refused: PaneStatus = loaded.apply(new ViewRequestRefusalEvent(RefusedRequest.FileChooser, "https://one.example"));
 
