@@ -10,6 +10,7 @@ import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
+import { ViewRequest } from "../fixtures/view-requests.ts";
 
 interface ISubresourceKind {
   readonly name: string;
@@ -26,6 +27,7 @@ interface IRefusedRow {
 
 const ALLOWED_TITLE = "Allowed";
 const REFUSED = "net::ERR_BLOCKED_BY_CLIENT";
+const CONTROL_FRAME = "/control";
 
 const FETCH: ISubresourceKind = { name: "fetch", isSeenByPage: true, url: address => `http://${address}/fetch` };
 const IMAGE: ISubresourceKind = { name: "image", isSeenByPage: true, url: address => `http://${address}/image` };
@@ -76,12 +78,17 @@ async function requestAsync(app: TestApp, kind: ISubresourceKind, url: string): 
   return app.viewPages.runAsync(`window.requestAsync(${JSON.stringify(kind.name)}, ${JSON.stringify(url)})`);
 }
 
-async function expectRefusedAsync(app: TestApp, kind: ISubresourceKind, url: string, how: string, since: number): Promise<void> {
+async function expectRefusedAsync(app: TestApp, kind: ISubresourceKind, url: string, how: string, since: number, control: string): Promise<void> {
   const href = new URL(url).href;
   if (kind === FRAME) {
+    await requestAsync(app, FRAME, control);
     await expect.poll(async () => (await app.viewPages.listAsync()).map(t => t.isLoading), { message: `The view never finished loading after ${how}.` }).toEqual([false]);
-    expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
-    expect((await app.viewRequests.peekAsync()).slice(since).filter(t => t.url === href && t.error !== REFUSED), `The main process's record shows ${how} not refused.`).toEqual([]);
+    const frameCommits = await app.viewPages.takeFrameCommitsAsync();
+    expect(frameCommits, `The allowed control frame didn't commit beside ${how}.`).toContain(control);
+    expect(frameCommits, `A subframe committed ${how}.`).not.toContain(href);
+    const records = (await app.viewRequests.peekAsync()).slice(since);
+    expect(records, `The main process's record doesn't show the control frame loaded beside ${how}.`).toContainEqual(new ViewRequest(control, null));
+    expect(records.filter(t => t.url === href && t.error !== REFUSED), `The main process's record shows ${how} not refused.`).toEqual([]);
     return;
   }
   await expect.poll(async () => (await app.viewRequests.peekAsync()).filter(t => t.url === href).map(t => t.error),
@@ -110,7 +117,7 @@ const ROWS: readonly IRefusedRow[] = [
 ];
 
 async function startAsync(servers: FixtureServers): Promise<{ allowed: FixtureServer; other: FixtureServer }> {
-  const allowed = await servers.startAsync("allowed.localhost", { "/": page() });
+  const allowed = await servers.startAsync("allowed.localhost", { "/": page(), [CONTROL_FRAME]: page() });
   const other = await servers.startAsync("other.localhost", {});
   return { allowed, other };
 }
@@ -129,7 +136,7 @@ test.describe("subresources", () => {
           const outcome = await requestAsync(app, kind, url);
           if (kind.isSeenByPage)
             expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
-          await expectRefusedAsync(app, kind, url, how, since);
+          await expectRefusedAsync(app, kind, url, how, since, allowed.url(CONTROL_FRAME));
         }
 
       expect(other.requests, "The other origin's fixture server received a request.").toEqual([]);
@@ -148,7 +155,7 @@ test.describe("subresources", () => {
       const outcome = await requestAsync(app, kind, allowed.url(path));
       if (kind.isSeenByPage)
         expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
-      await expectRefusedAsync(app, kind, target, how, since);
+      await expectRefusedAsync(app, kind, target, how, since, allowed.url(CONTROL_FRAME));
     }
 
     expect(other.requests, "The other origin's fixture server received a request.").toEqual([]);
@@ -203,7 +210,7 @@ test.describe("subresources", () => {
     const outcome = await app.viewPages.runAsync("navigator.serviceWorker.register(\"/sw.js\").then(() => \"registered\", () => \"failed\")");
 
     expect(outcome, "The service worker registered.").toBe("failed");
-    await expectRefusedAsync(app, FETCH, allowed.url("/sw.js"), "the service worker's script", 0);
+    await expectRefusedAsync(app, FETCH, allowed.url("/sw.js"), "the service worker's script", 0, allowed.url(CONTROL_FRAME));
     expect(allowed.requests.filter(t => t.path === "/sw.js"), "The allowed server received the service worker's script.").toEqual([]);
   });
 });
