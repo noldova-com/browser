@@ -28,6 +28,7 @@ interface IRefusedRow {
 const ALLOWED_TITLE = "Allowed";
 const REFUSED = "net::ERR_BLOCKED_BY_CLIENT";
 const CONTROL_FRAME = "/control";
+const PROXIED_CONTROL = "http://203.0.113.10/fetch";
 
 const FETCH: ISubresourceKind = { name: "fetch", isSeenByPage: true, url: address => `http://${address}/fetch` };
 const IMAGE: ISubresourceKind = { name: "image", isSeenByPage: true, url: address => `http://${address}/image` };
@@ -221,20 +222,24 @@ test.describe("subresources", () => {
     expect(other.requests, "The other public origin's fixture server received a request.").toEqual([]);
   });
 
-  test("Request through a proxy to a refused URL", async ({ app, servers, loopbackProxy }) => {
-    const { allowed } = await startAsync(servers);
-    await openAllowedAsync(app, allowed, [allowed.origin]);
-    const refused = FETCH.url("192.168.1.1");
-    const control = FETCH.url("203.0.113.10");
+  test.describe("through the recording proxy", () => {
+    test.use({ expectedViolations: [
+      `The recording proxy received GET ${PROXIED_CONTROL}.`,
+      `A view's request to ${PROXIED_CONTROL} ended with net::ERR_EMPTY_RESPONSE.`
+    ] });
 
-    await requestAsync(app, FETCH, refused);
-    await expectRefusedAsync(app, FETCH, refused, `fetch to ${refused}`, 0, allowed.url(CONTROL_FRAME));
-    await requestAsync(app, FETCH, control);
+    test("Request through a proxy to a refused URL", async ({ app, servers, loopbackProxy }) => {
+      const { allowed } = await startAsync(servers);
+      await openAllowedAsync(app, allowed, [allowed.origin]);
+      const refused = FETCH.url("192.168.1.1");
 
-    await expect.poll(() => loopbackProxy.peek(), { message: `The recording proxy never received the control request ${control}.` }).toContain(`GET ${control}`);
-    expect(loopbackProxy.take().filter(t => t !== `GET ${control}`), `The recording proxy received ${refused}.`).toEqual([]);
-    await expect.poll(async () => (await app.viewRequests.peekAsync()).filter(t => t.url === control).length, { message: `The main process's record never showed ${control} end.` }).toBe(1);
-    expect((await app.viewRequests.takeAsync()).filter(t => t.url === control).map(t => t.error), `The main process refused ${control}.`).not.toContain(REFUSED);
+      await requestAsync(app, FETCH, refused);
+      await expectRefusedAsync(app, FETCH, refused, `fetch to ${refused}`, 0, allowed.url(CONTROL_FRAME));
+      await requestAsync(app, FETCH, PROXIED_CONTROL);
+
+      await expect.poll(() => loopbackProxy.peek(), { message: `The recording proxy never received the control request ${PROXIED_CONTROL}.` }).toContain(`GET ${PROXIED_CONTROL}`);
+      await expect.poll(async () => (await app.viewRequests.peekAsync()).filter(t => t.url === PROXIED_CONTROL).length, { message: `The main process's record never showed ${PROXIED_CONTROL} end.` }).toBe(1);
+    });
   });
 
   test("Local entry on a loopback address", async ({ app, servers }) => {
