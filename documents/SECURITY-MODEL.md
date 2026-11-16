@@ -85,7 +85,10 @@ A WebSocket is the exception: `ws:` and `wss:` connect only to allowed origins, 
 ### Navigation checks
 
 1. **Scheme:** only `https:` and `http:` load, `about:blank` is the empty page, and a subframe may also load `about:srcdoc`, which takes its parent's origin.
-   Every other scheme is refused before the allowed origins are consulted: `data:`, `javascript:`, `blob:`, any other `about:` page, `view-source:` and `devtools:`, besides those the address checks refuse.
+   Every other scheme is refused before the allowed origins are consulted: `data:`, `blob:`, any other `about:` page, `view-source:` and `devtools:`, besides those the address checks refuse.
+   A page's own top-level navigation to `about:srcdoc` is refused by the engine itself, before the base sees it: the engine commits its own error page in place of the view's page, and nothing loads; [desktop#109](https://github.com/noldova-com/desktop/issues/109) has the base report it as a refused navigation.
+   A page's own `javascript:` link or location runs as that page's script, as in every browser: it runs in the page's own document and loads nothing, so the page keeps its address and origin.
+   A `javascript:` address typed into the pane, or given to the agent's navigate tool, is refused and runs nothing.
    Subframes take these checks too, so a `data:` or `blob:` frame is refused in the preview, even on an allowed page.
 2. **Origin:** the URL's origin must equal an allowed origin.
 
@@ -222,7 +225,10 @@ The hosts and ports are examples of each row's relation to an allowed origin, su
 | The base's local endpoint | Its endpoint, even with that origin allowed | Always refused |
 | The app's tool server | Its endpoint, even with that origin allowed | Always refused |
 | The app's window URL | The window's own URL | Always refused |
-| Other schemes | `file:`, `data:`, `javascript:`, `blob:`, `about:srcdoc` at the top, `view-source:`, `devtools:` | Always refused |
+| Other schemes | `file:`, `data:`, `blob:`, `view-source:`, `devtools:` | Always refused |
+| `about:srcdoc` at the top | A link to `about:srcdoc` on an allowed page | Refused by the engine, which commits its own error page in place of the view's page; nothing loads; [desktop#109](https://github.com/noldova-com/desktop/issues/109) has the base report it as a refused navigation |
+| A page's own `javascript:` URL | A link to `javascript:document.title = "Hi"` on an allowed page | Runs in the page's own document and loads nothing; the page keeps its address and origin |
+| A typed `javascript:` address | `javascript:alert(1)` typed into the pane's address field | Refused; runs nothing |
 | `srcdoc` subframe | `<iframe srcdoc="<p>Hello</p>">` on an allowed page | Loads, with its parent's origin |
 | `data:` or `blob:` subframe | `<iframe src="data:text/html,<p>Hello</p>">`, or a frame on a `blob:` URL, on an allowed page | Refused |
 | Navigation through the relay | `Page.navigate` to an allowed origin | Refused: the method isn't allowed |
