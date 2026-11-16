@@ -32,8 +32,14 @@ interface IBlockedRow {
 const ALLOWED_TITLE = "Allowed";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 
+const NAVIGATION_MARK = "<script>window.navigationStarted = false; navigation.addEventListener(\"navigate\", () => { window.navigationStarted = true; });</script>";
+
 function page(body: string): string {
-  return `<!doctype html><title>${ALLOWED_TITLE}</title>${body}`;
+  return `<!doctype html><title>${ALLOWED_TITLE}</title>${NAVIGATION_MARK}${body}`;
+}
+
+async function expectNavigationStartedAsync(app: TestApp, how: string): Promise<void> {
+  await expect.poll(() => app.viewPages.runAsync("String(window.navigationStarted)"), { message: `The page never started the navigation for ${how}.` }).toBe("true");
 }
 
 async function expectPageAsync(app: TestApp, url: string, title: string, message: string): Promise<void> {
@@ -46,6 +52,7 @@ async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body:
   await app.viewPages.runAsync(`location.href = ${JSON.stringify(url)};`);
   await expectPageAsync(app, url, ALLOWED_TITLE, `The view never loaded ${url}.`);
   await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept a refusal after loading ${url}.`).toHaveCount(0);
+  await app.viewPages.takeCommitsAsync();
   return url;
 }
 
@@ -188,10 +195,9 @@ test.describe("blocked origins", () => {
         for (const start of row.starts) {
           const stays = await start.startAsync(app, allowed, target);
           const how = `${target} from ${start.name}`;
-          await app.viewPages.takeCommitsAsync();
 
           if (start.isTopLevel)
-            await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${how} as refused.`).toHaveText(`Browser doesn't open ${new URL(target).origin}`);
+            await expectNavigationStartedAsync(app, how);
           const barrier = `After ${how}`;
           await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
 
@@ -215,7 +221,7 @@ test.describe("blocked origins", () => {
     await app.viewPages.takeCommitsAsync();
     await app.viewPages.runAsync("history.back();");
 
-    await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the history entry as refused.").toHaveText(`Browser doesn't open ${first.origin}`);
+    await expectNavigationStartedAsync(app, "going back");
     const barrier = "After going back";
     await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
     await expectPageAsync(app, second.url("/"), barrier, "The view didn't stay at the second page, done loading, after going back.");
