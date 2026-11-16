@@ -10,10 +10,18 @@ import type { JsonValue } from "@noldova/context.json";
 import { EventChannel } from "@noldova/desktop.runtime";
 import { describe, expect, it } from "vitest";
 
-import { HeldEvent } from "../app/src/modules/agent-double/runtime/src/held-event.ts";
+import { HeldEvent as AgentHeldEvent } from "../app/src/modules/agent-double/runtime/src/held-event.ts";
+import { HeldEvent as RelayHeldEvent } from "../app/src/modules/relay-double/runtime/src/held-event.ts";
 
-describe("HeldEvent", () => {
-  function hold(): { event: HeldEvent; delivered: JsonValue[] } {
+interface IHeldEvent {
+  publish(payload: JsonValue): void;
+  listen(): void;
+}
+
+const COPIES: readonly (readonly [string, new (channel: EventChannel) => IHeldEvent])[] = [["the agent double's", AgentHeldEvent], ["the relay double's", RelayHeldEvent]];
+
+describe.each(COPIES)("HeldEvent, %s copy", (_name, HeldEvent) => {
+  function hold(): { event: IHeldEvent; delivered: JsonValue[] } {
     const delivered: JsonValue[] = [];
     return { event: new HeldEvent(new EventChannel(payload => delivered.push(payload), () => undefined)), delivered };
   }
