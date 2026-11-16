@@ -47,13 +47,13 @@ async function expectPageAsync(app: TestApp, url: string, title: string, message
   await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
 }
 
-async function unrefusedAsync(app: TestApp, target: string): Promise<readonly string[]> {
+async function unrefusedAsync(app: TestApp, target: string, since: number): Promise<readonly string[]> {
   const url = new URL(target);
   const hrefs = [url.href];
   url.username = "";
   url.password = "";
   hrefs.push(url.href);
-  return (await app.viewRequests.peekAsync()).filter(t => hrefs.includes(t.url) && t.error !== REFUSED).map(t => `${t.url} ${t.error ?? "completed"}`);
+  return (await app.viewRequests.peekAsync()).slice(since).filter(t => hrefs.includes(t.url) && t.error !== REFUSED).map(t => `${t.url} ${t.error ?? "completed"}`);
 }
 
 async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
@@ -247,6 +247,7 @@ test.describe("blocked origins", () => {
           const href = new URL(target).href;
           const how = `${target} from ${start.name}`;
           await app.viewPages.takeFrameCommitsAsync();
+          const since = (await app.viewRequests.peekAsync()).length;
           const stays = await start.startAsync(app, allowed, target);
 
           if (start.isTopLevel)
@@ -258,7 +259,7 @@ test.describe("blocked origins", () => {
           expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${how}.`).toEqual([]);
           expect(servers.requests.filter(t => t.host !== allowedHost), `A fixture server received a request for ${how}.`).toEqual([]);
           expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
-          expect(await unrefusedAsync(app, target), `The main process's record shows a request for ${how} that wasn't refused.`).toEqual([]);
+          expect(await unrefusedAsync(app, target, since), `The main process's record shows a request for ${how} that wasn't refused.`).toEqual([]);
         }
     });
 
