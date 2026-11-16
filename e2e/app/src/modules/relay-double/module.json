@@ -1,0 +1,24 @@
+{
+  "id": "relay-double",
+  "version": "0.0.1",
+  "displayName": "Relay double",
+  "description": "Opens one web view on its own document, under the browser module's webViews.json, and sends the calls the end-to-end tests name through the base's relay, as a module that sends what the browser doesn't.",
+  "parts": ["runtime", "window"],
+  "dependencies": {},
+  "noldovaDesktop": ">=0.0.1 <0.1.0",
+  "contributes": {
+    "methods": [
+      "relay-double.open",
+      "relay-double.views",
+      "relay-double.allow",
+      "relay-double.navigate",
+      "relay-double.send"
+    ],
+    "events": [
+      "relay-double.opening"
+    ],
+    "documents": [
+      "relay-double.page"
+    ]
+  }
+}

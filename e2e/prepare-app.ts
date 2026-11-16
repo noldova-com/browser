@@ -20,6 +20,8 @@ class FixtureAppPreparation {
   private static readonly MODULE_PACKAGE: string = "@noldova/browser";
   private static readonly MODULE_ID: string = "browser";
   private static readonly DOUBLE_DECLARATION: readonly string[] = ["src", "modules", "agent-double", "module.json"];
+  private static readonly WEB_VIEWS_DECLARATION: string = "webViews.json";
+  private static readonly RELAY_DOUBLE_FOLDER: readonly string[] = ["src", "modules", "relay-double"];
   private static readonly PART_FOLDERS: readonly string[] = ["noldova.browser", "noldova.browser.protocol", "noldova.browser.window"];
   private static readonly MANIFEST: string = "package.json";
   private static readonly LOCKFILE: string = "package-lock.json";
@@ -49,6 +51,8 @@ class FixtureAppPreparation {
     await cp(TestAppLayout.TEMPLATE_FOLDER, TestAppLayout.APP_FOLDER, { recursive: true, force: true, filter: t => !t.split(path.sep).includes("node_modules") });
     await copyFile(path.join(TestAppLayout.REPOSITORY_ROOT, "LICENSE"), path.join(TestAppLayout.APP_FOLDER, "LICENSE"));
     await PlainIcons.writeAsync(path.join(TestAppLayout.APP_FOLDER, "assets", "icons"));
+    await copyFile(path.join(TestAppLayout.REPOSITORY_ROOT, "src", "noldova.browser", FixtureAppPreparation.WEB_VIEWS_DECLARATION),
+      path.join(TestAppLayout.APP_FOLDER, ...FixtureAppPreparation.RELAY_DOUBLE_FOLDER, FixtureAppPreparation.WEB_VIEWS_DECLARATION));
     const parts = await Promise.all(FixtureAppPreparation.PART_FOLDERS.map(t => PackedPart.readAsync(path.join(TestAppLayout.REPOSITORY_ROOT, "src", t))));
     const template = JsonReader.parse(await readFile(path.join(TestAppLayout.TEMPLATE_FOLDER, FixtureAppPreparation.MANIFEST), "utf8"));
     const dependencies = template.readObject("dependencies").toJson();
