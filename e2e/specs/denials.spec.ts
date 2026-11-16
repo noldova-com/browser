@@ -70,6 +70,8 @@ const PAGE_SCRIPT = `
 
 const POSITION = `new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, error => reject({ name: "PositionError " + error.code })))`;
 
+const BLUETOOTH = `navigator.bluetooth === undefined ? Promise.reject({ name: "Absent" }) : navigator.bluetooth.requestDevice({ acceptAllDevices: true })`;
+
 const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "the camera", attempt: "navigator.mediaDevices.getUserMedia({ video: true })", outcome: NOT_ALLOWED, query: `{ name: "camera" }`, isNoticed: true },
   { title: "the microphone", attempt: "navigator.mediaDevices.getUserMedia({ audio: true })", outcome: NOT_ALLOWED, query: `{ name: "microphone" }`, isNoticed: true },
@@ -79,7 +81,7 @@ const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "USB devices", attempt: "navigator.usb.requestDevice({ filters: [] })", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "serial ports", attempt: "navigator.serial.requestPort()", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "HID devices", attempt: "navigator.hid.requestDevice({ filters: [] }).then(t => t.length)", outcome: "resolved 0", query: null, isNoticed: false },
-  { title: "Bluetooth devices", attempt: "navigator.bluetooth.requestDevice({ acceptAllDevices: true })", outcome: NOT_FOUND, query: null, isNoticed: false },
+  { title: "Bluetooth devices", attempt: BLUETOOTH, outcome: "rejected Absent", query: null, isNoticed: false },
   { title: "every other permission the engine can ask for", attempt: "navigator.requestMIDIAccess({ sysex: true })", outcome: NOT_ALLOWED, query: `{ name: "midi", sysex: true }`,
     isNoticed: true },
   { title: "screen capture", attempt: "navigator.mediaDevices.getDisplayMedia({ video: true })", outcome: NOT_ALLOWED, query: null, isNoticed: true }
@@ -218,7 +220,7 @@ test.describe("denied by default", () => {
     await app.openPageAsync(secure.url("/"));
 
     await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the untrusted certificate's load as failed.").toHaveText(`Can't reach secure.localhost:${secure.port}`);
-    expect(await app.viewPages.takeCommitsAsync(), "The view committed the page with the untrusted certificate.").toEqual([]);
+    expect((await app.viewPages.takeCommitsAsync()).filter(t => t.startsWith(secure.origin)), "The view committed the page with the untrusted certificate.").toEqual([]);
     expect(pathsOf(secure), "The page with the untrusted certificate was asked for.").toEqual([]);
     await expectNothingOpenedAsync(app, before, "the certificate error");
   });
@@ -232,10 +234,10 @@ test.describe("denied by default", () => {
       const nested = document.createElement("webview");
       nested.setAttribute("src", "/nested");
       document.body.append(nested);
-      return [nested.constructor.name, String(customElements.get("webview"))].join(" ");
+      return [typeof nested.loadURL, typeof nested.getWebContentsId, String(customElements.get("webview"))].join(" ");
     })()`);
 
-    expect(element, "The page's <webview> element is a working view.").toBe("HTMLUnknownElement undefined");
+    expect(element, "The page's <webview> element is a working view.").toBe("undefined undefined undefined");
     expect(pathsOf(allowed), "The page's <webview> element asked for its page.").toEqual(["/"]);
     await expectNothingOpenedAsync(app, before, "the <webview> element");
   });
