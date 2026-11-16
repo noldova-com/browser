@@ -13,7 +13,8 @@ export default defineConfig({
   test: {
     isolate: true,
     include: [
-      "src/*/tests/**/*.test.ts"
+      "src/*/tests/**/*.test.ts",
+      "e2e/tests/**/*.test.ts"
     ],
     coverage: {
       provider: "v8",

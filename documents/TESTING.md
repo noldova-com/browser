@@ -85,7 +85,9 @@ Every pull request into `main`, draft or ready, runs every test on Linux x64, Wi
 Pull requests skip the other three, which keeps their runners free.
 The workflow's one job, `build-and-test`, named "Build and test", calls the shared workflow, which runs one job per target, named for its target, such as "Linux x64", which GitHub lists as "Build and test / Linux x64", and its "All targets" fails unless every one of them passed.
 
-**Not yet:** the end-to-end workflows below, and a nightly run that repeats the tests, each come in their own pull request.
+The [end-to-end workflows](#end-to-end-workflows) run in a job of their own, "Build and test / End-to-end test", on Linux x64 under a virtual display, which the shared workflow runs with `npm run test:e2e:prepare` and then `npm run test:e2e`, and whose report, `_build/e2e`, it keeps when they fail.
+
+**Not yet:** the end-to-end workflows on the other targets, and a nightly run that repeats the tests, each come in their own pull request.
 
 ## Test layers
 
@@ -94,7 +96,7 @@ The workflow's one job, `build-and-test`, named "Build and test", calls the shar
 | Unit tests | Each package through its public API, against the [doubles](#test-doubles) | The module's own logic: the tools, the page's states, its record and its restore, the origin list it hands over, the permission requests and every answer to them, and its handling of refusals, time and size limits, crashes and cleared profiles | That the base enforces anything, or that a real page behaves as the doubles do |
 | Registry contract tests | The tool descriptors and handlers the module publishes, through Desktop's `FakeToolsContext` answered by Noldova Desktop's own `ToolRegistry` | The tool list and input schemas, which the registry checks, each tool's output and errors, the size limits, that each tool asks through the permission contract before it acts, and cancellation and session end | That the app's MCP server carries the calls as the registry hands them over |
 | Contract suites | The same suite against a double and against the real base | That the double behaves as the real contract does, for every case the suite holds | Anything the suite doesn't hold |
-| End-to-end workflows (not yet) | The real app, with real views, through the [fixture host app](#the-fixture-host-app) | Isolation, the guards, the refused origins and schemes, the default denials, the tools on real pages, the page's placement, keys and focus within the run's display | A display at another scale, the operating system's foreground focus, and the packaged and signed binary; the [checks on a real desktop](#checks-on-a-real-desktop) cover those |
+| End-to-end workflows | The real app, with real views, through the [fixture host app](#the-fixture-host-app) | Isolation, the guards, the refused origins and schemes, the default denials, the tools on real pages, the page's placement, keys and focus within the run's display | A display at another scale, the operating system's foreground focus, and the packaged and signed binary; the [checks on a real desktop](#checks-on-a-real-desktop) cover those |
 
 ### Unit tests
 
@@ -190,32 +192,40 @@ The fixtures below only give those fakes their answers, as Desktop's main proces
 
 ## The fixture host app
 
-**Not yet:** the fixture host app and the end-to-end workflows, serial tests, slow runs and checks on a real desktop that use it are the design they follow; none is built.
+**Not yet:** the serial tests, slow runs and checks on a real desktop that use the fixture host app are the design they follow; none is built.
 
 The end-to-end workflows run in a fixture host app in this repository: an app built on Noldova Desktop's published packages, with this module's package in its `desktop.modules`, as Noldova Desktop's MODULES.md says under "Modules from packages".
-Until that app is built, this layer's claims stay unverified.
+- **Its template** is `e2e/app`: its `package.json` pins Noldova Desktop's published packages and names the module's package and one module of its own, the agent double, in its `desktop.modules`.
+- **`npm run test:e2e:prepare`** copies the template to `_build/e2e-app`, installs the module's three packages from the archives `npm run build` packed into `_packages`, pins the agent double's dependency on the module at the module's version, and builds the app with Noldova Desktop's build, as an app does.
+- **The agent double,** `e2e/app/src/modules/agent-double`, opens a page as an app does: its window part runs the module's `browser.openPage` with the workspace `e2e` and the address a test names, which a window part may only run for a module it depends on.
+  It also opens one agent session, calls the tools a test names and answers each permission request with the answer the test plans, for the workflows that call the tools.
+- **`npm run test:e2e`** type-checks `e2e` and runs `e2e/specs` with Playwright, one test at a time, each test in an app of its own with new data and device folders, which it quits through Noldova Desktop's command line.
 
 - Playwright drives the app as the base's desktop UI automation does.
 - The production security settings stay as they are: the view's sandbox and context isolation stay on, and the view has no preload.
-- Each launch setting that differs from production is recorded with its reason:
-  - GPU acceleration off, as in the base's workflows.
-  - Host resolver rules that map the fixture servers' `.test` names to `127.0.0.1` and fail every other lookup.
-  - A proxy on loopback for every address that isn't loopback, which records each request and answers none, so a request to an address literal that the base fails to refuse never leaves the machine.
+- Each launch setting that differs from production is recorded with its reason in `e2e/fixtures/launch-settings.ts`, and each test lists them in its report:
+  - GPU acceleration off, with no software stand-in, and one color profile, as in the base's workflows.
+  - Host resolver rules that map the fixture servers' `.test` names to `127.0.0.1` and fail every other lookup, while `localhost`, `.localhost` names and `127.0.0.1`, where the recording proxy listens, keep the engine's own loopback.
+  - A proxy on loopback for every address that isn't loopback, which records each request and answers none, so a request to an address literal that the base fails to refuse never leaves the machine, with `.test` names left out of it, as loopback addresses are, so they reach their fixture servers.
+  - On macOS, no windows restored from an earlier run.
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
+- A test reads each view's address and title from the main process with `e2e/fixtures/view-pages.ts`; the page itself gets no test hook.
 
 ### Fixture servers
 
 - Every fixture server listens on `127.0.0.1` on a port the system picks, and belongs to one test.
-- A fixture origin is a `.test` name on its own server, such as `allowed.test` and `blocked.test`, so origins are matched by host as well as by port and scheme.
-- Fixture servers listen on loopback, so each fixture origin a test allows has an exact entry in the fixture host app's Sites on this computer or network setting.
+- A fixture origin a test allows is a `.localhost` name on its own server, such as `allowed.localhost`, so origins are matched by host as well as by port and scheme.
+- Fixture servers listen on loopback, so each fixture origin a test allows has an exact entry in the fixture host app's Sites on this computer or network setting, which takes a `.localhost` name as a local entry and refuses any other name, as the [security model](SECURITY-MODEL.md) says.
+- A `.test` name, such as `blocked.test`, which the host resolver rules map to `127.0.0.1`, is a name that isn't local and resolves to this computer, which the base refuses whatever the allowed origins hold.
 - A test that needs HTTPS serves it with a certificate made for that run; a certificate the view doesn't trust is one of the [default denials](#isolation-and-default-denials).
-- **No request leaves loopback:** the harness records, from the main process, every request of each view's session, and a run fails when any of them names a host that is not one of its fixture servers.
-  `loopback-only.spec.ts` proves that the guard fails a run that makes such a request.
+- **No request leaves loopback:** the harness records, from the main process, every request of each view's session, as each ends, and each test fails at its end when the recording proxy received a request, or when a view's request named a host that is not one of its fixture servers and wasn't refused by the base before it left the app.
+  The guard reads once no view's request is in flight, and the recording proxy is read again after the app quits, so a late request fails the run too.
+  `e2e/fixtures/loopback-guard.ts` holds the guard, which requires at a test's end exactly the violations the test's `expectedViolations` option names, none by default; `loopback-only.spec.ts` names the ones its page's request causes, so the test passes only when the guard reports them, word for word.
 
 ## End-to-end workflows
 
-**Not yet:** none of these workflows exists; they come with [the fixture host app](#the-fixture-host-app).
+**Not yet:** of these workflows, `loopback-only.spec.ts` exists, and `navigation.spec.ts` with its test that an allowed origin loads; each other workflow, and the rest of `navigation.spec.ts`, comes in its own pull request.
 
 | Workflow | What it proves |
 |---|---|
@@ -298,7 +308,7 @@ Each test asserts that the view refuses with no prompt and no file written; a do
 
 ## Serial tests
 
-**Not yet:** these are end-to-end workflows, which come with [the fixture host app](#the-fixture-host-app).
+**Not yet:** these are end-to-end workflows in [the fixture host app](#the-fixture-host-app), each in its own pull request.
 
 These tests need the operating system's foreground focus, which a platform can't isolate per process, so they run last and one at a time, as the organization's standard allows:
 - `focus.spec.ts`: focus moving between the page and the window;
@@ -310,7 +320,7 @@ A test that shows it needs the foreground focus, or the system clipboard, joins 
 
 ## Slow runs
 
-**Not yet:** these are end-to-end workflows, which come with [the fixture host app](#the-fixture-host-app).
+**Not yet:** these are end-to-end workflows in [the fixture host app](#the-fixture-host-app), each in its own pull request.
 
 A slow run repeats a workflow while busy threads load the machine's CPU, to find timing bugs that only slower runners show.
 These race-prone workflows are each run 30 times without retries, on Windows and on Linux, with the load starting at the first test, before they count as stable and again after a change to the code they race:
@@ -323,7 +333,7 @@ Slow runs are never part of a gate.
 
 ## Checks on a real desktop
 
-**Not yet:** these checks need the end-to-end workflows and a packaged app, which come with [the fixture host app](#the-fixture-host-app).
+**Not yet:** these checks need the end-to-end workflows and a packaged app of [the fixture host app](#the-fixture-host-app), which come in their own pull requests.
 
 CI's runners have displays at one device pixel per CSS pixel and no person's desktop session, so these checks run on real machines.
 Each report names the machine's operating system and CPU.
