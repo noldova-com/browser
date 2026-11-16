@@ -14,6 +14,7 @@ import type { IRuntimePart, IRuntimePartContext } from "@noldova/desktop.runtime
 export declare class RuntimePart implements IRuntimePart {
   /**
    * Registers the methods and the opening event.
+   * It holds each opening until the window part has subscribed to the event and said so through `relay-double.listen`, since the base keeps no event for a window part that isn't listening yet.
    */
   public activateAsync(context: IRuntimePartContext): Promise<void>;
 

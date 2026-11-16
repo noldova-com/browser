@@ -117,7 +117,7 @@ export class TestApp {
 
   public async waitForStartAsync(): Promise<void> {
     await expect(this.window.locator(TestApp.WINDOW)).toBeVisible();
-    await expect(this.window.locator(TestApp.SETTINGS_BUTTON), "The app's window never ended its start: its Settings button, which it enables once it has activated the modules and enabled their commands, stayed disabled.").toBeEnabled();
+    await expect(this.window.locator(TestApp.SETTINGS_BUTTON), "The app's window never ended its start: its Settings button stayed disabled.").toBeEnabled();
   }
 
   public async allowLocalSitesAsync(origins: readonly string[]): Promise<void> {
