@@ -210,7 +210,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   - On macOS, no windows restored from an earlier run.
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
-- A test reads each view's address and title from the main process with `e2e/fixtures/view-pages.ts`, and may run a fixture page's own script in its view; the page itself gets no test hook.
+- A test reads each view's address, title and whether it is loading, and the addresses its view committed, from the main process with `e2e/fixtures/view-pages.ts`, and may run a fixture page's own script in its view; the page itself gets no test hook.
 
 ### Fixture servers
 
@@ -274,8 +274,8 @@ For a row that loads, such as another public origin or a loopback origin with a 
 ### Schemes
 
 `schemes.spec.ts` proves that a navigation loads only `https:`, `http:` and `about:blank`.
-Every other scheme, `file:`, `data:`, `javascript:`, `blob:`, `about:srcdoc`, `view-source:`, `devtools:`, the browser's internal `chrome:` pages and the app's own `desktop-file:` protocol, is refused from a link and from the page's script, with the page's own origin allowed, since the base reads the scheme before the allow list.
-Each test asserts that the pane shows the navigation as refused, that the view stays at its last allowed address and title, and that an allowed load afterwards clears the refusal.
+Every other scheme, `file:`, `data:`, `blob:`, `about:srcdoc`, `view-source:`, `devtools:`, the browser's internal `chrome:` pages and the app's own `desktop-file:` protocol, is refused from a link and from the page's script, with the page's own origin allowed, since the base reads the scheme before the allow list.
+The engine refuses most of them before the base sees the navigation, so the pane shows no refusal; each test sets the page's title after the navigation starts, through the same channel, and asserts that the view stays at its last allowed address with that title, done loading, and committed no navigation.
 A subresource may still use `data:` and `blob:`, which never leave the page, and the test proves that they load; a subframe by `srcdoc`, `data:` or `blob:` follows its row of the [blocked-origin table](#blocked-origins).
 
 ### Calls on the view

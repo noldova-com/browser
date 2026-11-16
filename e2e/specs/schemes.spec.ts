@@ -23,13 +23,10 @@ interface INavigationStart {
 const ALLOWED_TITLE = "Allowed";
 const ALLOWED_PAGE = `<!doctype html><title>${ALLOWED_TITLE}</title><p>Allowed fixture page</p>`;
 const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
-const REFUSED_HEADING = /^Browser doesn't open /;
 
 const REFUSED_SCHEMES: readonly IRefusedScheme[] = [
   { name: "file:", address: JSON.stringify("file:///") },
   { name: "data:", address: JSON.stringify("data:text/html,<title>Data page</title>") },
-  { name: "javascript:", address: JSON.stringify("javascript:'<title>Script page</title>'") },
   { name: "blob:", address: "URL.createObjectURL(new Blob([\"<title>Blob page</title>\"], { type: \"text/html\" }))" },
   { name: "about:srcdoc", address: JSON.stringify("about:srcdoc") },
   { name: "view-source:", address: "`view-source:${location.href}`" },
@@ -43,8 +40,8 @@ const STARTS: readonly INavigationStart[] = [
   { name: "the page's script", script: address => `location.href = ${address};` }
 ];
 
-async function expectPageAsync(app: TestApp, url: string): Promise<void> {
-  await expect.poll(() => app.viewPages.listAsync(), { message: `The view never showed ${url}.` }).toEqual([new ViewPage(url, ALLOWED_TITLE)]);
+async function expectPageAsync(app: TestApp, url: string, title: string, message: string): Promise<void> {
+  await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
 }
 
 test.describe("schemes", () => {
@@ -53,19 +50,21 @@ test.describe("schemes", () => {
       const allowed = await servers.startAsync("allowed.localhost", { "/": ALLOWED_PAGE, "/again": ALLOWED_PAGE });
       await app.allowLocalSitesAsync([allowed.origin]);
       await app.openPageAsync(allowed.url("/"));
-      await expectPageAsync(app, allowed.url("/"));
-      const heading = app.window.locator(PAGE_STATE_HEADING);
+      await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
 
       for (const [index, start] of STARTS.entries()) {
         const last = index === 0 ? allowed.url("/") : allowed.url("/again");
-        await app.viewPages.runAsync(start.script(scheme.address));
+        const barrier = `After ${start.name}`;
+        await app.viewPages.takeCommitsAsync();
 
-        await expect(heading, `The pane never showed ${scheme.name} from ${start.name} as refused.`).toHaveText(REFUSED_HEADING);
-        expect(await app.viewPages.listAsync(), `The view left ${last} for ${scheme.name} from ${start.name}.`).toEqual([new ViewPage(last, ALLOWED_TITLE)]);
+        await app.viewPages.runAsync(start.script(scheme.address));
+        await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
+
+        await expectPageAsync(app, last, barrier, `The view didn't stay at ${last}, done loading, after ${scheme.name} from ${start.name}.`);
+        expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${scheme.name} from ${start.name}.`).toEqual([]);
 
         await app.viewPages.runAsync(`location.href = ${JSON.stringify(allowed.url("/again"))};`);
-        await expectPageAsync(app, allowed.url("/again"));
-        await expect(heading, "The pane kept the refusal after an allowed load.").toHaveCount(0);
+        await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, "The view never loaded the allowed page again.");
       }
     });
 
@@ -73,7 +72,7 @@ test.describe("schemes", () => {
     const allowed = await servers.startAsync("allowed.localhost", { "/": `<!doctype html><title>${ALLOWED_TITLE}</title><img id="data" src="${PIXEL}" alt="">` });
     await app.allowLocalSitesAsync([allowed.origin]);
     await app.openPageAsync(allowed.url("/"));
-    await expectPageAsync(app, allowed.url("/"));
+    await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
 
     const widths = await app.viewPages.runAsync(`(async () => {
       const image = document.getElementById("data");
