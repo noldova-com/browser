@@ -12,7 +12,6 @@ interface IViewPageContents {
   getType(): string;
   getURL(): string;
   getTitle(): string;
-  executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
 }
 
 interface IViewPageRecord {
@@ -43,15 +42,5 @@ export class ViewPages {
       return views.map(t => ({ url: t.getURL(), title: t.getTitle() }));
     });
     return records.map(t => new ViewPage(t.url, t.title));
-  }
-
-  public async runAsync(script: string): Promise<string> {
-    return this.application.evaluate(async ({ webContents }, code: string): Promise<string> => {
-      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
-      const [view] = views;
-      if (views.length !== 1 || view === undefined)
-        throw new Error(`The app has ${views.length} views, not one.`);
-      return String(await view.executeJavaScript(code, true));
-    }, script);
   }
 }

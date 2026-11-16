@@ -210,7 +210,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   - On macOS, no windows restored from an earlier run.
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
-- A test reads each view's address and title from the main process with `e2e/fixtures/view-pages.ts`, and may run a fixture page's own script in its view; the page itself gets no test hook.
+- A test reads each view's address and title from the main process with `e2e/fixtures/view-pages.ts`; the page itself gets no test hook.
 
 ### Fixture servers
 
@@ -221,7 +221,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 - A test that needs HTTPS serves it with a certificate made for that run; a certificate the view doesn't trust is one of the [default denials](#isolation-and-default-denials).
 - **No request leaves loopback:** the harness records, from the main process, every request of each view's session, as each ends, and each test fails at its end when the recording proxy received a request, or when a view's request named a host that is not one of its fixture servers and wasn't refused by the base before it left the app.
   The guard reads once no view's request is in flight, and the recording proxy is read again after the app quits, so a late request fails the run too.
-  `e2e/fixtures/loopback-guard.ts` holds the guard, and `loopback-only.spec.ts`, a test marked to fail, proves that the guard alone fails a run that makes such a request.
+  `e2e/fixtures/loopback-guard.ts` holds the guard, which requires at a test's end exactly the violations the test's `expectedViolations` option names, none by default; `loopback-only.spec.ts` names the ones its page's request causes, so the test passes only when the guard reports them, word for word.
 
 ## End-to-end workflows
 
