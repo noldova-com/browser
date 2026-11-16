@@ -28,6 +28,7 @@ interface IRefusedRow {
 const ALLOWED_TITLE = "Allowed";
 const REFUSED = "net::ERR_BLOCKED_BY_CLIENT";
 const CONTROL_FRAME = "/control";
+const PROXIED_CONTROL = "http://203.0.113.10/fetch";
 
 const FETCH: ISubresourceKind = { name: "fetch", isSeenByPage: true, url: address => `http://${address}/fetch` };
 const IMAGE: ISubresourceKind = { name: "image", isSeenByPage: true, url: address => `http://${address}/image` };
@@ -122,6 +123,14 @@ const ROWS: readonly IRefusedRow[] = [
   }
 ];
 
+async function expectFailedAsync(app: TestApp, url: string): Promise<void> {
+  for (const kind of [FETCH, IMAGE, SCRIPT]) {
+    const outcome = await requestAsync(app, kind, url);
+    expect(outcome, `The page didn't see ${kind.name} to ${url} fail.`).toBe("failed");
+    expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === null), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
+  }
+}
+
 async function startAsync(servers: FixtureServers): Promise<{ allowed: FixtureServer; other: FixtureServer }> {
   const allowed = await servers.startAsync("allowed.localhost", { "/": page(), [CONTROL_FRAME]: page() });
   const other = await servers.startAsync("other.localhost", {});
@@ -172,12 +181,65 @@ test.describe("subresources", () => {
     const { allowed } = await startAsync(servers);
     await openAllowedAsync(app, allowed, [allowed.origin]);
 
-    for (const kind of [FETCH, IMAGE, SCRIPT]) {
-      const url = "file:///a.png";
-      const outcome = await requestAsync(app, kind, url);
-      expect(outcome, `The page didn't see ${kind.name} to ${url} fail.`).toBe("failed");
-      expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === null), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
+    await expectFailedAsync(app, "file:///a.png");
+  });
+
+  test("Subresource on the app's window URL", async ({ app, servers }) => {
+    const { allowed } = await startAsync(servers);
+    await openAllowedAsync(app, allowed, [allowed.origin]);
+
+    await expectFailedAsync(app, app.window.url());
+  });
+
+  test("Subresource on another public origin", async ({ app, servers }) => {
+    const { allowed } = await startAsync(servers);
+    const other = await servers.startAsync("public.test", {});
+    await openAllowedAsync(app, allowed, [allowed.origin]);
+
+    const kinds = [FETCH, IMAGE, SCRIPT, BEACON];
+    for (const kind of kinds)
+      await requestAsync(app, kind, kind.url(`${other.name}:${other.port}`));
+
+    await expect.poll(() => other.requests.map(t => t.path).sort(), { message: "The public origin's fixture server didn't receive each request." })
+      .toEqual(kinds.map(t => new URL(t.url(other.name)).pathname).sort());
+    expect((await app.viewRequests.peekAsync()).filter(t => new URL(t.url).host === `${other.name}:${other.port}` && t.error === REFUSED), "The main process refused a request to the public origin.")
+      .toEqual([]);
+  });
+
+  test("WebSocket to another public origin", async ({ app, servers }) => {
+    const { allowed } = await startAsync(servers);
+    const other = await servers.startAsync("other.test", {});
+    await openAllowedAsync(app, allowed, [allowed.origin]);
+
+    for (const kind of [SOCKET, SECURE_SOCKET]) {
+      const url = kind.url(`${other.name}:${other.port}`);
+      const how = `${kind.name} to ${url}`;
+      const since = (await app.viewRequests.peekAsync()).length;
+      expect(await requestAsync(app, kind, url), `The page didn't see ${how} fail.`).toBe("failed");
+      await expectRefusedAsync(app, kind, url, how, since, allowed.url(CONTROL_FRAME));
     }
+
+    expect(other.requests, "The other public origin's fixture server received a request.").toEqual([]);
+  });
+
+  test.describe("through the recording proxy", () => {
+    test.use({ expectedViolations: [
+      `The recording proxy received GET ${PROXIED_CONTROL}.`,
+      `A view's request to ${PROXIED_CONTROL} ended with net::ERR_EMPTY_RESPONSE.`
+    ] });
+
+    test("Request through a proxy to a refused URL", async ({ app, servers, loopbackProxy }) => {
+      const { allowed } = await startAsync(servers);
+      await openAllowedAsync(app, allowed, [allowed.origin]);
+      const refused = FETCH.url("192.168.1.1");
+
+      await requestAsync(app, FETCH, refused);
+      await expectRefusedAsync(app, FETCH, refused, `fetch to ${refused}`, 0, allowed.url(CONTROL_FRAME));
+      await requestAsync(app, FETCH, PROXIED_CONTROL);
+
+      await expect.poll(() => loopbackProxy.peek(), { message: `The recording proxy never received the control request ${PROXIED_CONTROL}.` }).toContain(`GET ${PROXIED_CONTROL}`);
+      await expect.poll(async () => (await app.viewRequests.peekAsync()).filter(t => t.url === PROXIED_CONTROL).length, { message: `The main process's record never showed ${PROXIED_CONTROL} end.` }).toBe(1);
+    });
   });
 
   test("Local entry on a loopback address", async ({ app, servers }) => {
