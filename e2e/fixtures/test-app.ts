@@ -20,6 +20,7 @@ import { type ElectronApplication, type Page, type TestInfo, _electron, expect }
 import { HangLimits } from "./hang-limits.ts";
 import type { LaunchSetting } from "./launch-settings.ts";
 import { TestAppLayout } from "./test-app-layout.ts";
+import { ViewPages } from "./view-pages.ts";
 import { ViewRequests } from "./view-requests.ts";
 
 export class TestApp {
@@ -35,6 +36,7 @@ export class TestApp {
   public readonly dataDirectory: string;
   public readonly deviceDirectory: string;
   public readonly viewRequests: ViewRequests;
+  public readonly viewPages: ViewPages;
   private readonly application: ElectronApplication;
   private readonly testInfo: TestInfo;
   private readonly output: string[] = [];
@@ -44,6 +46,7 @@ export class TestApp {
     this.testInfo = testInfo;
     this.window = window;
     this.viewRequests = viewRequests;
+    this.viewPages = new ViewPages(application);
     this.dataDirectory = dataDirectory;
     this.deviceDirectory = deviceDirectory;
     const child = application.process();

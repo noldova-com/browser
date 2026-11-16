@@ -210,6 +210,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   - On macOS, no windows restored from an earlier run.
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
+- A test reads each view's address and title, and runs a fixture page's own script in its view, such as following a link or setting `window.location`, from the main process, with `e2e/fixtures/view-pages.ts`; the page itself gets no test hook.
 
 ### Fixture servers
 
@@ -223,7 +224,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts` exists, and `navigation.spec.ts` with its test that an allowed origin loads; each other workflow, and the rest of `navigation.spec.ts`, comes in its own pull request.
+**Not yet:** of these workflows, `loopback-only.spec.ts` and `schemes.spec.ts` exist, and `navigation.spec.ts` with its test that an allowed origin loads; each other workflow, and the rest of `navigation.spec.ts`, comes in its own pull request.
 
 | Workflow | What it proves |
 |---|---|
@@ -272,7 +273,8 @@ For a row that loads, such as another public origin or a loopback origin with a 
 ### Schemes
 
 `schemes.spec.ts` proves that a navigation loads only `https:`, `http:` and `about:blank`.
-Every other scheme, such as `file:`, `data:`, `javascript:`, `blob:`, `about:srcdoc`, `view-source:`, `devtools:`, the browser's internal pages and the app's own protocols, is refused, even with an allow list that admits every host, so the scheme is refused before the allow list is read.
+Every other scheme, `file:`, `data:`, `javascript:`, `blob:`, `about:srcdoc`, `view-source:`, `devtools:`, the browser's internal `chrome:` pages and the app's own `desktop-file:` protocol, is refused from a link and from the page's script, with the page's own origin allowed, since the base reads the scheme before the allow list.
+Each test asserts that the pane shows the navigation as refused, that the view stays at its last allowed address and title, and that an allowed load afterwards clears the refusal.
 A subresource may still use `data:` and `blob:`, which never leave the page, and the test proves that they load; a subframe by `srcdoc`, `data:` or `blob:` follows its row of the [blocked-origin table](#blocked-origins).
 
 ### Calls on the view
