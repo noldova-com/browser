@@ -107,7 +107,7 @@ The proof's concurrency group is named by the ref and the first 16 hex digits of
 The pull request that changes the version writes that version's section in [CHANGELOG.md](CHANGELOG.md) from the pull requests merged since the previous version, and no other pull request edits the file.
 
 The module's packages, `@noldova/browser`, `@noldova/browser.protocol` and `@noldova/browser.window`, are published together at one version to npm, by the Release workflow, `.github/workflows/release-npm.yml`, and a release never deletes a published version.
-The first publish uses a one-time token that only the `release` environment holds, `NPM_FIRST_PUBLISH_TOKEN`, since npm's trusted publishing needs each package to exist; every later publish uses trusted publishing, so no token is stored.
+It publishes through npm's trusted publishing, with provenance, so no token is stored: each package's trusted publisher on npm is this repository's `release-npm.yml` in the `release` environment.
 
 - **It starts by hand only,** with two inputs: the version, `major.minor.patch` with no prerelease suffix, and the full hash of the commit on `main` to release.
 - **The version is the root `version.json`'s** at that commit, which the build stamps on every package.
