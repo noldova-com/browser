@@ -10,6 +10,7 @@ import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
+import { ViewRequest } from "../fixtures/view-requests.ts";
 
 interface INavigationStart {
   readonly name: string;
@@ -30,6 +31,7 @@ interface IBlockedRow {
 }
 
 const ALLOWED_TITLE = "Allowed";
+const CONTROL_FRAME = "/control";
 const REFUSED = "net::ERR_BLOCKED_BY_CLIENT";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 
@@ -58,11 +60,12 @@ async function unrefusedAsync(app: TestApp, target: string, since: number): Prom
 
 async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
   const url = allowed.url(path);
-  allowed.serve(path, page(body));
+  allowed.serve(CONTROL_FRAME, page(""));
+  allowed.serve(path, page(`${body}<iframe src="${allowed.url(CONTROL_FRAME)}"></iframe>`));
   await app.viewPages.runAsync(`location.href = ${JSON.stringify(url)};`);
   await expectPageAsync(app, url, ALLOWED_TITLE, `The view never loaded ${url}.`);
   await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept a refusal after loading ${url}.`).toHaveCount(0);
-  await app.viewPages.takeCommitsAsync();
+  expect(await app.viewPages.takeCommitsAsync(), `The view's commits don't show ${url} alone.`).toEqual([url]);
   return url;
 }
 
@@ -240,6 +243,7 @@ test.describe("blocked origins", () => {
       await app.allowLocalSitesAsync(row.localSites?.(context) ?? [allowed.origin]);
       await app.openPageAsync(allowed.url("/"));
       await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+      expect(await app.viewPages.takeCommitsAsync(), "The view's commits don't show the allowed page alone.").toEqual([allowed.url("/")]);
       const allowedHost = `${allowed.name}:${allowed.port}`;
 
       for (const target of targets)
@@ -258,7 +262,11 @@ test.describe("blocked origins", () => {
           await expectPageAsync(app, stays, barrier, `The view didn't stay at ${stays}, done loading, after ${how}.`);
           expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${how}.`).toEqual([]);
           expect(servers.requests.filter(t => t.host !== allowedHost), `A fixture server received a request for ${how}.`).toEqual([]);
-          expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
+          const frameCommits = await app.viewPages.takeFrameCommitsAsync();
+          expect(frameCommits, `The allowed control frame didn't commit for ${how}.`).toContain(allowed.url(CONTROL_FRAME));
+          expect(frameCommits, `A subframe committed ${how}.`).not.toContain(href);
+          const records = (await app.viewRequests.peekAsync()).slice(since);
+          expect(records, `The main process's record doesn't show ${stays} loaded for ${how}.`).toContainEqual(new ViewRequest(stays, null));
           expect(await unrefusedAsync(app, target, since), `The main process's record shows a request for ${how} that wasn't refused.`).toEqual([]);
         }
     });
