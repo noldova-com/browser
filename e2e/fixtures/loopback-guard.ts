@@ -16,9 +16,9 @@ export class LoopbackGuard {
 
   private readonly servers: FixtureServers;
   private readonly proxy: RecordingProxy;
-  private readonly requests: ViewRequests;
+  private readonly requests: Pick<ViewRequests, "takeAsync">;
 
-  public constructor(servers: FixtureServers, proxy: RecordingProxy, requests: ViewRequests) {
+  public constructor(servers: FixtureServers, proxy: RecordingProxy, requests: Pick<ViewRequests, "takeAsync">) {
     this.servers = servers;
     this.proxy = proxy;
     this.requests = requests;
