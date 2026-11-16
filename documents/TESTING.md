@@ -205,7 +205,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 - The production security settings stay as they are: the view's sandbox and context isolation stay on, and the view has no preload.
 - Each launch setting that differs from production is recorded with its reason in `e2e/fixtures/launch-settings.ts`, and each test lists them in its report:
   - GPU acceleration off, with no software stand-in, and one color profile, as in the base's workflows.
-  - Host resolver rules that map the fixture servers' `.test` names to `127.0.0.1` and fail every other lookup, while `localhost` and `.localhost` names keep the engine's own loopback.
+  - Host resolver rules that map the fixture servers' `.test` names to `127.0.0.1` and fail every other lookup, while `localhost`, `.localhost` names and `127.0.0.1`, where the recording proxy listens, keep the engine's own loopback.
   - A proxy on loopback for every address that isn't loopback, which records each request and answers none, so a request to an address literal that the base fails to refuse never leaves the machine, with `.test` names left out of it, as loopback addresses are, so they reach their fixture servers.
   - On macOS, no windows restored from an earlier run.
   - A forced device scale factor, only in the screenshot scale workflow.
