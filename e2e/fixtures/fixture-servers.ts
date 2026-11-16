@@ -20,6 +20,16 @@ export class FixtureRequest {
   }
 }
 
+class FixturePage {
+  public readonly body: string;
+  public readonly headers: Readonly<Record<string, string>>;
+
+  public constructor(body: string, headers: Readonly<Record<string, string>>) {
+    this.body = body;
+    this.headers = headers;
+  }
+}
+
 export class FixtureServer {
   private static readonly LOOPBACK: string = "127.0.0.1";
   private static readonly HTML: string = "text/html; charset=utf-8";
@@ -27,15 +37,19 @@ export class FixtureServer {
   public readonly name: string;
   public readonly address: string;
   private readonly server: Server;
-  private readonly pages: Map<string, string>;
+  private readonly pages: Map<string, FixturePage>;
   private readonly redirects: Map<string, string> = new Map();
   private readonly received: FixtureRequest[] = [];
 
   private constructor(name: string, address: string, pages: Readonly<Record<string, string>>) {
     this.name = name;
     this.address = address;
-    this.pages = new Map(Object.entries(pages));
+    this.pages = new Map(Object.entries(pages).map(([path, body]) => [path, new FixturePage(body, {})]));
     this.server = createServer((request, response) => this.answer(request, response));
+    this.server.on("upgrade", (request, socket) => {
+      this.received.push(new FixtureRequest(request.headers.host ?? "", request.url ?? ""));
+      socket.destroy();
+    });
   }
 
   public static async startAsync(name: string, pages: Readonly<Record<string, string>>, address: string = FixtureServer.LOOPBACK): Promise<FixtureServer> {
@@ -64,8 +78,8 @@ export class FixtureServer {
     return [...this.received];
   }
 
-  public serve(path: string, page: string): void {
-    this.pages.set(path, page);
+  public serve(path: string, body: string, headers: Readonly<Record<string, string>> = {}): void {
+    this.pages.set(path, new FixturePage(body, headers));
   }
 
   public redirect(path: string, location: string): void {
@@ -96,7 +110,7 @@ export class FixtureServer {
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { "content-type": FixtureServer.HTML, "cache-control": "no-store" }).end(page);
+    response.writeHead(200, { "content-type": FixtureServer.HTML, "cache-control": "no-store", ...page.headers }).end(page.body);
   }
 }
 
