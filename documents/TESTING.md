@@ -14,8 +14,8 @@ Every pull request into `main` must pass both checks before it merges.
 | Check / Linked issue | The organization's shared check, which `.github/workflows/require-linked-issue.yml` calls from its `check` job, named "Check": the PR description names an issue in this repository. |
 | Build and test / All targets | Every target's job passed. |
 
-`.github/workflows/build-and-test.yml` calls the organization's shared `build-and-test.yml`, v2.32.0, with `publishes: true`, as the `.github` repository's README describes it.
-Each target's job builds, checks the toolchain, Node.js 24.21.0 with npm 11.19.0, and the line endings, `* text=auto eol=lf` in `.gitattributes` and LF only with exactly one final newline in every tracked text file, with the shared pipelines tool, then runs `npm run test -- --skip-test-details --skip-coverage-details` and checks that the build and the tests changed no tracked file, within 20 minutes.
+`.github/workflows/build-and-test.yml` calls the organization's shared `build-and-test.yml`, v2.34.0, with `publishes: true`, as the `.github` repository's README describes it.
+Each target's job builds, checks the toolchain, Node.js 26.13.1 with npm 11.20.0, and the line endings, `* text=auto eol=lf` in `.gitattributes` and LF only with exactly one final newline in every tracked text file, with the shared pipelines tool, then runs `npm run test -- --skip-test-details --skip-coverage-details` and checks that the build and the tests changed no tracked file, within 20 minutes.
 On Linux x64 it also builds a second time in a clean worktree and checks that the archives are the same, byte for byte, and on every target it checks the archives as the release does, with `pipelines archive`: each archive's name, version, `gitHead`, scope and licence, and a byte-for-byte copy of every file `npm run build --silent -- --list-copies` lists, at its path.
 `npm run build` first installs the dependencies with `npm ci --ignore-scripts` in the root, only when its `node_modules` is missing; the root's `package.json` declares every package the build and tests use, [the Angular project](#the-angular-project)'s included, and the packages under `src` aren't npm workspaces; it then builds and packs the module's three packages and checks the archives with `scripts/services/archive-check.ts`, which, beyond the shared check, refuses a module archive without `module.json`, a caret range on the kit, a Noldova Desktop peer at another range than `noldovaDesktop`, a range among the dependencies or the optional dependencies, an Angular peer of the window part's package that is exact or ends short of the next major, a range on Angular in the module's package, and a `module.json` that isn't JSON or names no `noldovaDesktop`.
 `--skip-test-details` gives the root suite Vitest's dot reporter, and `--skip-coverage-details` leaves fully covered files out of its coverage table; `npm test` refuses any other option.
@@ -51,10 +51,10 @@ Arguments make a filtered run, as `npm test -- <test file>` does: a window spec,
 It runs the root's test files and the window part's specs three times each, and takes each file's time, and each spec's tests' times, as the median of the three runs, so one run slowed by a busy machine doesn't decide it.
 It fails on a unit test file over 1 second that README.md doesn't accept, or a spec file whose median test is over 100 milliseconds that README.md doesn't accept, each only past its bar plus 20%, for the jitter a quiet machine still has, and it names each component test over 1 second, which README.md lists with its cause.
 
-The shared workflow's own steps run locally after `npm run build`, with the pipelines tool v2.32.0 pins installed from npmjs into a folder outside the copy, such as `npm install --prefix ../pipelines-tool --registry https://registry.npmjs.org/ --no-audit --no-fund @noldova/tools.pipelines.github@0.0.20`, then, from the repository root:
+The shared workflow's own steps run locally after `npm run build`, with the pipelines tool v2.34.0 pins installed from npmjs into a folder outside the copy, such as `npm install --prefix ../pipelines-tool --registry https://registry.npmjs.org/ --no-audit --no-fund @noldova/tools.pipelines.github@0.0.21`, then, from the repository root:
 
 ```bash
-../pipelines-tool/node_modules/.bin/pipelines toolchain 24.21.0 11.19.0
+../pipelines-tool/node_modules/.bin/pipelines toolchain 26.13.1 11.20.0
 ../pipelines-tool/node_modules/.bin/pipelines line-endings
 ../pipelines-tool/node_modules/.bin/pipelines unchanged
 ../pipelines-tool/node_modules/.bin/pipelines reproducible _packages
