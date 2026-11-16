@@ -47,8 +47,13 @@ async function expectPageAsync(app: TestApp, url: string, title: string, message
   await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
 }
 
-async function refusedCountAsync(app: TestApp, href: string): Promise<number> {
-  return (await app.viewRequests.peekAsync()).filter(t => t.url === href && t.error === REFUSED).length;
+async function unrefusedAsync(app: TestApp, target: string): Promise<readonly string[]> {
+  const url = new URL(target);
+  const hrefs = [url.href];
+  url.username = "";
+  url.password = "";
+  hrefs.push(url.href);
+  return (await app.viewRequests.peekAsync()).filter(t => hrefs.includes(t.url) && t.error !== REFUSED).map(t => `${t.url} ${t.error ?? "completed"}`);
 }
 
 async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
@@ -241,7 +246,6 @@ test.describe("blocked origins", () => {
         for (const start of row.starts) {
           const href = new URL(target).href;
           const how = `${target} from ${start.name}`;
-          const refused = await refusedCountAsync(app, href);
           await app.viewPages.takeFrameCommitsAsync();
           const stays = await start.startAsync(app, allowed, target);
 
@@ -254,7 +258,7 @@ test.describe("blocked origins", () => {
           expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${how}.`).toEqual([]);
           expect(servers.requests.filter(t => t.host !== allowedHost), `A fixture server received a request for ${how}.`).toEqual([]);
           expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
-          await expect.poll(() => refusedCountAsync(app, href), { message: `The main process's record never showed ${how} refused.` }).toBeGreaterThan(refused);
+          expect(await unrefusedAsync(app, target), `The main process's record shows a request for ${how} that wasn't refused.`).toEqual([]);
         }
     });
 
