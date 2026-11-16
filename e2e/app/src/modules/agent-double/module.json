@@ -1,0 +1,22 @@
+{
+  "id": "agent-double",
+  "version": "0.0.1",
+  "displayName": "Agent double",
+  "description": "Opens the browser's pages the end-to-end tests name, opens one agent session, calls the tools they name and answers permission requests with the answers they plan, as an app's agent host would.",
+  "parts": ["runtime", "window"],
+  "dependencies": {},
+  "noldovaDesktop": ">=0.0.1 <0.1.0",
+  "contributes": {
+    "methods": [
+      "agent-double.callTool",
+      "agent-double.listTools",
+      "agent-double.planAnswer",
+      "agent-double.takeQuestions",
+      "agent-double.endSession",
+      "agent-double.openPage"
+    ],
+    "events": [
+      "agent-double.pageOpening"
+    ]
+  }
+}

@@ -13,6 +13,8 @@
     "build": "node scripts/build.ts",
     "peers:newest": "node scripts/move-peers.ts",
     "test": "node scripts/test.ts",
+    "test:e2e": "tsc -p e2e/tsconfig.json && playwright test --config e2e/playwright.config.ts",
+    "test:e2e:prepare": "node e2e/prepare-app.ts",
     "test:timing": "node scripts/timing/timing-check.ts"
   },
   "devDependencies": {
