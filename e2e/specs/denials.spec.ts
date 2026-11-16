@@ -214,11 +214,12 @@ test.describe("denied by default", () => {
   });
 
   test("certificate errors", async ({ app, servers }) => {
+    const allowed = await openAsync(app, servers);
     const secure = await servers.startAsync("secure.localhost", { "/": page() }, undefined, await TestCertificate.createAsync("secure.localhost"));
-    await app.allowLocalSitesAsync([secure.origin]);
+    await app.allowLocalSitesAsync([allowed.origin, secure.origin]);
     const before = await beforeAsync(app);
 
-    await app.openPageAsync(secure.url("/"));
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(secure.url("/"))}; "started"`);
 
     await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the untrusted certificate's load as failed.").toHaveText(`Can't reach secure.localhost:${secure.port}`);
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the certificate.").toHaveText(CERTIFICATE_NOTICE);
