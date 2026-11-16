@@ -92,6 +92,7 @@ test.describe("schemes", () => {
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
       await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, `The allowed page didn't load again after ${SRCDOC} from ${start.name}.`);
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept the failed load after the allowed page loaded again, after ${SRCDOC} from ${start.name}.`).toHaveCount(0);
     }
   });
 
