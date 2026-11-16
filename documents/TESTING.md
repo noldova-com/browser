@@ -331,7 +331,8 @@ Each test asserts that the view refuses with no prompt and no file written; a do
 - No prompt: the app's windows and contents read from the main process are the same before and after, and the downloads folder doesn't change.
 - The pane shows Browser's notice for each request the base reports: a site permission, screen capture, a download, a file chooser and a sign-in; a new window shows the pane's pop-up offer.
   The base refuses a USB, serial, HID or Bluetooth chooser with no report, so those tests check the page's refusal and that nothing opened.
-  A certificate error reports a refusal and then fails the load, so the pane shows the failed load rather than a notice, and the fixture server receives no request.
+  The engine on the Linux runner has no Web Bluetooth, so the Bluetooth test expects the page to find no API to ask.
+  A certificate error reports a refusal and then fails the load, so the pane shows the failed load and the certificate's notice, and the fixture server receives no request.
 - An embedded `<webview>` element stays an unknown element in the page, since the view has no `<webview>` support, and asks for nothing.
 - A download is tried from a freshly loaded page each time, since a page load clears the pane's notice; the test then finds no file with its name under the downloads folder or the app's folders.
 

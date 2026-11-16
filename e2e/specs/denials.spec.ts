@@ -49,6 +49,7 @@ const PERMISSION_NOTICE = /^Site permissions, such as the camera or your locatio
 const DOWNLOAD_NOTICE = /^Downloads aren't available in .+ yet\.$/;
 const FILE_CHOOSER_NOTICE = /^Opening files from this computer isn't available in .+ yet\.$/;
 const AUTHENTICATION_NOTICE = /^Sign-in dialogs aren't available in .+ yet\.$/;
+const CERTIFICATE_NOTICE = /^This page's certificate wasn't accepted, so .+ didn't open it\.$/;
 const POPUP_NOTICE = /^.+ tried to open a pop-up window and was stopped\.$/;
 
 const PAGE_SCRIPT = `
@@ -220,6 +221,7 @@ test.describe("denied by default", () => {
     await app.openPageAsync(secure.url("/"));
 
     await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the untrusted certificate's load as failed.").toHaveText(`Can't reach secure.localhost:${secure.port}`);
+    await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the certificate.").toHaveText(CERTIFICATE_NOTICE);
     expect((await app.viewPages.takeCommitsAsync()).filter(t => t.startsWith(secure.origin)), "The view committed the page with the untrusted certificate.").toEqual([]);
     expect(pathsOf(secure), "The page with the untrusted certificate was asked for.").toEqual([]);
     await expectNothingOpenedAsync(app, before, "the certificate error");
