@@ -12,7 +12,8 @@
       "relay-double.views",
       "relay-double.allow",
       "relay-double.navigate",
-      "relay-double.send"
+      "relay-double.send",
+      "relay-double.listen"
     ],
     "events": [
       "relay-double.opening"

@@ -7,8 +7,9 @@
  */
 
 import { JsonReader, type JsonValue } from "@noldova/context.json";
-import type { EventChannel, IRuntimePart, IRuntimePartContext, IToolsContext, Registration, RequestContext, ToolSession } from "@noldova/desktop.runtime";
+import type { IRuntimePart, IRuntimePartContext, IToolsContext, Registration, RequestContext, ToolSession } from "@noldova/desktop.runtime";
 
+import { HeldEvent } from "./held-event.js";
 import { PlannedAnswers } from "./planned-answers.js";
 import { Resources } from "./resources.js";
 
@@ -16,7 +17,7 @@ export class RuntimePart implements IRuntimePart {
   private readonly answers: PlannedAnswers = new PlannedAnswers();
   private answerer: Registration | null = null;
   private session: ToolSession | null = null;
-  private opening: EventChannel | null = null;
+  private opening: HeldEvent | null = null;
 
   public async activateAsync(context: IRuntimePartContext): Promise<void> {
     this.answerer = context.permissions.registerAnswerer(this.answers);
@@ -25,9 +26,10 @@ export class RuntimePart implements IRuntimePart {
     context.registerMethod(Resources.planAnswerMethod, { handleAsync: async t => this.planAnswer(t) });
     context.registerMethod(Resources.takeQuestionsMethod, { handleAsync: async () => this.answers.takeAsked().map(t => t.toJson()) });
     context.registerMethod(Resources.endSessionMethod, { handleAsync: async () => this.endSession() });
-    const opening = context.declareEvent(Resources.pageOpeningEvent);
+    const opening = new HeldEvent(context.declareEvent(Resources.pageOpeningEvent));
     this.opening = opening;
     context.registerMethod(Resources.openPageMethod, { handleAsync: async t => RuntimePart.openPage(opening, t) });
+    context.registerMethod(Resources.listenMethod, { handleAsync: async () => RuntimePart.listen(opening) });
   }
 
   public async deactivateAsync(): Promise<void> {
@@ -44,8 +46,13 @@ export class RuntimePart implements IRuntimePart {
     return result.toJson();
   }
 
-  private static openPage(opening: EventChannel, request: RequestContext): null {
+  private static openPage(opening: HeldEvent, request: RequestContext): null {
     opening.publish(request.payload);
+    return null;
+  }
+
+  private static listen(opening: HeldEvent): null {
+    opening.listen();
     return null;
   }
 

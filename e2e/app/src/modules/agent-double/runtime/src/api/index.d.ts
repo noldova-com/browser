@@ -14,6 +14,7 @@ import type { IRuntimePart, IRuntimePartContext } from "@noldova/desktop.runtime
 export declare class RuntimePart implements IRuntimePart {
   /**
    * Registers the methods, the page-opening event and the permission answerer.
+   * It holds each page opening until the window part has subscribed to the event and said so through `agent-double.listen`, since the base keeps no event for a window part that isn't listening yet.
    */
   public activateAsync(context: IRuntimePartContext): Promise<void>;
 

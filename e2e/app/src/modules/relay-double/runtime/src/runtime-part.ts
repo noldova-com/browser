@@ -7,7 +7,9 @@
  */
 
 import { JsonReader, type JsonValue } from "@noldova/context.json";
-import { type EventChannel, type IRuntimePart, type IRuntimePartContext, type IRuntimeWebViews, type RequestContext, WebViewFailureException } from "@noldova/desktop.runtime";
+import { type IRuntimePart, type IRuntimePartContext, type IRuntimeWebViews, type RequestContext, WebViewFailureException } from "@noldova/desktop.runtime";
+
+import { HeldEvent } from "./held-event.js";
 
 export class RuntimePart implements IRuntimePart {
   private static readonly OPEN_METHOD: string = "relay-double.open";
@@ -16,16 +18,18 @@ export class RuntimePart implements IRuntimePart {
   private static readonly NAVIGATE_METHOD: string = "relay-double.navigate";
   private static readonly SEND_METHOD: string = "relay-double.send";
   private static readonly OPENING_EVENT: string = "relay-double.opening";
+  private static readonly LISTEN_METHOD: string = "relay-double.listen";
   private static readonly ANSWERED: string = "Answered";
   private static readonly NO_VIEW: string = "The relay double has no web view open; call relay-double.open first.";
 
-  private opening: EventChannel | null = null;
+  private opening: HeldEvent | null = null;
 
   public async activateAsync(context: IRuntimePartContext): Promise<void> {
     const views = context.webViews;
-    const opening = context.declareEvent(RuntimePart.OPENING_EVENT);
+    const opening = new HeldEvent(context.declareEvent(RuntimePart.OPENING_EVENT));
     this.opening = opening;
     context.registerMethod(RuntimePart.OPEN_METHOD, { handleAsync: async () => RuntimePart.open(opening) });
+    context.registerMethod(RuntimePart.LISTEN_METHOD, { handleAsync: async () => RuntimePart.listen(opening) });
     context.registerMethod(RuntimePart.VIEWS_METHOD, { handleAsync: async () => views.list().map(t => t.id) });
     context.registerMethod(RuntimePart.ALLOW_METHOD, { handleAsync: t => RuntimePart.allowAsync(views, t) });
     context.registerMethod(RuntimePart.NAVIGATE_METHOD, { handleAsync: t => RuntimePart.navigateAsync(views, t) });
@@ -37,8 +41,13 @@ export class RuntimePart implements IRuntimePart {
     this.opening = null;
   }
 
-  private static open(opening: EventChannel): null {
+  private static open(opening: HeldEvent): null {
     opening.publish(null);
+    return null;
+  }
+
+  private static listen(opening: HeldEvent): null {
+    opening.listen();
     return null;
   }
 
