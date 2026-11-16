@@ -71,7 +71,7 @@ const PAGE_SCRIPT = `
     for (const line of connection.localDescription.sdp.split("\\r\\n").filter(t => t.startsWith("a=candidate:")))
       addresses.push(line.split(" ")[4]);
     connection.close();
-    return JSON.stringify(addresses.filter(t => /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(t) || t.includes(":")));
+    return JSON.stringify(addresses);
   };`;
 
 function page(): string {
@@ -110,7 +110,7 @@ test.describe("isolation", () => {
     const allowed = await startAsync(app, servers);
     await openAsync(app, allowed.url("/"));
 
-    expect(await app.viewPages.runAsync("window.candidatesAsync()"), "The page's ICE candidates name an address.").toBe("[]");
+    expect(await app.viewPages.runAsync("window.candidatesAsync()"), "The page gathered ICE candidates, so a host candidate may name this computer.").toBe("[]");
   });
 
   test("cookies, local storage and IndexedDB written under one profile key are absent under another key and in the app's window", async ({ app, servers }) => {

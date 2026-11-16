@@ -326,7 +326,7 @@ The same file has a named test for each of the relay's other refusals and limits
 Each `isolation.spec.ts` test is titled with its item.
 - The globals test checks the base's bridge, `desktop`, and Node's and Electron's names, such as `require`, `process` and `ipcRenderer`, after checking that the app's window has the bridge.
 - The protocol test fetches, and loads as an image, an address on the base's shared-file protocol, `desktop-file:`, which the page must fail to reach.
-- The WebRTC test gathers the candidates of a data channel's offer, with no STUN server, and finds no address literal among them.
+- The WebRTC test gathers the candidates of a data channel's offer, with no STUN server, and finds none: under the policy the view gathers no host candidate, while without it Chromium would gather host candidates whose `.local` names hide the address, so a test for address literals alone would pass without the policy.
 - The storage tests write a cookie that outlives the session, a local storage item and an IndexedDB record, and read all three back.
   A second profile key's page reads none of them; the main process finds the cookie only in the first key's session, not in the window's or the default session.
   Clearing goes through the pane's Clear browsing data… and its dialog, as the person does; the restart quits the app and launches it again on the same folders.
