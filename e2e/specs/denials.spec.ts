@@ -128,6 +128,7 @@ async function beforeAsync(app: TestApp): Promise<Before> {
 }
 
 async function expectNothingOpenedAsync(app: TestApp, before: Before, title: string): Promise<void> {
+  expect(await app.viewPages.takeChoosersAsync(), `The view's session offered a device chooser for ${title}.`).toEqual([]);
   expect(await app.viewPages.surfacesAsync(), `The app's windows or contents changed after ${title}, so something may have prompted.`).toEqual(before.surfaces);
   expect(await filesAsync(await app.viewPages.downloadsFolderAsync()), `The downloads folder changed after ${title}.`).toEqual(before.downloads);
 }

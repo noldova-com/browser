@@ -21,6 +21,10 @@ interface IViewDebugger {
   sendCommand(method: "Runtime.evaluate", params: { expression: string; returnByValue: boolean }, sessionId: string): Promise<{ result: { value?: unknown } }>;
 }
 
+interface IViewChooserSession {
+  on(event: "select-usb-device" | "select-serial-port" | "select-hid-device", listener: () => void): void;
+}
+
 interface IViewPageContents {
   getType(): string;
   readonly debugger: IViewDebugger;
@@ -82,11 +86,21 @@ export class ViewPages {
     await application.evaluate(({ app }) => {
       const commits: string[] = [];
       const frameCommits: string[] = [];
+      const choosers: string[] = [];
+      const watched = new WeakSet<object>();
       globalThis.noldovaViewCommits = commits;
       globalThis.noldovaViewFrameCommits = frameCommits;
-      app.on("web-contents-created", (_event: unknown, contents: IViewPageContents) => {
+      globalThis.noldovaViewChoosers = choosers;
+      app.on("web-contents-created", (_event: unknown, contents: IViewPageContents & { readonly session: IViewChooserSession }) => {
         if (contents.getType() !== "webview")
           return;
+        if (!watched.has(contents.session)) {
+          watched.add(contents.session);
+          for (const name of ["select-usb-device", "select-serial-port", "select-hid-device"] as const)
+            contents.session.on(name, () => {
+              choosers.push(name);
+            });
+        }
         contents.on("did-navigate", (_navigated: unknown, url: string) => {
           commits.push(url);
         });
@@ -117,6 +131,10 @@ export class ViewPages {
 
   public async downloadsFolderAsync(): Promise<string> {
     return this.application.evaluate(({ app }): string => app.getPath("downloads"));
+  }
+
+  public async takeChoosersAsync(): Promise<readonly string[]> {
+    return this.application.evaluate(() => globalThis.noldovaViewChoosers?.splice(0) ?? []);
   }
 
   public async takeCommitsAsync(): Promise<readonly string[]> {
