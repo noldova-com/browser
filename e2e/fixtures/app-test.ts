@@ -16,7 +16,7 @@ import { TestApp } from "./test-app.ts";
 
 export { expect } from "playwright/test";
 
-export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; waitsForStart: boolean; servers: FixtureServers; proxy: RecordingProxy; app: TestApp; guard: LoopbackGuard }>({
+export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; waitsForStart: boolean; servers: FixtureServers; loopbackProxy: RecordingProxy; app: TestApp; guard: LoopbackGuard }>({
   dataFiles: [{}, { option: true }],
   waitsForStart: [true, { option: true }],
   servers: async ({}, use) => {
@@ -28,7 +28,7 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await servers.closeAsync();
     }
   },
-  proxy: async ({}, use) => {
+  loopbackProxy: async ({}, use) => {
     const proxy = await RecordingProxy.startAsync();
     try {
       await use(proxy);
@@ -37,8 +37,8 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await proxy.closeAsync();
     }
   },
-  app: async ({ dataFiles, waitsForStart, proxy }, use, testInfo) => {
-    const app = await TestApp.launchAsync(testInfo, dataFiles, LaunchSettings.forRun(proxy.address));
+  app: async ({ dataFiles, waitsForStart, loopbackProxy }, use, testInfo) => {
+    const app = await TestApp.launchAsync(testInfo, dataFiles, LaunchSettings.forRun(loopbackProxy.address));
     try {
       if (waitsForStart)
         await app.waitForStartAsync();
@@ -48,8 +48,8 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await app.quitAsync();
     }
   },
-  guard: [async ({ servers, proxy, app }, use) => {
-    const guard = new LoopbackGuard(servers, proxy, app.viewRequests);
+  guard: [async ({ servers, loopbackProxy, app }, use) => {
+    const guard = new LoopbackGuard(servers, loopbackProxy, app.viewRequests);
     await use(guard);
     expect(await guard.takeViolationsAsync(), "A view's request left loopback.").toEqual([]);
   }, { auto: true }]
