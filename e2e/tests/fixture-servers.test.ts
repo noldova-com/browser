@@ -64,6 +64,15 @@ describe("FixtureServers", () => {
     expect(server.requests).toEqual([new FixtureRequest(`allowed.localhost:${server.port}`, "/ws")]);
   });
 
+  it("listens on the address it was started on, and names it among its hosts", async () => {
+    const address = process.platform === "darwin" ? "127.0.0.1" : "127.0.0.2";
+    const server = await servers.startAsync("127.0.0.2", { "/": "<p>Range</p>" }, address);
+
+    const answered = await fetch(`http://${address}:${server.port}/`);
+
+    expect([await answered.text(), server.hosts]).toEqual(["<p>Range</p>", [`127.0.0.2:${server.port}`, `${address}:${server.port}`]]);
+  });
+
   it("lists every server's requests, with the host each named", async () => {
     const first = await servers.startAsync("first.localhost", { "/": "<p>First</p>" });
     const second = await servers.startAsync("second.localhost", { "/": "<p>Second</p>" });

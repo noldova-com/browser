@@ -35,13 +35,15 @@ export class FixtureServer {
   private static readonly HTML: string = "text/html; charset=utf-8";
 
   public readonly name: string;
+  public readonly address: string;
   private readonly server: Server;
   private readonly pages: Map<string, FixturePage>;
   private readonly redirects: Map<string, string> = new Map();
   private readonly received: FixtureRequest[] = [];
 
-  private constructor(name: string, pages: Readonly<Record<string, string>>) {
+  private constructor(name: string, address: string, pages: Readonly<Record<string, string>>) {
     this.name = name;
+    this.address = address;
     this.pages = new Map(Object.entries(pages).map(([path, body]) => [path, new FixturePage(body, {})]));
     this.server = createServer((request, response) => this.answer(request, response));
     this.server.on("upgrade", (request, socket) => {
@@ -50,9 +52,9 @@ export class FixtureServer {
     });
   }
 
-  public static async startAsync(name: string, pages: Readonly<Record<string, string>>): Promise<FixtureServer> {
-    const server = new FixtureServer(name, pages);
-    server.server.listen(0, FixtureServer.LOOPBACK);
+  public static async startAsync(name: string, pages: Readonly<Record<string, string>>, address: string = FixtureServer.LOOPBACK): Promise<FixtureServer> {
+    const server = new FixtureServer(name, address, pages);
+    server.server.listen(0, address);
     await once(server.server, "listening");
     return server;
   }
@@ -69,7 +71,7 @@ export class FixtureServer {
   }
 
   public get hosts(): readonly string[] {
-    return [`${this.name}:${this.port}`, `${FixtureServer.LOOPBACK}:${this.port}`];
+    return [`${this.name}:${this.port}`, `${this.address}:${this.port}`];
   }
 
   public get requests(): readonly FixtureRequest[] {
@@ -123,8 +125,8 @@ export class FixtureServers {
     return this.started.flatMap(t => t.requests);
   }
 
-  public async startAsync(name: string, pages: Readonly<Record<string, string>>): Promise<FixtureServer> {
-    const server = await FixtureServer.startAsync(name, pages);
+  public async startAsync(name: string, pages: Readonly<Record<string, string>>, address?: string): Promise<FixtureServer> {
+    const server = await FixtureServer.startAsync(name, pages, address);
     this.started.push(server);
     return server;
   }
