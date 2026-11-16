@@ -116,6 +116,10 @@ async function openAgainAsync(app: TestApp, allowed: FixtureServer): Promise<voi
 }
 
 async function filesAsync(folder: string): Promise<readonly string[]> {
+  return existsSync(folder) ? (await readdir(folder, { withFileTypes: true })).filter(t => t.isFile()).map(t => t.name).sort() : [];
+}
+
+async function treeAsync(folder: string): Promise<readonly string[]> {
   return existsSync(folder) ? (await readdir(folder, { recursive: true })).sort() : [];
 }
 
@@ -168,8 +172,9 @@ test.describe("denied by default", () => {
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the linked download.").toHaveText(DOWNLOAD_NOTICE);
 
     await expectNothingOpenedAsync(app, before, "the downloads");
-    for (const folder of [await app.viewPages.downloadsFolderAsync(), app.dataDirectory, app.deviceDirectory])
-      expect((await filesAsync(folder)).filter(t => t.includes(name)), `A refused download wrote ${name} under ${folder}.`).toEqual([]);
+    expect((await filesAsync(await app.viewPages.downloadsFolderAsync())).filter(t => t.includes(name)), `A refused download wrote ${name} to the downloads folder.`).toEqual([]);
+    for (const folder of [app.dataDirectory, app.deviceDirectory])
+      expect((await treeAsync(folder)).filter(t => t.includes(name)), `A refused download wrote ${name} under ${folder}.`).toEqual([]);
   });
 
   test("new windows and pop-ups", async ({ app, servers }) => {

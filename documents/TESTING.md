@@ -328,7 +328,7 @@ A check fails when an item has no test, or a test names none.
 Each test asserts that the view refuses with no prompt and no file written; a download is tried by an attachment response and by a link's `download` attribute, and a new window by `window.open` and by a link that targets one.
 - The page sees the refusal: the request's promise rejects or resolves as denied, `window.open` returns `null`, the file input stays empty, and a refused sign-in shows the server's own 401 page with no second request.
 - Where the engine answers a permission query, it reports the item as denied, so a refusal for another reason, such as clipboard reading in a page without focus, doesn't pass the test.
-- No prompt: the app's windows and contents read from the main process are the same before and after, and the downloads folder doesn't change.
+- No prompt: the app's windows and contents read from the main process are the same before and after, and the files in the downloads folder itself don't change; its subfolders are left out, since on a Linux runner that folder is the home folder, where the engine keeps its certificate store.
 - The pane shows Browser's notice for each request the base reports: a site permission, screen capture, a download, a file chooser and a sign-in; a new window shows the pane's pop-up offer.
   The base refuses a USB, serial, HID or Bluetooth chooser with no report, so those tests check the page's refusal and that nothing opened.
   The engine on the Linux runner has no Web Bluetooth, so the Bluetooth test expects the page to find no API to ask.
