@@ -13,7 +13,8 @@
       "agent-double.planAnswer",
       "agent-double.takeQuestions",
       "agent-double.endSession",
-      "agent-double.openPage"
+      "agent-double.openPage",
+      "agent-double.listen"
     ],
     "events": [
       "agent-double.pageOpening"

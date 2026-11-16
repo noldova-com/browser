@@ -10,6 +10,7 @@ import { DocumentContribution, type IWindowPart, type IWindowPartContext } from 
 
 export class RelayDoubleWindowPart implements IWindowPart {
   private static readonly OPENING_EVENT: string = "relay-double.opening";
+  private static readonly LISTEN_METHOD: string = "relay-double.listen";
   private static readonly PAGE_DOCUMENT: string = "relay-double.page";
   private static readonly INSTANCE: string = "1";
   private static readonly TITLE: string = "Relay double";
@@ -22,6 +23,7 @@ export class RelayDoubleWindowPart implements IWindowPart {
       () => import("./relay-page.component").then(t => t.RelayPageComponent)));
     this.stopListening = context.onEvent(RelayDoubleWindowPart.OPENING_EVENT,
       () => context.openDocument(RelayDoubleWindowPart.PAGE_DOCUMENT, RelayDoubleWindowPart.INSTANCE, RelayDoubleWindowPart.TITLE));
+    await context.requestAsync(RelayDoubleWindowPart.LISTEN_METHOD, null);
   }
 
   public async reconnectAsync(): Promise<boolean> {
