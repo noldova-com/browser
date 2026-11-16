@@ -30,6 +30,7 @@ interface IBlockedRow {
 }
 
 const ALLOWED_TITLE = "Allowed";
+const REFUSED = "net::ERR_BLOCKED_BY_CLIENT";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 
 const NAVIGATION_MARK = "<script>window.navigationStarted = false; navigation.addEventListener(\"navigate\", () => { window.navigationStarted = true; });</script>";
@@ -44,6 +45,10 @@ async function expectNavigationStartedAsync(app: TestApp, how: string): Promise<
 
 async function expectPageAsync(app: TestApp, url: string, title: string, message: string): Promise<void> {
   await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
+}
+
+async function refusedCountAsync(app: TestApp, href: string): Promise<number> {
+  return (await app.viewRequests.peekAsync()).filter(t => t.url === href && t.error === REFUSED).length;
 }
 
 async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
@@ -177,6 +182,47 @@ const ROWS: readonly IBlockedRow[] = [
     starts: EVERY_START,
     localSites: ({ allowed }) => [allowed.origin, `http://localhost:${allowed.port}`],
     targetsAsync: async ({ servers }) => [(await servers.startAsync("localhost", { "/": page("") })).url("/")]
+  },
+  {
+    name: "Loopback range",
+    starts: EVERY_START,
+    targetsAsync: async ({ servers, allowed }) => process.platform === "darwin"
+      ? [`http://127.0.0.2:${allowed.port}/`]
+      : [(await servers.startAsync("127.0.0.2", { "/": page("") }, "127.0.0.2")).url("/")]
+  },
+  { name: "IPv4-mapped loopback", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://[::ffff:127.0.0.1]:${allowed.port}/`] },
+  { name: "IPv4-compatible loopback", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://[::127.0.0.1]:${allowed.port}/`] },
+  { name: "NAT64 loopback", starts: EVERY_START, targetsAsync: async ({ allowed }) => [`http://[64:ff9b::7f00:1]:${allowed.port}/`] },
+  {
+    name: "Private range",
+    starts: EVERY_START,
+    targetsAsync: async () => ["http://10.0.0.1/", "http://172.16.0.1/", "http://192.168.1.1/", "http://[fd00::1]/"]
+  },
+  { name: "IPv4-mapped private address", starts: EVERY_START, targetsAsync: async () => ["http://[::ffff:192.168.1.1]/"] },
+  { name: "Shared address space", starts: EVERY_START, targetsAsync: async () => ["http://100.64.0.1/"] },
+  {
+    name: "Wildcard and a loopback name",
+    starts: EVERY_START,
+    localSites: ({ allowed }) => [allowed.origin, `http://*.localhost:${allowed.port}`],
+    targetsAsync: async ({ allowed }) => [`http://app.localhost:${allowed.port}/`]
+  },
+  {
+    name: "Unspecified address",
+    starts: EVERY_START,
+    localSites: ({ allowed }) => [allowed.origin, `http://0.0.0.0:${allowed.port}`, `http://0.1.2.3:${allowed.port}`, `http://[::]:${allowed.port}`],
+    targetsAsync: async ({ allowed }) => [`http://0.0.0.0:${allowed.port}/`, `http://0.1.2.3:${allowed.port}/`, `http://[::]:${allowed.port}/`]
+  },
+  {
+    name: "Link-local",
+    starts: EVERY_START,
+    localSites: ({ allowed }) => [allowed.origin, "http://169.254.169.254", "http://[fe80::1]"],
+    targetsAsync: async () => ["http://169.254.169.254/", "http://[fe80::1]/"]
+  },
+  {
+    name: "IPv4-mapped link-local",
+    starts: EVERY_START,
+    localSites: ({ allowed }) => [allowed.origin, "http://[::ffff:a9fe:a9fe]"],
+    targetsAsync: async () => ["http://[::ffff:169.254.169.254]/"]
   }
 ];
 
@@ -193,8 +239,11 @@ test.describe("blocked origins", () => {
 
       for (const target of targets)
         for (const start of row.starts) {
-          const stays = await start.startAsync(app, allowed, target);
+          const href = new URL(target).href;
           const how = `${target} from ${start.name}`;
+          const refused = await refusedCountAsync(app, href);
+          await app.viewPages.takeFrameCommitsAsync();
+          const stays = await start.startAsync(app, allowed, target);
 
           if (start.isTopLevel)
             await expectNavigationStartedAsync(app, how);
@@ -204,6 +253,8 @@ test.describe("blocked origins", () => {
           await expectPageAsync(app, stays, barrier, `The view didn't stay at ${stays}, done loading, after ${how}.`);
           expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for ${how}.`).toEqual([]);
           expect(servers.requests.filter(t => t.host !== allowedHost), `A fixture server received a request for ${how}.`).toEqual([]);
+          expect(await app.viewPages.takeFrameCommitsAsync(), `A subframe committed ${how}.`).not.toContain(href);
+          await expect.poll(() => refusedCountAsync(app, href), { message: `The main process's record never showed ${how} refused.` }).toBeGreaterThan(refused);
         }
     });
 
@@ -219,6 +270,7 @@ test.describe("blocked origins", () => {
 
     await app.allowLocalSitesAsync([second.origin]);
     await app.viewPages.takeCommitsAsync();
+    expect(await app.viewPages.canGoBackAsync(), "The view had no history entry to go back to.").toBe(true);
     await app.viewPages.runAsync("history.back();");
 
     const barrier = "After going back";
