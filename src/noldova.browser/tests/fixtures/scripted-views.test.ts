@@ -18,7 +18,7 @@ import { ScriptedViews } from "./scripted-views.fixture.ts";
 const SHOT: JsonObject = { format: "png", clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 } };
 
 describe("ScriptedViews", () => {
-  it("refuses a view that isn't open, another module's view and a method off the module's list, focus emulation among them, and records each call", async () => {
+  it("refuses a view that isn't open, another module's view and a method off the module's list, and records each call, while Noldova Desktop's relay refuses focus emulation before the call reaches it", async () => {
     const views: ScriptedViews = new ScriptedViews(["view"], ["foreign"]);
     const { relay } = views;
 
@@ -27,7 +27,7 @@ describe("ScriptedViews", () => {
     await expect(relay.sendAsync("view", "Runtime.evaluate", { expression: "1" }, 100)).rejects.toMatchObject({ failure: { kind: WebViewFailureKind.NotAllowed } });
     await expect(relay.sendAsync("view", "Emulation.setFocusEmulationEnabled", { enabled: true }, 100)).rejects.toMatchObject({ failure: { kind: WebViewFailureKind.NotAllowed } });
     await expect(views.webViews.navigateAsync("stranger", "https://public.test/")).rejects.toMatchObject({ failure: { kind: WebViewFailureKind.ViewClosed } });
-    expect(views.calls.map(t => [t.viewId, t.method])).toEqual([["stranger", "Page.enable"], ["foreign", "Page.enable"], ["view", "Runtime.evaluate"], ["view", "Emulation.setFocusEmulationEnabled"]]);
+    expect(views.calls.map(t => [t.viewId, t.method])).toEqual([["stranger", "Page.enable"], ["foreign", "Page.enable"], ["view", "Runtime.evaluate"]]);
   });
 
   it("refuses, as Noldova Desktop does, a declared method sent with a parameter it doesn't declare, a value its rule refuses or without a required one, and a method webViews.json doesn't declare", async () => {
