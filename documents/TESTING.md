@@ -214,7 +214,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ### Fixture servers
 
-- Every fixture server listens on `127.0.0.1` on a port the system picks, and belongs to one test.
+- Every fixture server listens on `127.0.0.1` on a port the system picks, and belongs to one test; the "Loopback range" row's server listens on `127.0.0.2` instead, on a platform that routes it.
 - A fixture origin a test allows is a `.localhost` name on its own server, such as `allowed.localhost`, so origins are matched by host as well as by port and scheme.
 - Fixture servers listen on loopback, so each fixture origin a test allows has an exact entry in the fixture host app's Sites on this computer or network setting, which takes a `.localhost` name as a local entry and refuses any other name, as the [security model](SECURITY-MODEL.md) says.
 - A `.test` name, such as `blocked.test`, which the host resolver rules map to `127.0.0.1`, is a name that isn't local and resolves to this computer, which the base refuses whatever the allowed origins hold.
@@ -225,7 +225,12 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts` and `schemes.spec.ts` exist, and `navigation.spec.ts` with its test that an allowed origin loads; each other workflow, and the rest of `navigation.spec.ts`, comes in its own pull request.
+**Not yet:** of these workflows, `loopback-only.spec.ts` and `schemes.spec.ts` exist, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
+Each asserts that the view stays at its last allowed address, done loading, with no navigation committed in the view or in a subframe, that the main process's record shows no request for the target that the base didn't refuse, since the base refuses a page's own navigation before its request and a redirect at its request, and that no fixture server received a request for another host; for a top-level start other than going back, it also asserts that the page started the navigation, by the page's own `navigate` event.
+So that those records can't pass empty, each start's page also has an allowed control frame, and the test asserts that the view committed the start page, that a subframe committed the control frame, and that the record shows the start page loaded.
+On macOS, which doesn't route `127.0.0.2`, the "Loopback range" row has no fixture server at that address, and the main process's record alone proves its refusal.
+That the module receives the refused-navigation event waits on [desktop#115](https://github.com/noldova-com/desktop/issues/115), since the base doesn't report a refused main-frame navigation today.
+The bridge's navigate, back and forward come with the agent tools; each other workflow, the rest of `navigation.spec.ts` and the rows for the base's local endpoint, the app's tool server and the app's window URL come in their own pull requests.
 
 | Workflow | What it proves |
 |---|---|

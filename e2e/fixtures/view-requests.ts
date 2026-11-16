@@ -67,6 +67,11 @@ export class ViewRequests {
     return this.application.evaluate(() => [...globalThis.noldovaViewRequestsInFlight?.values() ?? []]);
   }
 
+  public async peekAsync(): Promise<readonly ViewRequest[]> {
+    const records = await this.application.evaluate(() => [...globalThis.noldovaViewRequests ?? []]);
+    return records.map(t => new ViewRequest(t.url, t.error));
+  }
+
   public async takeAsync(): Promise<readonly ViewRequest[]> {
     const records = await this.application.evaluate(() => globalThis.noldovaViewRequests?.splice(0) ?? []);
     return records.map(t => new ViewRequest(t.url, t.error));
