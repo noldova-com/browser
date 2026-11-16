@@ -93,9 +93,9 @@ export class PaneStatus {
   }
 
   public navigate(): PaneStatus {
-    return this.holdsRefusedLoad
-      ? new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, this.refusedRequest, this.refusedTarget,
-        this.refusedAddress, this.popup, this.replaced)
+    return this.holdsRefusedLoad || this.refusedRequest !== null
+      ? new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, null, null, this.refusedAddress, this.popup,
+        this.replaced)
       : this;
   }
 
