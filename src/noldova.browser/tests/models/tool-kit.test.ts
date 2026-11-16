@@ -66,13 +66,13 @@ describe("ToolKit", () => {
     await expect(bench.kit.origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toBeInstanceOf(TypedRedirectAfterAgentException);
   });
 
-  it("writes a request with the origin as its subject and last detail, asking for any risk above low", () => {
+  it("writes a request with the origin as its subject and the details as given, asking for any risk above low", () => {
     expect(ToolKit.request("browser.click", "Click Pay", "https://shop.test", [{ label: "Element", kind: PermissionDetailKind.Text, value: "Pay" }], ToolRisk.Medium,
       [PermissionOption.AllowOnce, PermissionOption.Deny])).toEqual({
       action: "browser.click",
       subject: "https://shop.test",
       title: "Click Pay",
-      details: [{ label: "Element", kind: PermissionDetailKind.Text, value: "Pay" }, { label: "Origin", kind: PermissionDetailKind.Text, value: "https://shop.test" }],
+      details: [{ label: "Element", kind: PermissionDetailKind.Text, value: "Pay" }],
       risk: ToolRisk.Medium,
       isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.Deny],

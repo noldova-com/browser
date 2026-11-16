@@ -55,8 +55,8 @@ describe("PressKeyTool", () => {
 
     expect(bench.permissions.requests[0]).toMatchObject({
       action: "browser.pressKey",
-      title: "Press a key",
-      details: [{ label: "Key", kind: PermissionDetailKind.Text, value: "a" }, { label: "Element", value: "<input>" }, { label: "Origin" }],
+      title: "Press a on shop.test",
+      details: [{ label: "Page", value: "\"Cart\", https://shop.test/cart/" }, { label: "Key", kind: PermissionDetailKind.Text, value: "a" }, { label: "Field", value: "textbox" }],
       risk: ToolRisk.Medium
     });
     expect(keyEvents()).toEqual([
@@ -67,10 +67,19 @@ describe("PressKeyTool", () => {
     expect(bench.sendingMarks).toBe(1);
   });
 
+  it("names the form an Enter in its field submits, and the fields the form sends", async () => {
+    bench.surface.answer("Accessibility.getFullAXTree", focusedTree(ShopPage.COUPON));
+
+    await bench.runAsync(tool, bench.call({ key: "Enter" }));
+
+    expect(bench.permissions.requests[0]).toMatchObject({ title: "Submit a form on shop.test",
+      details: [{ label: "Page" }, { label: "Key", value: "Enter" }, { label: "Field", value: "textbox" }, { label: "Sends", value: "coupon" }] });
+  });
+
   it("sends a shortcut with its modifiers and no text", async () => {
     await bench.runAsync(tool, bench.call({ key: "a", modifiers: ["Control", "Shift"] }));
 
-    expect(bench.permissions.requests[0]?.details[0]?.value).toBe("Control+Shift+a");
+    expect([bench.permissions.requests[0]?.title, bench.permissions.requests[0]?.details[1]?.value]).toEqual(["Press Control+Shift+a on shop.test", "Control+Shift+a"]);
     expect(keyEvents()[0]).toEqual({ type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 10 });
   });
 

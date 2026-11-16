@@ -68,10 +68,10 @@ describe("NavigateTool", () => {
     expect(bench.permissions.requests).toEqual([{
       action: "browser.navigate",
       subject: "https://docs.example",
-      title: "Open a page on https://docs.example",
+      title: "Open a page on docs.example",
       details: [
-        { label: "URL", kind: PermissionDetailKind.Text, value: "https://docs.example/next" },
-        { label: "Origin", kind: PermissionDetailKind.Text, value: "https://docs.example" }
+        { label: "From", kind: PermissionDetailKind.Text, value: "https://docs.example/guide" },
+        { label: "To", kind: PermissionDetailKind.Text, value: "https://docs.example/next" }
       ],
       risk: ToolRisk.Low,
       isAsking: false,
@@ -90,7 +90,8 @@ describe("NavigateTool", () => {
 
     expect(bench.permissions.pending[0]?.request).toMatchObject({
       subject: "https://new.example",
-      title: "Open https://new.example, a site this workspace doesn't allow yet",
+      title: "Open new.example",
+      details: [{ label: "From", value: "https://docs.example/guide" }, { label: "To", value: "https://new.example/a" }],
       risk: ToolRisk.Medium,
       isAsking: true,
       options: [PermissionOption.AllowAlways, PermissionOption.Deny, PermissionOption.DenyAlways],

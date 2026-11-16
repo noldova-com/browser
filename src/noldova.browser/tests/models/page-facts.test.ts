@@ -12,8 +12,8 @@ import { PageFacts } from "../../src/models/page-facts.ts";
 
 describe("PageFacts", () => {
   it("keeps its fields", () => {
-    const pageFacts: PageFacts = new PageFacts("https://shop.test/cart");
+    const pageFacts: PageFacts = new PageFacts("https://shop.test/cart", "Cart");
 
-    expect([pageFacts.baseUrl]).toEqual(["https://shop.test/cart"]);
+    expect([pageFacts.baseUrl, pageFacts.title]).toEqual(["https://shop.test/cart", "Cart"]);
   });
 });

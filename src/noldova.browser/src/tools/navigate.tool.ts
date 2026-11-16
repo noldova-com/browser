@@ -8,7 +8,7 @@
 
 import { PageAction, PageRefusal, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest } from "@noldova/browser.protocol";
 import { WebViewAction, type WebViewNavigation } from "@noldova/desktop.protocol";
-import { type IPermissionDetail, type IToolDescriptor, PermissionDetailKind, PermissionOption, type ToolCall, ToolContent, type ToolResult,
+import { type IPermissionDetail, type IToolDescriptor, PermissionOption, type ToolCall, ToolContent, type ToolResult,
   ToolRisk } from "@noldova/desktop.runtime";
 
 import { AddressRefusedException } from "../exceptions/address-refused.exception.ts";
@@ -33,6 +33,7 @@ import { UrlMove } from "../models/url-move.ts";
 import { Resources } from "../resources.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { LoadWaiter } from "../services/load-waiter.ts";
+import { PermissionCards } from "../services/permission-cards.ts";
 import { ToolFailures } from "../services/tool-failures.ts";
 import { ToolResults } from "../services/tool-results.ts";
 import type { JsonObject } from "../types/json-value.ts";
@@ -59,7 +60,7 @@ export class NavigateTool implements IBrowserTool {
       await this.kit.calls.sendAsync(page.viewId, Resources.enableMethod, {}, options);
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
       const target: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
-      await this.askAsync(activity, call, page, target.url, progress);
+      await this.askAsync(activity, call, page, frame.url, target.url, progress);
       if (target.index !== null) {
         const now: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
         if (now.index !== target.index || now.url !== target.url)
@@ -96,8 +97,8 @@ export class NavigateTool implements IBrowserTool {
     return action;
   }
 
-  private async askAsync(activity: PageActivity, call: ToolCall, page: SessionPage, target: string, progress: ActionProgress): Promise<void> {
-    const details: IPermissionDetail[] = [{ label: Resources.urlLabel, kind: PermissionDetailKind.Text, value: target }];
+  private async askAsync(activity: PageActivity, call: ToolCall, page: SessionPage, from: string, target: string, progress: ActionProgress): Promise<void> {
+    const details: readonly IPermissionDetail[] = PermissionCards.move(from, target);
     if (target === Resources.blank) {
       await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatOpenTitle(target), target, details, ToolRisk.Low, ToolKit.lowRiskOptions), progress);
       return;
@@ -106,14 +107,14 @@ export class NavigateTool implements IBrowserTool {
     if (judged.kind === TypedAddressAnswerKind.Refused)
       throw new AddressRefusedException(judged.reason);
     if (await this.kit.origins.isAllowedAsync(page.profileKey, judged.origin)) {
-      await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatOpenTitle(judged.origin), judged.origin, details, ToolRisk.Low,
+      await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatOpenTitle(Resources.formatHost(judged.origin)), judged.origin, details, ToolRisk.Low,
         ToolKit.lowRiskOptions), progress);
       return;
     }
 
     const choices: readonly PermissionOption[] = [PermissionOption.AllowAlways, PermissionOption.Deny, PermissionOption.DenyAlways];
     try {
-      await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatLeaveTitle(judged.origin), judged.origin, details, ToolRisk.Medium,
+      await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatLeaveTitle(Resources.formatHost(judged.origin)), judged.origin, details, ToolRisk.Medium,
         choices, Resources.allowSiteLabel), progress);
     }
     catch (error) {

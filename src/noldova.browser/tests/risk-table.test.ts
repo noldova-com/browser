@@ -219,7 +219,9 @@ describe("the risk table", () => {
           ["browser.typeSecret", ToolRisk.High, true, TAKING_OVER], ["browser.typeSecret", ToolRisk.High, true, HIGH],
           ["browser.pressKeySecret", ToolRisk.High, true, TAKING_OVER], ["browser.pressKeySecret", ToolRisk.High, true, HIGH]
         ]]);
-        expect(bench.permissions.requests.slice(0, 2).map(t => t.details.find(u => u.value === "1234")?.kind)).toEqual([PermissionDetailKind.Secret, PermissionDetailKind.Secret]);
+        expect(bench.permissions.requests.slice(0, 2).map(t => t.details.find(u => u.label === "Text"))).toEqual(Array(2).fill({ label: "Text", kind: PermissionDetailKind.Text,
+          value: "4 characters, hidden" }));
+        expect(JSON.stringify(bench.permissions.requests)).not.toContain("1234");
         expect(bench.permissions.requests[0]?.labels).toEqual({ [PermissionOption.TakeOver]: "I'll type it myself" });
       }
     },

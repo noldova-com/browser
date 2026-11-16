@@ -15,8 +15,8 @@ import { PageFacts } from "../../src/models/page-facts.ts";
 describe("ElementFacts", () => {
   it("keeps its fields", () => {
     const button: NodeFacts = new NodeFacts("BUTTON", new Map([["type", "submit"]]));
-    const facts: ElementFacts = new ElementFacts([button], [button], new PageFacts("https://shop.test/cart"));
+    const facts: ElementFacts = new ElementFacts([button], [button], "Checkout", new PageFacts("https://shop.test/cart", "Cart"));
 
-    expect([facts.path, facts.form, facts.page.baseUrl]).toEqual([[button], [button], "https://shop.test/cart"]);
+    expect([facts.path, facts.form, facts.formName, facts.page.baseUrl]).toEqual([[button], [button], "Checkout", "https://shop.test/cart"]);
   });
 });

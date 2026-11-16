@@ -66,11 +66,11 @@ describe("ClickTool", () => {
     expect(bench.permissions.requests).toEqual([{
       action: "browser.click",
       subject: ShopPage.ORIGIN,
-      title: "Click <a>",
+      title: "Click \"Help\" on shop.test",
       details: [
-        { label: "Element", kind: PermissionDetailKind.Text, value: "<a>" },
-        { label: "Goes to", kind: PermissionDetailKind.Text, value: "https://shop.test/help" },
-        { label: "Origin", kind: PermissionDetailKind.Text, value: ShopPage.ORIGIN }
+        { label: "Page", kind: PermissionDetailKind.Text, value: "\"Cart\", https://shop.test/cart/" },
+        { label: "Link", kind: PermissionDetailKind.Text, value: "\"Help\", link" },
+        { label: "Goes to", kind: PermissionDetailKind.Text, value: "https://shop.test/help" }
       ],
       risk: ToolRisk.Medium,
       isAsking: true,
@@ -102,8 +102,13 @@ describe("ClickTool", () => {
 
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.FORM_BUTTON) }));
 
-    expect(bench.permissions.requests[0]).toMatchObject({ title: "Click <button>", risk: ToolRisk.Medium, isAsking: true,
+    expect(bench.permissions.requests[0]).toMatchObject({ title: "Submit a form on shop.test", risk: ToolRisk.Medium, isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny], labels: { [PermissionOption.AllowAlways]: "Allow for this chat" } });
+    expect(bench.permissions.requests[0]?.details).toEqual([
+      { label: "Page", kind: PermissionDetailKind.Text, value: "\"Cart\", https://shop.test/cart/" },
+      { label: "Button", kind: PermissionDetailKind.Text, value: "\"Pay\", button" },
+      { label: "Sends", kind: PermissionDetailKind.Text, value: "coupon" }
+    ]);
     expect(mouseEvents().length).toBe(3);
     expect(bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["depth"] === -1).map(t => t.params))
       .toEqual([1, 2].map(() => ({ backendNodeId: ShopPage.FORM_BUTTON, depth: -1, pierce: true })));
@@ -114,8 +119,9 @@ describe("ClickTool", () => {
 
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SIGN_IN) }));
 
-    expect(bench.permissions.requests[0]).toMatchObject({ action: "browser.clickSecret", title: "Click <button>", risk: ToolRisk.High, isAsking: true,
+    expect(bench.permissions.requests[0]).toMatchObject({ action: "browser.clickSecret", title: "Submit the form \"Sign in to the shop\"", risk: ToolRisk.High, isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.Deny], labels: {} });
+    expect(bench.permissions.requests[0]?.details.at(-1)).toEqual({ label: "Sends", kind: PermissionDetailKind.Text, value: "pin" });
     expect(mouseEvents().length).toBe(3);
   });
 
@@ -181,8 +187,8 @@ describe("ClickTool", () => {
     await bench.runAsync(tool, bench.call({ reference: reference(99) }));
 
     expect(bench.permissions.requests[0]).toMatchObject({
-      title: "Click an element",
-      details: [{ label: "Element", value: "An element the browser can't read, such as one in another site's frame" }, { label: "Origin" }],
+      title: "Click the element on shop.test",
+      details: [{ label: "Page", value: "\"Cart\", https://shop.test/cart/" }, { label: "Element", value: "An element the browser can't read, such as one in another site's frame" }],
       risk: ToolRisk.Medium
     });
   });

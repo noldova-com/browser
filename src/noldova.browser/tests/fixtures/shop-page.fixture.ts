@@ -44,6 +44,10 @@ export class ShopPage {
     [15, { backendNodeId: 15, nodeName: "INPUT", attributes: ["type", "password", "name", "cart-pin"] }]
   ]);
 
+  private static readonly HEAD: JsonObject = { backendNodeId: 20, nodeName: "HEAD", children: [
+    { backendNodeId: 21, nodeName: "TITLE", children: [{ backendNodeId: 22, nodeName: "#text", nodeValue: "Cart" }] }
+  ] };
+
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
   }
@@ -51,9 +55,9 @@ export class ShopPage {
   public static document(hasCartPin: boolean = false): JsonObject {
     const node: (id: number) => JsonObject = (id: number): JsonObject => ShopPage.NODES.get(id) ?? {};
     return { root: { backendNodeId: 1, nodeName: "#document", baseURL: "https://shop.test/cart/", children: [
-      { backendNodeId: 2, nodeName: "HTML", children: [{ backendNodeId: 3, nodeName: "BODY", children: [
+      { backendNodeId: 2, nodeName: "HTML", children: [ShopPage.HEAD, { backendNodeId: 3, nodeName: "BODY", children: [
         { backendNodeId: 4, nodeName: "FORM", children: hasCartPin ? [node(14), node(15), node(5)] : [node(14), node(5)] },
-        { backendNodeId: 11, nodeName: "FORM", attributes: ["id", "sign-in"], children: [node(13), node(9), node(12)] },
+        { backendNodeId: 11, nodeName: "FORM", attributes: ["id", "sign-in", "aria-label", "Sign in to the shop"], children: [node(13), node(9), node(12)] },
         node(7), node(8), node(10)
       ] }] }
     ] } };

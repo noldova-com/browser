@@ -91,11 +91,9 @@ export class Resources {
   public static readonly pageChangesNotSwitched: string = "The page's isolated world came back without the binding that reports its changes switched on.";
   public static readonly unbound: string = "The app bound this session to no page of its workspace.";
   public static readonly pageNotOpen: string = "The session's page isn't open; ask the person to open it again.";
-  public static readonly originLabel: string = "Origin";
   public static readonly maskedValue: string = "••••••";
   public static readonly snapshotCut: string = "The snapshot was cut at its limit; act on what it shows, or scroll and take another.";
   public static readonly navigateAction: string = "browser.navigate";
-  public static readonly urlLabel: string = "URL";
   public static readonly originRefusedCode: string = "browser.originRefused";
   public static readonly stillLoading: string = "The page is still loading; wait for it with browser_wait_for before you act on it.";
   public static readonly clickAction: string = "browser.click";
@@ -109,6 +107,19 @@ export class Resources {
   public static readonly submitValue: string = "Press Enter to submit";
   public static readonly keyLabel: string = "Key";
   public static readonly unknownElement: string = "An element the browser can't read, such as one in another site's frame";
+  public static readonly pageLabel: string = "Page";
+  public static readonly buttonLabel: string = "Button";
+  public static readonly linkLabel: string = "Link";
+  public static readonly fieldLabel: string = "Field";
+  public static readonly sendsLabel: string = "Sends";
+  public static readonly fromLabel: string = "From";
+  public static readonly toLabel: string = "To";
+  public static readonly noNamedFields: string = "No named fields";
+  public static readonly plainRole: string = "element";
+  public static readonly plainRoles: ReadonlySet<string> = new Set<string>(["", "generic", "none", "presentation", "StaticText"]);
+  public static readonly linkRole: string = "link";
+  public static readonly buttonRole: string = "button";
+  public static readonly maximumDetailLength: number = 2000;
   public static readonly notVisible: string = "The element has no box on the page, so it can't be clicked; take a new snapshot.";
   public static readonly notVisibleCode: string = "browser.notVisible";
   public static readonly covered: string = "Another element covers the element at its centre, so nothing was clicked; take a new snapshot.";
@@ -341,6 +352,15 @@ export class Resources {
   public static readonly nodeNameField: string = "nodeName";
   public static readonly attributesField: string = "attributes";
   public static readonly childrenField: string = "children";
+  public static readonly nodeValueField: string = "nodeValue";
+  public static readonly textNodeName: string = "#text";
+  public static readonly titleElement: string = "TITLE";
+  public static readonly ariaLabelledByAttribute: string = "aria-labelledby";
+  public static readonly ariaLabelAttribute: string = "aria-label";
+  public static readonly titleAttribute: string = "title";
+  public static readonly nameAttribute: string = "name";
+  public static readonly sentElements: readonly string[] = ["INPUT", "SELECT", "TEXTAREA"];
+  public static readonly unsentInputs: readonly string[] = ["button", "image", "reset", "submit"];
   public static readonly shadowRootsField: string = "shadowRoots";
   public static readonly textEncoding: BufferEncoding = "utf8";
   public static readonly base64Encoding: BufferEncoding = "base64";
@@ -489,12 +509,49 @@ export class Resources {
     return `The allowed origins of view ${viewId} weren't applied: ${error}`;
   }
 
-  public static formatOpenTitle(origin: string): string {
-    return `Open a page on ${origin}`;
+  public static formatOpenTitle(host: string): string {
+    return `Open a page on ${host}`;
   }
 
-  public static formatLeaveTitle(origin: string): string {
-    return `Open ${origin}, a site this workspace doesn't allow yet`;
+  public static formatLeaveTitle(host: string): string {
+    return `Open ${host}`;
+  }
+
+  public static formatHost(origin: string): string {
+    const host: string = URL.parse(origin)?.host ?? "";
+    return host === "" ? origin : host;
+  }
+
+  public static formatRole(role: string): string {
+    return Resources.plainRoles.has(role) ? Resources.plainRole : role;
+  }
+
+  public static formatClickTitle(name: string, role: string, host: string): string {
+    return name === "" ? `Click the ${Resources.formatRole(role)} on ${host}` : `Click "${name}" on ${host}`;
+  }
+
+  public static formatTypeTitle(name: string, role: string, host: string): string {
+    return name === "" ? `Type into the ${Resources.formatRole(role)} on ${host}` : `Type into the ${name} field on ${host}`;
+  }
+
+  public static formatSubmitTitle(formName: string, host: string): string {
+    return formName === "" ? `Submit a form on ${host}` : `Submit the form "${formName}"`;
+  }
+
+  public static formatPressKeyTitle(chord: string, host: string): string {
+    return `Press ${chord} on ${host}`;
+  }
+
+  public static formatNamed(name: string, role: string): string {
+    return name === "" ? Resources.formatRole(role) : `"${name}", ${Resources.formatRole(role)}`;
+  }
+
+  public static formatPage(title: string, url: string): string {
+    return title === "" ? url : `"${title}", ${url}`;
+  }
+
+  public static formatHidden(count: number): string {
+    return `${count} ${count === 1 ? "character" : "characters"}, hidden`;
   }
 
   public static formatAddressRefused(refusal: TypedAddressRefusal): string {
@@ -526,13 +583,6 @@ export class Resources {
     return `URL: ${url}`;
   }
 
-  public static formatTag(nodeName: string): string {
-    return `<${nodeName.toLowerCase()}>`;
-  }
-
-  public static formatClickTitle(nodeName: string): string {
-    return nodeName === "" ? Resources.clickTitle : `Click ${Resources.formatTag(nodeName)}`;
-  }
 
   public static formatNotFlag(name: string): string {
     return `The argument "${name}" must be true or false.`;

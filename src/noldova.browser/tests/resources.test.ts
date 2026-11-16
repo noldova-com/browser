@@ -41,8 +41,32 @@ describe("Resources", () => {
     expect([Resources.formatRefused("https://shop.test"), Resources.formatRefused(null)]).toEqual(["Navigation to https://shop.test was refused.", "Navigation to the address was refused."]);
   });
 
-  it("titles a click by the element's tag, in lower case, or as an element's when it has none", () => {
-    expect([Resources.formatClickTitle("BUTTON"), Resources.formatClickTitle("")]).toEqual(["Click <button>", "Click an element"]);
+  it("names a site by its host, or by the origin itself when it has none", () => {
+    expect([Resources.formatHost("https://shop.test:8443"), Resources.formatHost("about:blank"), Resources.formatHost("://")]).toEqual(["shop.test:8443", "about:blank", "://"]);
+  });
+
+  it("titles a click by the element's name, or by its role when it has none, and a plain element as an element", () => {
+    expect([Resources.formatClickTitle("Choose Team", "button", "docs.example.com"), Resources.formatClickTitle("", "checkbox", "docs.example.com"),
+      Resources.formatClickTitle("", "generic", "docs.example.com")])
+      .toEqual(["Click \"Choose Team\" on docs.example.com", "Click the checkbox on docs.example.com", "Click the element on docs.example.com"]);
+  });
+
+  it("titles typing by the field's name, or by its role when it has none", () => {
+    expect([Resources.formatTypeTitle("Password", "textbox", "docs.example.com"), Resources.formatTypeTitle("", "searchbox", "docs.example.com")])
+      .toEqual(["Type into the Password field on docs.example.com", "Type into the searchbox on docs.example.com"]);
+  });
+
+  it("titles a submit by the form's name, or by the site when the form has none", () => {
+    expect([Resources.formatSubmitTitle("Create your Team account", "docs.example.com"), Resources.formatSubmitTitle("", "docs.example.com")])
+      .toEqual(["Submit the form \"Create your Team account\"", "Submit a form on docs.example.com"]);
+  });
+
+  it("titles a navigation within the workspace's sites and to a new one by the host", () => {
+    expect([Resources.formatOpenTitle("docs.example.com"), Resources.formatLeaveTitle("status.example.net")]).toEqual(["Open a page on docs.example.com", "Open status.example.net"]);
+  });
+
+  it("says a hidden text's length in characters, one or more", () => {
+    expect([Resources.formatHidden(1), Resources.formatHidden(10)]).toEqual(["1 character, hidden", "10 characters, hidden"]);
   });
 
   it("says why a typed address is refused, for each refusal", () => {
