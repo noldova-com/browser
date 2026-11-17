@@ -47,6 +47,7 @@ export class Pages {
   private readonly current: WritableSignal<ReadonlyMap<string, PageActivity>> = signal(new Map<string, PageActivity>());
   private readonly refused: WritableSignal<ReadonlyMap<string, RefusedPage>> = signal(new Map<string, RefusedPage>());
   private readonly heldElsewhere: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
+  private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly opening: Map<string, boolean> = new Map<string, boolean>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
   private readonly agentPages: AgentPages;
@@ -244,11 +245,13 @@ export class Pages {
   }
 
   public canOpenBeside(commandArguments: JsonValue): boolean {
-    return this.besideOf(commandArguments) !== undefined;
+    const instance: string | null = Pages.besideOf(commandArguments);
+    return instance !== null && this.shownInstances().has(instance);
   }
 
   public openBeside(commandArguments: JsonValue): void {
-    const tab: PaneTab | undefined = this.besideOf(commandArguments);
+    const instance: string | null = Pages.besideOf(commandArguments);
+    const tab: PaneTab | undefined = [...this.shown.keys()].find(t => t.id === instance);
     if (tab !== undefined)
       this.openNew(tab);
   }
@@ -268,6 +271,7 @@ export class Pages {
     if (held === undefined)
       return;
     this.shown.delete(tab);
+    this.noteShown();
     this.lastAsked.delete(tab.id);
     held.stop();
     this.stopFirstLoad(tab);
@@ -358,9 +362,12 @@ export class Pages {
     }
   }
 
-  private besideOf(commandArguments: JsonValue): PaneTab | undefined {
-    const instance: string | null = commandArguments === null ? Pages.focusedInstance() : Pages.instanceOf(commandArguments);
-    return [...this.shown.keys()].find(t => t.id === instance);
+  private noteShown(): void {
+    this.shownInstances.set(new Set<string>([...this.shown.keys()].map(t => t.id)));
+  }
+
+  private static besideOf(commandArguments: JsonValue): string | null {
+    return commandArguments === null ? Pages.focusedInstance() : Pages.instanceOf(commandArguments);
   }
 
   private static instanceOf(commandArguments: JsonValue): string | null {
@@ -371,7 +378,7 @@ export class Pages {
   }
 
   private static focusedInstance(): string | null {
-    return document.querySelector(Resources.focusedPageSelector)?.getAttribute(Resources.pageInstanceAttribute) ?? null;
+    return [...document.querySelectorAll(Resources.pageSelector)].find(t => t.contains(document.activeElement))?.getAttribute(Resources.pageInstanceAttribute) ?? null;
   }
 
   private documentOptions(instance: string, opener: PaneTab | null): IDocumentOptions {
@@ -411,6 +418,7 @@ export class Pages {
       if (tab.id !== instance)
         continue;
       this.shown.delete(tab);
+      this.noteShown();
       held.stop();
       this.stopFirstLoad(tab);
       tab.controller.close();
@@ -503,6 +511,7 @@ export class Pages {
       return null;
     }
     this.shown.set(tab, { place, stop: this.follow(tab, place) });
+    this.noteShown();
     if (place.url !== "" && view !== null)
       this.goFirst(tab, place.url);
     return tab;

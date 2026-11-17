@@ -181,7 +181,7 @@ export class Resources {
   public static readonly noticeId: string = "-notice";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
   public static readonly agentBarSelector: string = "nol-browser-agent-bar";
-  public static readonly focusedPageSelector: string = ".nol-browser-page:focus-within";
+  public static readonly pageSelector: string = ".nol-browser-page";
   public static readonly pageInstanceAttribute: string = "data-instance";
   public static readonly schemePattern: RegExp = /^[a-z][a-z\d+.-]*$/iu;
   public static readonly portPattern: RegExp = /^\d/u;

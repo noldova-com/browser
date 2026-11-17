@@ -5,6 +5,7 @@
  * This source code is licensed under the license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import { type Signal, computed } from "@angular/core";
 import type { JsonObject } from "@noldova/context.json";
 import { BrowserEvents, BrowserMethods } from "@noldova/browser.protocol";
 import { ContentPadding, LinkPlace } from "@noldova/desktop.window";
@@ -133,6 +134,23 @@ describe("BrowserWindowPart", () => {
 
     expect([context.opened.map(t => t.title), shown?.controller.status.state, context.views.views.at(-1)?.profileKey])
       .toEqual([["https://docs.example.com/", "New tab"], PaneState.Empty, "workspace-2"]);
+  });
+
+  it("enables browser.newPage for a tab row's page as its page shows and disables it once the page goes, so a tab row that reads it in a computed follows", async () => {
+    const context: WindowContext = new WindowContext();
+    await new BrowserWindowPart().activateAsync(context);
+    const pages: Pages = Pages.of(context);
+    const instance: string = pages.open("workspace-1", null);
+    const command = context.commands[1];
+    const isEnabled: Signal<boolean | undefined> = computed(() => command?.isEnabled({ tabGroup: "1", document: "browser.page", instance }));
+
+    const beforeShown: boolean | undefined = isEnabled();
+    const tab = await pages.showAsync(instance);
+    const whileShown: boolean | undefined = isEnabled();
+    if (tab !== null)
+      pages.release(tab);
+
+    expect([beforeShown, whileShown, isEnabled()]).toEqual([false, true, false]);
   });
 
   it("registers as the in-app browser, which places a link as the settings say and opens one in a new tab on the links workspace", async () => {
