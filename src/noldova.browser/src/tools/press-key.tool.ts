@@ -12,6 +12,7 @@ import { type IPermissionDetail, type IToolDescriptor, PermissionDetailKind, typ
 
 import { ArgumentNotOneOfException } from "../exceptions/argument-not-one-of.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
+import { ReplyTooLargeException } from "../exceptions/reply-too-large.exception.ts";
 import { UnknownKeyException } from "../exceptions/unknown-key.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import type { AccessibilityNode } from "../models/accessibility-node.ts";
@@ -28,6 +29,7 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
+import { DomLookup } from "../services/dom-lookup.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { KeyEvents } from "../services/key-events.ts";
@@ -38,10 +40,12 @@ import type { JsonObject, JsonValue } from "../types/json-value.ts";
 
 export class PressKeyTool implements IBrowserTool {
   private readonly kit: ToolKit;
+  private readonly lookup: DomLookup;
   public readonly descriptor: IToolDescriptor = ToolDescriptors.pressKey;
 
   public constructor(kit: ToolKit) {
     this.kit = kit;
+    this.lookup = new DomLookup(kit.calls);
   }
 
   public async callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
@@ -100,7 +104,14 @@ export class PressKeyTool implements IBrowserTool {
   }
 
   private async readFocusedAsync(viewId: string, options: CallOptions): Promise<AccessibilityNode | null> {
-    return AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes(
-      await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))));
+    try {
+      return AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes(
+        await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))).nodes);
+    }
+    catch (error) {
+      if (!(error instanceof ReplyTooLargeException))
+        throw error;
+      return this.lookup.findFocusedAsync(viewId, options);
+    }
   }
 }

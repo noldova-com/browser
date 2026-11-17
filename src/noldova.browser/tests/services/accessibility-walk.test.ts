@@ -34,6 +34,10 @@ const ROOT_LINE_BYTES: number = "- RootWebArea \"Page\"\n".length;
 const LINK_LINE_BYTES: number = "- link \"A\"\n".length;
 const BUTTON_LINE_BYTES: number = "- button \"B\"\n".length;
 
+function layout(pageY: number): JsonObject {
+  return { cssVisualViewport: { pageX: 0, pageY, clientWidth: 800, clientHeight: 600 }, cssContentSize: { width: 800, height: 9000 }, visualViewport: { clientWidth: 800 } };
+}
+
 describe("AccessibilityWalk", () => {
   let surface: ScriptedViews;
   let log: FakeModuleLog;
@@ -55,6 +59,7 @@ describe("AccessibilityWalk", () => {
     surface = new ScriptedViews(["view-1"]);
     surface.acknowledge("Accessibility.enable", "Accessibility.disable");
     surface.answer("Accessibility.getRootAXNode", { node: ROOT });
+    surface.answer("Page.getLayoutMetrics", layout(0));
     log = new FakeModuleLog();
   });
 
@@ -64,8 +69,8 @@ describe("AccessibilityWalk", () => {
     const tree: AccessibilityTree = await readAsync();
 
     expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "4"], true]);
-    expect(calls()).toEqual([["Accessibility.enable", {}], ["Accessibility.getRootAXNode", {}], ["Accessibility.getChildAXNodes", { id: "1" }],
-      ["Accessibility.getChildAXNodes", { id: "3" }], ["Accessibility.disable", {}]]);
+    expect(calls()).toEqual([["Accessibility.enable", {}], ["Accessibility.getRootAXNode", {}], ["Page.getLayoutMetrics", {}],
+      ["Accessibility.getChildAXNodes", { id: "1" }], ["Accessibility.getChildAXNodes", { id: "3" }], ["Accessibility.disable", {}]]);
   });
 
   it("stops once the lines it read are sure to pass the limit, and marks the tree as read in part", async () => {
@@ -74,9 +79,74 @@ describe("AccessibilityWalk", () => {
     const whole: AccessibilityTree = await readAsync(ROOT_LINE_BYTES + LINK_LINE_BYTES + BUTTON_LINE_BYTES);
     const cut: AccessibilityTree = await readAsync(ROOT_LINE_BYTES + LINK_LINE_BYTES - 1);
 
-    expect([whole.nodes.length, whole.isWhole]).toEqual([4, true]);
+    expect([whole.nodes.length, whole.isWhole, whole.isFromView]).toEqual([4, true, false]);
     expect([cut.nodes.map(t => t.id), cut.isWhole]).toEqual([["1", "2", "3"], false]);
-    expect(calls().slice(-3)).toEqual([["Accessibility.getRootAXNode", {}], ["Accessibility.getChildAXNodes", { id: "1" }], ["Accessibility.disable", {}]]);
+    expect(calls().slice(-3)).toEqual([["Page.getLayoutMetrics", {}], ["Accessibility.getChildAXNodes", { id: "1" }], ["Accessibility.disable", {}]]);
+  });
+
+  describe("on a scrolled page", () => {
+    const PAGE: JsonObject = node("1", "RootWebArea", "Page", ["2", "3", "6"]);
+    const SECTION: JsonObject = node("3", "generic", "", ["4", "5"]);
+    const START: JsonObject = { ...node("4", "button", "B"), backendDOMNodeId: 40 };
+    const AFTER: JsonObject = node("5", "link", "C");
+    const LAST: JsonObject = node("6", "link", "D");
+
+    function scrolled(relatives: readonly JsonObject[] = [PAGE, SECTION, START, AFTER]): void {
+      surface.answer("Accessibility.getRootAXNode", { node: PAGE });
+      surface.answer("Page.getLayoutMetrics", layout(3000));
+      surface.answer("DOM.getNodeForLocation", { backendNodeId: 40, frameId: "frame-1" });
+      surface.answer("Accessibility.getPartialAXTree", { nodes: [...relatives] });
+      children({ 1: [LINK, SECTION, LAST], 3: [START, AFTER] });
+    }
+
+    it("starts at the element a quarter down the view, after the lines that lead to it, and goes on with what follows it", async () => {
+      scrolled();
+
+      const tree: AccessibilityTree = await readAsync();
+
+      expect([tree.nodes.map(t => t.id), tree.isWhole, tree.isFromView]).toEqual([["1", "3", "6", "4", "5"], true, true]);
+      expect(calls().slice(2, -1)).toEqual([["Page.getLayoutMetrics", {}], ["DOM.getNodeForLocation", { x: 400, y: 3150, includeUserAgentShadowDOM: false }],
+        ["Accessibility.getPartialAXTree", { backendNodeId: 40, fetchRelatives: true }], ["Accessibility.getChildAXNodes", { id: "1" }],
+        ["Accessibility.getChildAXNodes", { id: "3" }]]);
+    });
+
+    it("stops at the limit on the way to the start or after it, and marks the tree as read in part", async () => {
+      scrolled();
+
+      const leading: AccessibilityTree = await readAsync(ROOT_LINE_BYTES - 1);
+      const after: AccessibilityTree = await readAsync(ROOT_LINE_BYTES + BUTTON_LINE_BYTES);
+
+      expect([leading.nodes, leading.isWhole, leading.isFromView]).toEqual([[], false, true]);
+      expect([after.nodes.map(t => t.id), after.isWhole, after.isFromView]).toEqual([["1", "3", "6", "4", "5"], false, true]);
+    });
+
+    it("starts at the root when the point has no element, the element no node, or the node no line of ancestors up to the root", async () => {
+      const cases: readonly (() => void)[] = [
+        () => surface.fail("DOM.getNodeForLocation", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node found at given location")),
+        () => surface.answer("Accessibility.getPartialAXTree", { nodes: [PAGE, SECTION] }),
+        () => surface.answer("Accessibility.getPartialAXTree", { nodes: [START, AFTER] }),
+        () => surface.answer("Accessibility.getPartialAXTree", { nodes: [{ ...node("4", "button", "B", ["4"]), backendDOMNodeId: 40 }] })
+      ];
+      for (const fallBack of cases) {
+        scrolled();
+        fallBack();
+
+        const tree: AccessibilityTree = await readAsync();
+
+        expect([tree.nodes.map(t => t.id), tree.isWhole, tree.isFromView]).toEqual([["1", "2", "3", "6", "4", "5"], true, false]);
+      }
+    });
+
+    it("fails on a point it can't read, or any other failure finding it", async () => {
+      scrolled();
+      surface.answer("DOM.getNodeForLocation", { frameId: "frame-1" });
+
+      await expect(readAsync()).rejects.toBeInstanceOf(MalformedReplyException);
+
+      surface.fail("DOM.getNodeForLocation", new WebViewFailure(WebViewFailureKind.ViewClosed));
+
+      await expect(readAsync()).rejects.toBeInstanceOf(ViewClosedException);
+    });
   });
 
   it("leaves out a child its parent doesn't name, one it names that didn't come, and one already read, so a loop ends", async () => {

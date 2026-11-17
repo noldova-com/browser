@@ -93,6 +93,7 @@ export class Resources {
   public static readonly pageNotOpen: string = "The session's page isn't open; ask the person to open it again.";
   public static readonly maskedValue: string = "••••••";
   public static readonly snapshotCut: string = "The snapshot was cut at its limit; act on what it shows, or scroll and take another.";
+  public static readonly snapshotFromView: string = "The page is too large to read from its start, so the snapshot starts where it is scrolled to; scroll up and take another for what is above.";
   public static readonly navigateAction: string = "browser.navigate";
   public static readonly originRefusedCode: string = "browser.originRefused";
   public static readonly stillLoading: string = "The page is still loading; wait for it with browser_wait_for before you act on it.";
@@ -374,6 +375,16 @@ export class Resources {
   public static readonly accessibilityDisableMethod: "Accessibility.disable" = "Accessibility.disable";
   public static readonly getRootAXNodeMethod: "Accessibility.getRootAXNode" = "Accessibility.getRootAXNode";
   public static readonly getChildAXNodesMethod: "Accessibility.getChildAXNodes" = "Accessibility.getChildAXNodes";
+  public static readonly querySelectorMethod: "DOM.querySelector" = "DOM.querySelector";
+  public static readonly performSearchMethod: "DOM.performSearch" = "DOM.performSearch";
+  public static readonly getSearchResultsMethod: "DOM.getSearchResults" = "DOM.getSearchResults";
+  public static readonly discardSearchResultsMethod: "DOM.discardSearchResults" = "DOM.discardSearchResults";
+  public static readonly documentOnlyDepth: number = 0;
+  public static readonly focusedSelector: string = ":focus";
+  public static readonly maximumSearchResults: number = 100;
+  public static readonly searchIdField: string = "searchId";
+  public static readonly resultCountField: string = "resultCount";
+  public static readonly nodeIdsField: string = "nodeIds";
   public static readonly rootLevelDepth: number = 1;
   public static readonly gapMilliseconds: number = 100;
   public static readonly profileKeyField: string = "profileKey";

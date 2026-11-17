@@ -17,12 +17,18 @@ describe("AccessibilityTree", () => {
     const button: AccessibilityNode = new AccessibilityNode("2", false, "button", "Pay", "", [], 2, true);
     const tree: AccessibilityTree = new AccessibilityTree(root, [button]);
 
-    expect([tree.root, tree.nodes, tree.isWhole]).toEqual([root, [root, button], true]);
+    expect([tree.root, tree.nodes, tree.isWhole, tree.isFromView]).toEqual([root, [root, button], true, false]);
   });
 
   it("says when it holds only part of the page's tree", () => {
     const root: AccessibilityNode = new AccessibilityNode("1", false, "RootWebArea", "Cart", "", ["2"], 1, false);
 
     expect(new AccessibilityTree(root, [], false).isWhole).toBe(false);
+  });
+
+  it("says when it starts where the page is scrolled to", () => {
+    const root: AccessibilityNode = new AccessibilityNode("1", false, "RootWebArea", "Cart", "", ["2"], 1, false);
+
+    expect(new AccessibilityTree(root, [], true, true).isFromView).toBe(true);
   });
 });

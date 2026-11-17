@@ -14,6 +14,7 @@ import { PageAnswerTimedOutException } from "../exceptions/page-answer-timed-out
 import { PageChangesContextMissingException } from "../exceptions/page-changes-context-missing.exception.ts";
 import { PageChangesNotSwitchedException } from "../exceptions/page-changes-not-switched.exception.ts";
 import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
+import { ReplyTooLargeException } from "../exceptions/reply-too-large.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
@@ -27,6 +28,7 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
+import { DomLookup } from "../services/dom-lookup.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { LoadWaiter } from "../services/load-waiter.ts";
@@ -35,10 +37,12 @@ import type { JsonObject, JsonValue } from "../types/json-value.ts";
 
 export class WaitForTool implements IBrowserTool {
   private readonly kit: ToolKit;
+  private readonly lookup: DomLookup;
   public readonly descriptor: IToolDescriptor = ToolDescriptors.waitFor;
 
   public constructor(kit: ToolKit) {
     this.kit = kit;
+    this.lookup = new DomLookup(kit.calls);
   }
 
   public async callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
@@ -110,7 +114,15 @@ export class WaitForTool implements IBrowserTool {
   }
 
   private async hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
-    const nodes: JsonObject = await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+    let nodes: JsonObject;
+    try {
+      nodes = await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+    }
+    catch (error) {
+      if (!(error instanceof ReplyTooLargeException))
+        throw error;
+      return this.lookup.hasTextAsync(viewId, text, options);
+    }
     return AccessibilitySnapshot.readNodes(nodes).nodes.some(t => !t.isIgnored && t.name.includes(text));
   }
 

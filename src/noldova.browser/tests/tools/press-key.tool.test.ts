@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,7 @@ import { HandedOverException } from "../../src/exceptions/handed-over.exception.
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
 import { UnknownKeyException } from "../../src/exceptions/unknown-key.exception.ts";
 import { PressKeyTool } from "../../src/tools/press-key.tool.ts";
@@ -191,6 +193,29 @@ describe("PressKeyTool", () => {
     expect(bench.permissions.requests.map(t => [t.risk, t.details.length])).toEqual([[ToolRisk.Medium, 2], [ToolRisk.Medium, 3]]);
     expect(bench.permissions.requests.map(t => [t.options, t.labels])).toEqual(Array(2).fill([[PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       { [PermissionOption.AllowAlways]: "Allow for this chat" }]));
+  });
+
+  it("finds the focused element through the document when the page's whole tree is too large for one reply", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.answerWith("DOM.getDocument", (params: JsonObject) => params["depth"] === 0 ? { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } } : ShopPage.document());
+    bench.surface.answer("DOM.querySelector", { nodeId: 70 });
+    bench.surface.answerWith("Accessibility.getPartialAXTree", (params: JsonObject) => params["nodeId"] === 70
+      ? focusedTree(ShopPage.SEARCH)
+      : { nodes: [{ nodeId: "ax-2", role: { value: "textbox" }, backendDOMNodeId: params["backendNodeId"] ?? 0 }] });
+    await bench.runAsync(tool, bench.call({ key: "a" }));
+    bench.surface.answer("DOM.querySelector", { nodeId: 0 });
+    await bench.runAsync(tool, bench.call({ key: "Escape" }));
+
+    expect(bench.permissions.requests.map(t => [t.risk, t.details.at(-1)])).toEqual([[ToolRisk.Medium, { label: "Field", value: "textbox" }],
+      [ToolRisk.Medium, { label: "Key", kind: PermissionDetailKind.Text, value: "Escape" }]]);
+    expect(bench.surface.calls.filter(t => t.method === "DOM.querySelector").map(t => t.params)).toContainEqual({ nodeId: 1, selector: ":focus" });
+  });
+
+  it("fails on any other failure reading the whole tree, and looks for the focus no other way", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ key: "a" })), ProtocolFailedException);
+    expect(bench.methods).not.toContain("DOM.querySelector");
   });
 
   it("presses nothing and fails as stale when the page moves the focus while the person answers", async () => {

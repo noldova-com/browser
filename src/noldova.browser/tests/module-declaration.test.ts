@@ -81,7 +81,7 @@ describe("webViews.json", () => {
     const methods: readonly string[] = ["Page.enable", "Page.getFrameTree", "Page.getNavigationHistory", "Page.getLayoutMetrics", "Page.createIsolatedWorld",
       "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Log.enable",
       "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Accessibility.enable", "Accessibility.disable", "Accessibility.getRootAXNode",
-      "Accessibility.getChildAXNodes", "DOM.getDocument", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
+      "Accessibility.getChildAXNodes", "DOM.getDocument", "DOM.querySelector", "DOM.performSearch", "DOM.getSearchResults", "DOM.discardSearchResults", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
       "DOM.getNodeForLocation", "DOM.focus", "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
       "Input.insertText"];
 
@@ -93,9 +93,14 @@ describe("webViews.json", () => {
     });
   });
 
-  it("holds the bounds that keep the tools' calls to what they send: whole documents read once, three clicks, short key texts, bounded captures, and a tree read a node's children at a time", async () => {
+  it("holds the bounds that keep the tools' calls to what they send: whole documents read once, three clicks, short key texts, bounded captures, a tree read a node's children at a time, the focused element, a bounded text search, and a node with its relatives", async () => {
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ methods: expect.arrayContaining([
-      { name: "DOM.getDocument", parameters: { depth: { required: true, values: [-1] }, pierce: { required: true, values: [true] } } },
+      { name: "DOM.getDocument", parameters: { depth: { required: true, values: [-1, 0] }, pierce: { required: true, values: [true] } } },
+      { name: "DOM.querySelector", parameters: { nodeId: { required: true, minimum: 1 }, selector: { required: true, values: [":focus"] } } },
+      { name: "DOM.performSearch", parameters: { query: { required: true, maxLength: 10000 }, includeUserAgentShadowDOM: { required: true, values: [false] } } },
+      { name: "DOM.getSearchResults", parameters: { searchId: { required: true, maxLength: 64 }, fromIndex: { required: true, values: [0] }, toIndex: { required: true, minimum: 1, maximum: 100 } } },
+      { name: "DOM.discardSearchResults", parameters: { searchId: { required: true, maxLength: 64 } } },
+      { name: "Accessibility.getPartialAXTree", parameters: { backendNodeId: { minimum: 1 }, nodeId: { minimum: 1 }, fetchRelatives: { required: true, values: [false, true] } } },
       { name: "Accessibility.getRootAXNode" },
       { name: "Accessibility.getChildAXNodes", parameters: { id: { required: true, maxLength: 64 } } },
       { name: "DOM.describeNode", parameters: { backendNodeId: { required: true, minimum: 1 }, depth: { values: [-1] }, pierce: { values: [true] } } },

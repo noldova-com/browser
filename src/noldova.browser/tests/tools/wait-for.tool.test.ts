@@ -14,6 +14,7 @@ import { CallCancelledException } from "../../src/exceptions/call-cancelled.exce
 import { ExactlyOneArgumentException } from "../../src/exceptions/exactly-one-argument.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageCrashedException } from "../../src/exceptions/page-crashed.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { ViewClosedException } from "../../src/exceptions/view-closed.exception.ts";
 import { WaitForTool } from "../../src/tools/wait-for.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
@@ -75,6 +76,30 @@ describe("WaitForTool", () => {
     bench.surface.answerWith("Accessibility.getFullAXTree", () => ({ nodes: [...nodes(["placed"], true), { nodeId: "9", role: { value: "textbox" }, value: { value: "placed" } }] }));
 
     expect((await bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 1 }))).content[0]?.value).toBe("The wait wasn't met in 1 ms.");
+  });
+
+  it("searches the document for the text when the page's whole tree is too large for one reply", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.answerWith("DOM.getDocument", (params: JsonObject) => params["depth"] === 0 ? { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } } : ShopPage.document());
+    bench.surface.answer("DOM.performSearch", { searchId: "s1", resultCount: 1 });
+    bench.surface.answer("DOM.getSearchResults", { nodeIds: [70] });
+    bench.surface.answer("Accessibility.getPartialAXTree", { nodes: nodes(["Order placed"]).slice(1) });
+    bench.surface.acknowledge("DOM.discardSearchResults");
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 }));
+
+    expect(result.content[0]?.value).toBe("The wait was met.");
+    expect(bench.surface.calls.filter(t => t.method.startsWith("DOM.") || t.method === "Accessibility.getPartialAXTree").map(t => [t.method, t.params])).toEqual([
+      ["DOM.getDocument", { depth: 0, pierce: true }], ["DOM.performSearch", { query: "placed", includeUserAgentShadowDOM: false }],
+      ["DOM.getSearchResults", { searchId: "s1", fromIndex: 0, toIndex: 1 }], ["Accessibility.getPartialAXTree", { nodeId: 70, fetchRelatives: false }],
+      ["DOM.discardSearchResults", { searchId: "s1" }]]);
+  });
+
+  it("fails on any other failure reading the whole tree, and searches no other way", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), ProtocolFailedException);
+    expect(bench.methods).not.toContain("DOM.performSearch");
   });
 
   it("is met once the element has a box, and not while the engine says it has none, reading again only when the page reports a change", async () => {

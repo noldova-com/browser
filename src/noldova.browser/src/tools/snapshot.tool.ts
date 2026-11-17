@@ -52,6 +52,8 @@ export class SnapshotTool implements IBrowserTool {
         t => this.kit.sessions.issueReference(call.session, new ElementReference(page.viewId, frame.documentId, t)), BrowserLimits.maximumSnapshotBytes);
       const title: string = AccessibilitySnapshot.readTitle(tree);
       const content: ToolContent[] = [ToolContent.fromText(Resources.formatSnapshot(frame.url, title, text.text), frame.origin)];
+      if (tree.isFromView)
+        content.push(ToolContent.fromText(Resources.snapshotFromView, null));
       if (text.isCut || !tree.isWhole)
         content.push(ToolContent.fromText(Resources.snapshotCut, null));
       return ToolResults.page(frame.origin, content, new ShownPage(frame.url, title));
