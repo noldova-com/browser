@@ -28,7 +28,6 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
-import { DomLookup } from "../services/dom-lookup.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { LoadWaiter } from "../services/load-waiter.ts";
@@ -37,12 +36,10 @@ import type { JsonObject, JsonValue } from "../types/json-value.ts";
 
 export class WaitForTool implements IBrowserTool {
   private readonly kit: ToolKit;
-  private readonly lookup: DomLookup;
   public readonly descriptor: IToolDescriptor = ToolDescriptors.waitFor;
 
   public constructor(kit: ToolKit) {
     this.kit = kit;
-    this.lookup = new DomLookup(kit.calls);
   }
 
   public async callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
@@ -121,7 +118,7 @@ export class WaitForTool implements IBrowserTool {
     catch (error) {
       if (!(error instanceof ReplyTooLargeException))
         throw error;
-      return this.lookup.hasTextAsync(viewId, text, options);
+      return this.kit.changes.hasTextAsync(viewId, text, options);
     }
     return AccessibilitySnapshot.readNodes(nodes).nodes.some(t => !t.isIgnored && t.name.includes(text));
   }

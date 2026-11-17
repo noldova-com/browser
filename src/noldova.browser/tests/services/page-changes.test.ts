@@ -20,6 +20,7 @@ import { PageChangesContextMissingException } from "../../src/exceptions/page-ch
 import { PageChangesNotSwitchedException } from "../../src/exceptions/page-changes-not-switched.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import { PageTextScript } from "../../src/models/page-text-script.ts";
 import { ConsoleBuffers } from "../../src/services/console-buffers.ts";
 import { PageChanges } from "../../src/services/page-changes.ts";
 import { RuntimeDomains } from "../../src/services/runtime-domains.ts";
@@ -81,6 +82,31 @@ describe("PageChanges", () => {
     return surface.calls.filter(t => t.method === "Runtime.callFunctionOn").slice(from)
       .map(t => `${String(t.params["uniqueContextId"])} ${JSON.stringify(t.params["arguments"]) === '[{"value":true}]' ? "on" : "off"}`).sort();
   }
+
+  it("reads whether the main frame shows a text with the pinned function alone, in the same world the page changes use there, by value and silent", async () => {
+    const shown: boolean = await changes.hasTextAsync("view-1", "Order placed", options);
+    surface.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: false } });
+    const hidden: boolean = await changes.hasTextAsync("view-1", "Order placed", options);
+    surface.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: true } });
+    await hearAsync();
+
+    expect([shown, hidden]).toEqual([true, false]);
+    expect(surface.calls.map(t => t.method).slice(0, 8)).toEqual(["Page.getFrameTree", ...ENABLES, "Page.createIsolatedWorld", "Runtime.callFunctionOn"]);
+    expect(surface.calls.filter(t => t.method === "Runtime.callFunctionOn").slice(0, 2).map(t => t.params)).toEqual(Array(2).fill({
+      functionDeclaration: PageTextScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: "Order placed" }], returnByValue: true, silent: true
+    }));
+    expect(switches(2)[0]).toBe("view-1.1 on");
+  });
+
+  it("reads a text check that gives no boolean as malformed, and fails as the hearing does when the frame's world has no context", async () => {
+    for (const reply of [{ result: { type: "string", value: "yes" } }, { result: 1 }, {}]) {
+      surface.answer("Runtime.callFunctionOn", reply);
+      await expect(changes.hasTextAsync("view-1", "Order placed", options)).rejects.toBeInstanceOf(MalformedReplyException);
+    }
+    surface.answer("Page.createIsolatedWorld", {});
+
+    await expect(changes.hasTextAsync("view-1", "Order placed", options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
+  });
 
   it("starts the view's tracker, adds the binding after it, and starts the function in the world of each frame with an id, the main frame's first", async () => {
     await hearAsync();

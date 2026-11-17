@@ -376,15 +376,8 @@ export class Resources {
   public static readonly getRootAXNodeMethod: "Accessibility.getRootAXNode" = "Accessibility.getRootAXNode";
   public static readonly getChildAXNodesMethod: "Accessibility.getChildAXNodes" = "Accessibility.getChildAXNodes";
   public static readonly querySelectorMethod: "DOM.querySelector" = "DOM.querySelector";
-  public static readonly performSearchMethod: "DOM.performSearch" = "DOM.performSearch";
-  public static readonly getSearchResultsMethod: "DOM.getSearchResults" = "DOM.getSearchResults";
-  public static readonly discardSearchResultsMethod: "DOM.discardSearchResults" = "DOM.discardSearchResults";
   public static readonly documentOnlyDepth: number = 0;
   public static readonly focusedSelector: string = ":focus";
-  public static readonly maximumSearchResults: number = 100;
-  public static readonly searchIdField: string = "searchId";
-  public static readonly resultCountField: string = "resultCount";
-  public static readonly nodeIdsField: string = "nodeIds";
   public static readonly rootLevelDepth: number = 1;
   public static readonly gapMilliseconds: number = 100;
   public static readonly profileKeyField: string = "profileKey";

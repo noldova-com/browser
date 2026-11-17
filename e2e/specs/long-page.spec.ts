@@ -19,7 +19,7 @@ const SECTION_NAME_LENGTH = 4_000;
 // A note field above the list has the focus, and the page adds its status line half a second after it loads.
 const PAGE = "<!doctype html><title>Long page</title><input aria-label=\"Note\" autofocus><ul>"
   + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`
-  + "<script>setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p>Order placed</p>'), 500)</script>";
+  + "<script>setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p>Order <b>placed</b></p>'), 500)</script>";
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -49,16 +49,20 @@ test.describe("keys and waits on a long page", () => {
     expect(JSON.stringify(await app.requestAsync("agent-double.takeQuestions", {}))).toContain("\"Field\"");
   });
 
-  test("a wait for text the page adds later is met on a page whose accessibility tree passes the reply limit", async ({ app, servers }) => {
+  test("a wait for a field's value isn't met, and one for text the page adds later is, on a page whose accessibility tree passes the reply limit", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": PAGE });
     await app.allowLocalSitesAsync([docs.origin]);
     const instance = await app.openPageAsync(docs.url("/"));
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long page")]);
+    await app.viewPages.runAtAsync(docs.url("/"), "document.querySelector('input').value = 'typed-secret'; 'set'");
 
+    const value = await app.requestAsync("agent-double.callTool", { name: "browser_wait_for", input: { text: "typed-secret", timeoutMilliseconds: 1_000 },
+      bindings: { page: instance, profileKey: PROFILE_KEY } });
     const result = await app.requestAsync("agent-double.callTool", { name: "browser_wait_for", input: { text: "Order placed", timeoutMilliseconds: 10_000 },
       bindings: { page: instance, profileKey: PROFILE_KEY } });
 
     expect(result, `The wait failed: ${textsOf(result).join(" | ")}`).toEqual(expect.objectContaining({ isFailure: false }));
     expect(textsOf(result)).toContain("The wait was met.");
+    expect(textsOf(value)).toContain("The wait wasn't met in 1000 ms.");
   });
 });
