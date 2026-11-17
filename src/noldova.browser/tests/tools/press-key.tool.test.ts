@@ -210,7 +210,7 @@ describe("PressKeyTool", () => {
     bench.surface.answer("DOM.querySelector", { nodeId: 0 });
     await bench.runAsync(tool, bench.call({ key: "Escape" }));
 
-    expect(bench.permissions.requests.map(t => [t.risk, t.details.at(-1)])).toEqual([[ToolRisk.Medium, { label: "Field", value: "textbox" }],
+    expect(bench.permissions.requests.map(t => [t.risk, t.details.at(-1)])).toEqual([[ToolRisk.Medium, { label: "Field", kind: PermissionDetailKind.Text, value: "textbox" }],
       [ToolRisk.Medium, { label: "Key", kind: PermissionDetailKind.Text, value: "Escape" }]]);
     expect(bench.surface.calls.filter(t => t.method === "DOM.querySelector").map(t => t.params)).toContainEqual({ nodeId: 1, selector: ":focus" });
   });
