@@ -1414,6 +1414,8 @@ export declare class PaneController {
    * It does nothing once the controller closed or the tab is unavailable.
    *
    * @param origin The refused origin, as the URL standard writes it.
+   * @param address The refused address, which the page names in place of an opaque origin, `"null"`; `null`, the default, names the origin, and an
+   * opaque one as "this page".
    * @example
    * ```ts
    * import type { PaneController } from "@noldova/browser.window";
@@ -1423,7 +1425,7 @@ export declare class PaneController {
    * }
    * ```
    */
-  public refuseNavigation(origin: string): void;
+  public refuseNavigation(origin: string, address?: string | null): void;
 
   /**
    * Offers a new window the page asked for, which didn't open by itself, in the tab's notice; listeners hear of the change.

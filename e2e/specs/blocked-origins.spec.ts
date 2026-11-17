@@ -102,10 +102,14 @@ const LOCATION: INavigationStart = {
   }
 };
 
+// The meta refresh page shows its own refusal as it loads, so a plain page first shows that no earlier start's refusal is left.
 const META_REFRESH: INavigationStart = {
   name: "a meta refresh",
   isTopLevel: true,
-  startAsync: async (app, allowed, target) => goAsync(app, allowed, "/meta", `<meta http-equiv="refresh" content="0;url=${target}">`, true)
+  startAsync: async (app, allowed, target) => {
+    await goAsync(app, allowed, "/before-meta");
+    return goAsync(app, allowed, "/meta", `<meta http-equiv="refresh" content="0;url=${target}">`, true);
+  }
 };
 
 const REDIRECT: INavigationStart = {

@@ -210,7 +210,7 @@ Its look follows the app's design, whose rules this section writes out.
   Allow goes to the address as the person's own, as typing it does, so the runtime part keeps its origin for the workspace before the page loads; Not now gives the page back as it was; either moves the focus to the toolbar, and the page's next load also takes the state away.
 
 **Not yet:**
-- The page's favicon on its tab waits for a Noldova Desktop release with the web view's `Favicon` event, which 0.0.2 doesn't have.
+- The page's favicon on its tab waits for the window part to read the web view's `Favicon` event, which Noldova Desktop has since 0.0.3 ([desktop#137](https://github.com/noldova-com/desktop/pull/137)).
 - Stop and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
   Until then the bar offers neither while the call's permission card asks, since Noldova Desktop withdraws a card only when the call itself is aborted.
 
