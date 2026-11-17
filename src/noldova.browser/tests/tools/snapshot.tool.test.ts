@@ -25,6 +25,10 @@ import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
 const FRAME: JsonObject = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://shop.test/login", securityOrigin: "https://shop.test" } } };
 
+function layout(pageY: number): JsonObject {
+  return { cssVisualViewport: { pageX: 0, pageY, clientWidth: 800, clientHeight: 600 }, cssContentSize: { width: 800, height: 200_000 }, visualViewport: { clientWidth: 800 } };
+}
+
 function node(id: string, role: string, name: string, changes: JsonObject = {}): JsonObject {
   return { nodeId: id, role: { type: "role", value: role }, name: { type: "string", value: name }, ...changes };
 }
@@ -188,6 +192,7 @@ describe("SnapshotTool", () => {
     bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
     bench.surface.answer("Accessibility.getRootAXNode", { node: node("1", "RootWebArea", "Long", { childIds: children, backendDOMNodeId: 1 }) });
     bench.surface.answer("Accessibility.getChildAXNodes", { nodes: children.map((t, index) => node(t, "link", `Section ${index} ${"x".repeat(40)}`, { backendDOMNodeId: index + 2 })) });
+    bench.surface.answer("Page.getLayoutMetrics", layout(0));
 
     const result: ToolResult = await bench.runAsync(tool, bench.call({}));
 
@@ -196,8 +201,29 @@ describe("SnapshotTool", () => {
     expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(128 * 1024 + 200);
     expect(Buffer.byteLength(text, "utf8")).toBeGreaterThan(128 * 1024 - 100);
     expect(result.content[2]?.value).toBe("The snapshot was cut at its limit; act on what it shows, or scroll and take another.");
-    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree", "Accessibility.enable", "Accessibility.getRootAXNode", "Accessibility.getChildAXNodes",
-      "Accessibility.disable", "Page.getFrameTree"]);
+    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree", "Accessibility.enable", "Accessibility.getRootAXNode", "Page.getLayoutMetrics",
+      "Accessibility.getChildAXNodes", "Accessibility.disable", "Page.getFrameTree"]);
+  });
+
+  it("starts a page whose whole tree is too large for one reply where it is scrolled to, and says so", async () => {
+    const children: string[] = Array.from({ length: 10_000 }, (_value: unknown, index: number) => `c${index}`);
+    const root: JsonObject = node("1", "RootWebArea", "Long", { childIds: children, backendDOMNodeId: 1 });
+    const links: JsonObject[] = children.map((t, index) => node(t, "link", `Section ${index} ${"x".repeat(40)}`, { backendDOMNodeId: index + 2 }));
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getRootAXNode", { node: root });
+    bench.surface.answer("Accessibility.getChildAXNodes", { nodes: links });
+    bench.surface.answer("Page.getLayoutMetrics", layout(90_000));
+    bench.surface.answer("DOM.getNodeForLocation", { backendNodeId: 4_002, frameId: "F1" });
+    bench.surface.answer("Accessibility.getPartialAXTree", { nodes: [root, ...links.slice(3_999, 4_002)] });
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({}));
+
+    expect(String(result.content[1]?.value).split("\n").slice(3, 6)).toEqual(["- RootWebArea \"Long\"", `  - link "Section 4000 ${"x".repeat(40)}" [e1]`,
+      `  - link "Section 4001 ${"x".repeat(40)}" [e2]`]);
+    expect(result.content.slice(2).map(t => t.value)).toEqual([
+      "The page is too large to read from its start, so the snapshot starts where it is scrolled to; scroll up and take another for what is above.",
+      "The snapshot was cut at its limit; act on what it shows, or scroll and take another."]);
   });
 
   it("passes on any other failure reading the whole tree, and reads it no other way", async () => {

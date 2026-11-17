@@ -16,6 +16,7 @@ import { PageChangesContextMissingException } from "../exceptions/page-changes-c
 import { PageChangesNotSwitchedException } from "../exceptions/page-changes-not-switched.exception.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import { PageFrames } from "../models/page-frames.ts";
+import { PageTextScript } from "../models/page-text-script.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
@@ -70,7 +71,30 @@ export class PageChanges {
     return stop;
   }
 
+  // Whether the page's main frame shows the text, as the one pinned function reads it in the page changes' isolated world of that frame,
+  // which the engine keeps by its name, so the page's own world and script never see the call.
+  public async hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
+    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
+    const uniqueContextId: string = await this.findWorldAsync(viewId, mainId, options);
+    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
+      functionDeclaration: PageTextScript.functionDeclaration, uniqueContextId, arguments: [{ value: text }], returnByValue: true, silent: true
+    }, options);
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    const has: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
+    if (typeof has !== "boolean")
+      throw new MalformedReplyException();
+    return has;
+  }
+
   private async startAsync(viewId: string, frameId: string, options: CallOptions, contexts: string[]): Promise<void> {
+    const uniqueId: string = await this.findWorldAsync(viewId, frameId, options);
+    contexts.push(uniqueId);
+    if (await this.switchAsync(viewId, uniqueId, true, options) !== true)
+      throw new PageChangesNotSwitchedException(viewId, frameId);
+  }
+
+  private async findWorldAsync(viewId: string, frameId: string, options: CallOptions): Promise<string> {
     const world: JsonObject = await this.calls.sendAsync(viewId, Resources.createIsolatedWorldMethod, { frameId, worldName: PageChangeScript.worldName, grantUniveralAccess: false },
       options);
     const id: JsonValue | undefined = world[Resources.executionContextIdField];
@@ -79,9 +103,7 @@ export class PageChanges {
       : null;
     if (uniqueId === null)
       throw options.signal.aborted ? ToolFailures.fromAbort(options.signal.reason) : new PageChangesContextMissingException(viewId, frameId);
-    contexts.push(uniqueId);
-    if (await this.switchAsync(viewId, uniqueId, true, options) !== true)
-      throw new PageChangesNotSwitchedException(viewId, frameId);
+    return uniqueId;
   }
 
   private async switchAsync(viewId: string, uniqueContextId: string, isOn: boolean, options: CallOptions): Promise<JsonValue | undefined> {

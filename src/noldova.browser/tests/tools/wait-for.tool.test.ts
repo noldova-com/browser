@@ -14,7 +14,9 @@ import { CallCancelledException } from "../../src/exceptions/call-cancelled.exce
 import { ExactlyOneArgumentException } from "../../src/exceptions/exactly-one-argument.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageCrashedException } from "../../src/exceptions/page-crashed.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { ViewClosedException } from "../../src/exceptions/view-closed.exception.ts";
+import { PageTextScript } from "../../src/models/page-text-script.ts";
 import { WaitForTool } from "../../src/tools/wait-for.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -75,6 +77,35 @@ describe("WaitForTool", () => {
     bench.surface.answerWith("Accessibility.getFullAXTree", () => ({ nodes: [...nodes(["placed"], true), { nodeId: "9", role: { value: "textbox" }, value: { value: "placed" } }] }));
 
     expect((await bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 1 }))).content[0]?.value).toBe("The wait wasn't met in 1 ms.");
+  });
+
+  it("checks the page's shown text with the pinned function once the page's whole tree is too large for one reply, and only so when the page reports a change", async () => {
+    vi.useFakeTimers(FAKED);
+    const shown: boolean[] = [false, true];
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+      if (params["depth"] === undefined)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
+      return tree([]);
+    });
+    bench.surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => ({ result: { type: "boolean",
+      value: params["functionDeclaration"] === PageTextScript.functionDeclaration ? shown.shift() ?? false : true } }));
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 }));
+    await ToolBench.settleAsync();
+    bench.surface.reportChange(ToolBench.VIEW);
+    const result: ToolResult = await running;
+
+    expect(result.content[0]?.value).toBe("The wait was met.");
+    expect(bench.surface.calls.filter(t => t.params["functionDeclaration"] === PageTextScript.functionDeclaration).map(t => t.params["arguments"]))
+      .toEqual(Array(2).fill([{ value: "placed" }]));
+    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getFullAXTree" && t.params["depth"] === undefined).length).toBe(1);
+  });
+
+  it("fails on any other failure reading the whole tree, and checks the page's text no other way", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), ProtocolFailedException);
+    expect(bench.surface.calls.filter(t => t.params["functionDeclaration"] === PageTextScript.functionDeclaration)).toEqual([]);
   });
 
   it("is met once the element has a box, and not while the engine says it has none, reading again only when the page reports a change", async () => {
