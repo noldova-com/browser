@@ -112,14 +112,14 @@ describe("NavigateTool", () => {
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://new.example/a" })), PermissionDeniedException, { reason: "Denied" });
     expect([bench.database.callsOf("transaction"), bench.surface.navigations, bench.sendingMarks]).toEqual([[], [], 0]);
-    expect(bench.activities.at(-1)).toMatchObject({ state: "Ended", refusal: { url: "https://new.example/a", origin: "https://new.example" } });
+    expect(bench.activities.at(-1)).toMatchObject({ state: "Idle", refusal: { url: "https://new.example/a", origin: "https://new.example" } });
   });
 
   it("leaves no address with the page when nobody answers the new origin's request in time", async () => {
     bench.permissions.automaticDecision = PermissionDecision.Expired;
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://new.example/a" })), PermissionExpiredException, { reason: "Expired" });
-    expect(bench.activities.at(-1)).toMatchObject({ state: "Ended", refusal: null });
+    expect(bench.activities.at(-1)).toMatchObject({ state: "Idle", refusal: null });
   });
 
   it.each<[string, string]>([

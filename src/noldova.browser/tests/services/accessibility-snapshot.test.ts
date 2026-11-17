@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { Buffer } from "node:buffer";
+
 import { describe, expect, it } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
@@ -152,12 +154,41 @@ describe("AccessibilitySnapshot", () => {
       node("3", "button", { properties: [{ name: "focused", value: text(false) }, "focused"], backendDOMNodeId: 3 })
     ] });
 
-    expect(AccessibilitySnapshot.findFocused(nodes)?.backendNodeId).toBe(2);
-    expect(AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { properties: [focused] })] }))).toBeNull();
+    expect(AccessibilitySnapshot.findFocused(nodes.nodes)?.backendNodeId).toBe(2);
+    expect(AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { properties: [focused] })] }).nodes)).toBeNull();
   });
 
   it("reads the page's title from the root's name", () => {
     expect(AccessibilitySnapshot.readTitle(AccessibilitySnapshot.readNodes(PAGE))).toBe("Sign in");
+  });
+
+  it("reads one root node, and a node's children in the order they come", () => {
+    const root: AccessibilityNode = AccessibilitySnapshot.readRoot({ node: node("1", "RootWebArea", { name: text("Sign in"), childIds: ["2"] }) });
+    const children: readonly AccessibilityNode[] = AccessibilitySnapshot.readChildren({ nodes: [node("3", "link"), node("2", "button")] });
+
+    expect([root.id, root.name, root.childIds, children.map(t => t.id)]).toEqual(["1", "Sign in", ["2"], ["3", "2"]]);
+  });
+
+  it.each<[string, () => unknown]>([
+    ["a root reply with no node", () => AccessibilitySnapshot.readRoot({})],
+    ["a root that isn't a node", () => AccessibilitySnapshot.readRoot({ node: 1 })],
+    ["children that aren't a list", () => AccessibilitySnapshot.readChildren({ nodes: "2" })],
+    ["a child that isn't a node", () => AccessibilitySnapshot.readChildren({ nodes: [1] })]
+  ])("fails as a malformed reply with %s", (_case: string, reading: () => unknown) => {
+    expectMalformed(reading);
+  });
+
+  it("counts at least a shown node's line at no depth, with its name but no value or reference, and nothing for a node the snapshot doesn't show", () => {
+    const [cut]: [CutText, number[]] = write(AccessibilitySnapshot.readNodes(PAGE), []);
+    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes(PAGE);
+    const least: number[] = nodes.nodes.map(t => AccessibilitySnapshot.leastLineBytes(t));
+
+    expect(least.slice(0, 4)).toEqual(["- RootWebArea \"Sign in\"\n".length, "- heading \"Welcome back\"\n".length, "- link \"Help\"\n".length,
+      "- searchbox \"Search\"\n".length]);
+    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", false, "generic", "", "", [], null, false))).toBe(0);
+    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", true, "button", "Hidden", "", [], 9, false))).toBe(0);
+    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", false, "list", "", "", [], null, false))).toBe("- list\n".length);
+    expect(least.reduce((sum, t) => sum + t, 0)).toBeLessThanOrEqual(Buffer.byteLength(`${cut.text}\n`, "utf8"));
   });
 
   it.each<[string, JsonObject]>([

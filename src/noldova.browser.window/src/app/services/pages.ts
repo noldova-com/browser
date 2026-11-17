@@ -160,7 +160,7 @@ export class Pages {
     }
     this.pending.set(instance, { profileKey, url: url === null ? "" : url });
     try {
-      this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(instance, opener));
+      this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(opener));
     }
     catch (error) {
       this.pending.delete(instance);
@@ -308,7 +308,7 @@ export class Pages {
     finally {
       this.arriving = null;
     }
-    this.showActivities(arrived.reduce((shown, activity) => Pages.apply(shown, activity), next));
+    this.current.set(arrived.reduce((shown, activity) => Pages.apply(shown, activity), next));
     return isRead;
   }
 
@@ -337,8 +337,9 @@ export class Pages {
   private showActivity(activity: PageActivity): void {
     this.agentPages.noteAgent(activity.instance, activity.agentName);
     this.arriving?.push(activity);
-    this.showActivities(Pages.apply(this.current(), activity));
-    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = [...this.shown].find(([t]) => t.id === activity.instance && this.typing.has(t));
+    this.current.set(Pages.apply(this.current(), activity));
+    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = activity.state === PageActivityState.Idle ? undefined
+      : [...this.shown].find(([t]) => t.id === activity.instance && this.typing.has(t));
     if (shown !== undefined)
       this.endTyping(shown[0], shown[1].place, false);
     if (activity.action === PageAction.Navigating && activity.state === PageActivityState.Acting)
@@ -350,16 +351,6 @@ export class Pages {
     const held: PaneTab | undefined = activity.state === PageActivityState.Ended && activity.isHandedOver ? [...this.shown.keys()].find(t => t.id === activity.instance) : undefined;
     if (held !== undefined)
       this.context.openDocument(Resources.pageDocument, activity.instance, held.title);
-  }
-
-  private showActivities(next: ReadonlyMap<string, PageActivity>): void {
-    const before: ReadonlyMap<string, PageActivity> = this.current();
-    this.current.set(next);
-    for (const instance of new Set<string>([...before.keys(), ...next.keys()])) {
-      const underline: string | null = Pages.underlineOf(next.get(instance));
-      if (underline !== Pages.underlineOf(before.get(instance)))
-        this.context.updateDocument(Resources.pageDocument, instance, { underline });
-    }
   }
 
   private noteShown(): void {
@@ -381,17 +372,12 @@ export class Pages {
     return [...document.querySelectorAll(Resources.pageSelector)].find(t => t.contains(document.activeElement))?.getAttribute(Resources.pageInstanceAttribute) ?? null;
   }
 
-  private documentOptions(instance: string, opener: PaneTab | null): IDocumentOptions {
+  private documentOptions(opener: PaneTab | null): IDocumentOptions {
     if (opener !== null) {
       const last: string | undefined = this.lastAsked.get(opener.id);
       return { after: last !== undefined && this.holds(last) ? last : opener.id, marker: { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) } };
     }
-    const using: string | null = Pages.underlineOf(this.current().get(instance));
-    return using === null ? {} : { underline: using };
-  }
-
-  private static underlineOf(activity: PageActivity | undefined): string | null {
-    return activity === undefined ? null : Resources.formatUsingPage(activity.agentName);
+    return {};
   }
 
   private static apply(shown: ReadonlyMap<string, PageActivity>, activity: PageActivity): ReadonlyMap<string, PageActivity> {
@@ -403,6 +389,12 @@ export class Pages {
     else
       next.set(activity.instance, activity);
     return next;
+  }
+
+  // Whether one of an agent's calls runs on the page, rather than the agent only keeping control of it between calls.
+  private isCalledOn(instance: string): boolean {
+    const state: PageActivityState | undefined = this.current().get(instance)?.state;
+    return state !== undefined && state !== PageActivityState.Idle;
   }
 
   private holds(instance: string): boolean {
@@ -439,7 +431,7 @@ export class Pages {
 
   private followRedirect(tab: PaneTab, place: PagePlace, event: ViewRefusalEvent): boolean {
     const typing: TypedLoad | undefined = this.typing.get(tab);
-    if (typing === undefined || this.entries.get(tab) !== typing.entry || this.current().has(tab.id) || typing.hops >= Resources.redirectLimit) {
+    if (typing === undefined || this.entries.get(tab) !== typing.entry || this.isCalledOn(tab.id) || typing.hops >= Resources.redirectLimit) {
       this.endTyping(tab, place);
       return false;
     }
@@ -486,7 +478,7 @@ export class Pages {
     if (!this.passing.delete(tab))
       return;
     const status: PaneStatus = tab.controller.status;
-    const isLanded: boolean = mayJoin && status.state === PaneState.Loaded && !this.current().has(tab.id);
+    const isLanded: boolean = mayJoin && status.state === PaneState.Loaded && !this.isCalledOn(tab.id);
     const log = (error: unknown): void => this.context.log(Resources.formatRedirectsNotEnded(error));
     const landing: Promise<unknown> = isLanded ? this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, status.url).toJson()) : Promise.resolve();
     landing.catch(log).then(() => this.context.requestAsync(BrowserMethods.endTypedRedirects, new PageRequest(tab.id).toJson())).catch(log);

@@ -26,6 +26,25 @@ export class AccessibilitySnapshot {
     return new AccessibilityTree(AccessibilitySnapshot.readNode(root), rest.map(t => AccessibilitySnapshot.readNode(t)));
   }
 
+  public static readRoot(reply: JsonObject): AccessibilityNode {
+    return AccessibilitySnapshot.readNode(reply[Resources.nodeField] ?? null);
+  }
+
+  public static readChildren(reply: JsonObject): readonly AccessibilityNode[] {
+    const nodes: JsonValue | undefined = reply[Resources.nodesField];
+    if (!JsonShapes.isArray(nodes))
+      throw new MalformedReplyException();
+    return nodes.map(t => AccessibilitySnapshot.readNode(t));
+  }
+
+  // The fewest bytes the node's line takes in the snapshot, whatever its depth, value or reference; none for a node the snapshot doesn't show.
+  public static leastLineBytes(node: AccessibilityNode): number {
+    if (!AccessibilitySnapshot.isShown(node))
+      return 0;
+    const line: string = Resources.formatSnapshotNode(0, node.role);
+    return OutputLimits.byteLength(node.name === "" ? line : `${line}${Resources.snapshotPartSeparator}${JSON.stringify(node.name)}`) + 1;
+  }
+
   public static readTitle(tree: AccessibilityTree): string {
     return tree.root.name;
   }
@@ -50,7 +69,7 @@ export class AccessibilitySnapshot {
         continue;
       visited.add(node.id);
 
-      const isShown: boolean = !node.isIgnored && !(Resources.liftedRoles.has(node.role) && node.name === "");
+      const isShown: boolean = AccessibilitySnapshot.isShown(node);
       const isSecret: boolean = AccessibilitySnapshot.isMasked(node, secrets);
       if (isShown) {
         const line: string = AccessibilitySnapshot.formatLine(node, depth, isSecret, issue);
@@ -72,8 +91,12 @@ export class AccessibilitySnapshot {
     return new CutText(lines.join(Resources.lineSeparator), false);
   }
 
-  public static findFocused(tree: AccessibilityTree): AccessibilityNode | null {
-    return tree.nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
+  public static findFocused(nodes: readonly AccessibilityNode[]): AccessibilityNode | null {
+    return nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
+  }
+
+  private static isShown(node: AccessibilityNode): boolean {
+    return !node.isIgnored && !(Resources.liftedRoles.has(node.role) && node.name === "");
   }
 
   private static isMasked(node: AccessibilityNode, secrets: ReadonlySet<number>): boolean {

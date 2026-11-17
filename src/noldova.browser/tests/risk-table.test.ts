@@ -8,8 +8,9 @@
 
 import { readFile } from "node:fs/promises";
 
-import { WebViewNavigation, WebViewNavigationKind } from "@noldova/desktop.protocol";
-import { type IPermissionRequest, PermissionDecision, PermissionDetailKind, PermissionOption, type ToolCall, ToolFailureCode, ToolRisk } from "@noldova/desktop.runtime";
+import { WebViewFailure, WebViewFailureKind, WebViewNavigation, WebViewNavigationKind } from "@noldova/desktop.protocol";
+import { type IPermissionRequest, PermissionDecision, PermissionDetailKind, PermissionOption, type ToolCall, ToolFailureCode, ToolRisk,
+  WebViewFailureException } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CallFailureException } from "../src/exceptions/call-failure.exception.ts";
@@ -166,8 +167,8 @@ describe("the risk table", () => {
       }
     },
     {
-      action: "Type, or press any key, in a field that isn't a secret field, or with nothing focused, unless it submits a form that holds a secret field; Enter in a "
-        + "form field and the type tool's submit option included",
+      action: "Type, or press any key, in a field that isn't a secret field, or with nothing focused but for the unseen focus two rows below, unless it submits a form "
+        + "that holds a secret field; Enter in a form field and the type tool's submit option included",
       checkAsync: async () => {
         bench.surface.answer("Accessibility.getFullAXTree", focusedTree(ShopPage.SEARCH));
         bench.permissions.automaticDecision = PermissionDecision.AllowedAlways;
@@ -202,6 +203,25 @@ describe("the risk table", () => {
           ["browser.clickSecret", ToolRisk.High, true, HIGH], ["browser.clickSecret", ToolRisk.High, true, HIGH], ["browser.pressKeySecret", ToolRisk.High, true, HIGH],
           ["browser.pressKeySecret", ToolRisk.High, true, HIGH], ["browser.pressKeySecret", ToolRisk.High, true, HIGH], ["browser.typeSecret", ToolRisk.High, true, HIGH]
         ]);
+      }
+    },
+    {
+      action: "A key through press_key that types a character, Enter or Space, on a page whose whole accessibility tree is too large for one reply, where the document "
+        + "shows no focused element, which it doesn't while the window has no focus",
+      checkAsync: async () => {
+        bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+          if (params["depth"] === undefined)
+            throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
+          return { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Cart" } }] };
+        });
+        bench.surface.answer("DOM.getDocument", { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } });
+        bench.surface.answer("DOM.querySelector", { nodeId: 0 });
+        const outcomes: string[] = [];
+        for (const key of ["a", "Enter", " ", "Escape"])
+          outcomes.push(await runAsync(new PressKeyTool(bench.kit), { key }));
+
+        expect([outcomes, asked()]).toEqual([Array(4).fill("Done"), [...Array(3).fill(["browser.pressKeySecret", ToolRisk.High, true, HIGH]),
+          ["browser.pressKey", ToolRisk.Medium, true, ACTING]]]);
       }
     },
     {

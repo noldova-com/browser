@@ -136,7 +136,7 @@ describe("Pages", () => {
     expect(named.map(t => t.appName())).toEqual([null, null, null]);
   });
 
-  it("follows what agents do on each page by its instance, underlined on its tab, until each activity ends, and leaves an end of another activity alone", () => {
+  it("follows what agents do on each page by its instance until each activity ends, never underlines its tab, and leaves an end of another activity alone", () => {
     const acting: JsonObject = { instance: "page-1", activity: "call-1", agentName: "Scout", action: "Clicking", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
     context.emit(BrowserEvents.pageActivity, acting);
     context.emit(BrowserEvents.pageActivity, { ...acting, instance: "page-2", activity: "call-2" });
@@ -149,10 +149,20 @@ describe("Pages", () => {
     context.emit(BrowserEvents.pageActivity, { ...acting, instance: "page-3", activity: "call-3", state: "Ended" });
 
     expect([...pages.activities().keys()]).toEqual(["page-2"]);
-    expect(underlines()).toEqual([["page-1", "Scout is using this page"], ["page-2", "Scout is using this page"], ["page-1", null]]);
+    expect(underlines()).toEqual([]);
   });
 
-  it("opens a page's document underlined when a teammate's call on it already runs, and keeps the underline of one already open", async () => {
+  it("keeps an agent's control of a page between its calls, until the control ends", () => {
+    const control: JsonObject = { instance: "page-1", activity: "control-1", agentName: "Scout", action: "Reading", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
+    context.emit(BrowserEvents.pageActivity, control);
+    context.emit(BrowserEvents.pageActivity, { ...control, state: "Idle" });
+    const resting: unknown[] = [...pages.activities().values()].map(t => [t.activity, t.state]);
+    context.emit(BrowserEvents.pageActivity, { ...control, state: "Ended" });
+
+    expect([resting, pages.activities().size]).toEqual([[["control-1", "Idle"]], 0]);
+  });
+
+  it("opens a page's document with no underline when a teammate's call on it already runs, and adds none to one already open", async () => {
     const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const opening = vi.spyOn(context, "openDocument");
     context.emit(BrowserEvents.pageActivity, { instance: picked, activity: "call-1", agentName: " ", action: "Clicking", state: "Acting", box: null, point: null, refusal: null,
@@ -162,8 +172,7 @@ describe("Pages", () => {
     await pages.showAsync(picked);
     pages.open("workspace-1", null, picked);
 
-    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", { underline: "A teammate is using this page" }], ["browser.page", picked, "New tab"]],
-      [[picked, "A teammate is using this page"]]]);
+    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", {}], ["browser.page", picked, "New tab"]], []]);
   });
 
   it("logs an activity event that isn't one, without its payload, and changes no page", () => {
@@ -216,7 +225,7 @@ describe("Pages", () => {
 
     expect(isRead).toBe(true);
     expect([...pages.activities().entries()].map(t => [t[0], t[1].activity, t[1].state])).toEqual([["page-4", "call-8", "Asking"], ["page-2", "call-5", "Acting"]]);
-    expect(underlines()).toEqual([["page-1", "Scout is using this page"], ["page-2", "Scout is using this page"], ["page-1", null], ["page-4", "Scout is using this page"]]);
+    expect(underlines()).toEqual([]);
     expect(context.requests.filter(t => t.method === BrowserMethods.readActivities)).toEqual([{ method: BrowserMethods.readActivities, parameters: null }]);
   });
 
@@ -1180,6 +1189,34 @@ describe("Pages", () => {
       await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "end"]));
 
       expect([tab.controller.status.state, tab.controller.status.url]).toEqual([PaneState.Loaded, "https://www.example.com/"]);
+    });
+
+    it("joins the page a teammate only keeps control of between its calls, once the typed load lands, and ends the redirects its view followed", async () => {
+      surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
+      surface().script("https://www.example.com/", { kind: "pending" });
+      const tab = await openAsync();
+
+      await pages.goToAsync(tab, "example.com");
+      await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/", "navigate https://www.example.com/"]));
+      context.emit(BrowserEvents.pageActivity, { instance: tab.id, activity: "control-1", agentName: "Builder", action: "Reading", state: "Idle", box: null, point: null, refusal: null, isHandedOver: false });
+      await viewOf(tab).stopAsync();
+      await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
+
+      expect([pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual(["Idle", "https://www.example.com/"]);
+    });
+
+    it("follows the redirects of a load typed on a page a teammate keeps control of between its calls, and joins the page once the load lands", async () => {
+      surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
+      surface().script("https://www.example.com/", { kind: "pending" });
+      const tab = await openAsync();
+      context.emit(BrowserEvents.pageActivity, { instance: tab.id, activity: "control-1", agentName: "Builder", action: "Reading", state: "Idle", box: null, point: null, refusal: null, isHandedOver: false });
+
+      await pages.goToAsync(tab, "example.com");
+      await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/", "navigate https://www.example.com/"]));
+      await viewOf(tab).stopAsync();
+      await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
+
+      expect([passed(), pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual([["https://www.example.com/"], "Idle", "https://www.example.com/"]);
     });
 
     it("follows no redirect and joins nothing once a teammate's call starts on the page during its typed load, even after the call ended", async () => {

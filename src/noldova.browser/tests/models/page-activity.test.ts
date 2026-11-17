@@ -76,6 +76,40 @@ describe("PageActivity", () => {
       ["Ended", { url: "https://docs.example.com/pricing", origin: "https://docs.example.com" }]]);
   });
 
+  it("rests between calls: the mark leaves, a refusal is reported once, and nothing is aimed until the next call, which acts with its own action and signal", () => {
+    activity.aim(new PageBox(1, 2, 3, 4), new PagePoint(2, 4));
+    activity.refuse(new PageRefusal("https://docs.example.com/pricing", "https://docs.example.com"));
+    activity.rest();
+    const resting: boolean = activity.isCalling;
+    activity.aim(new PageBox(5, 6, 7, 8), null);
+    activity.rest();
+    const next: AbortController = new AbortController();
+    activity.begin(PageAction.Clicking, next.signal);
+    call.abort(ToolAbortReason.Cancelled);
+
+    expect(published.slice(2).map(t => [t["action"], t["state"], t["box"], t["point"], t["refusal"]])).toEqual([
+      ["Typing", "Idle", null, null, { url: "https://docs.example.com/pricing", origin: "https://docs.example.com" }],
+      ["Clicking", "Acting", null, null, null]
+    ]);
+    expect([resting, activity.isCalling, activity.signal.aborted]).toEqual([false, true, false]);
+    next.abort(ToolAbortReason.Cancelled);
+    expect(activity.signal.reason).toBe(ToolAbortReason.Cancelled);
+  });
+
+  it("is calling while it acts or asks, and over once the person stops it or takes the page, or the page or session goes", () => {
+    const over = (change: (t: PageActivity) => void): boolean => {
+      const other: PageActivity = new PageActivity(new SessionPage("view-1", "page-1", "workspace-1", ""), "session-1", PageAction.Reading, call.signal, () => undefined);
+      change(other);
+      return other.isOver;
+    };
+    activity.ask();
+    const asking: boolean = activity.isCalling;
+    activity[Symbol.dispose]();
+
+    expect([asking, activity.isCalling]).toEqual([true, false]);
+    expect([over(() => undefined), over(t => t.stop()), over(t => t.handOver()), over(t => t.release())]).toEqual([false, true, true, true]);
+  });
+
   it("keeps the same id in each event, and gives another activity another", () => {
     activity.aim(new PageBox(1, 2, 3, 4), null);
     const other: PageActivity = new PageActivity(new SessionPage("view-1", "page-1", "workspace-1", ""),"session-1", PageAction.Reading,

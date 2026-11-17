@@ -105,17 +105,40 @@ describe("RuntimePart", () => {
     expect(context.tools.openSession("conversation-2", {}).listTools()).toEqual([]);
   });
 
-  it("publishes what a tool does on a page to every window through its declared event, and withdraws the event when it deactivates", async () => {
+  it("publishes an agent's control of a page to every window through its declared event, one control across its calls, and withdraws the event when it deactivates", async () => {
     const context: BrowserContext = new BrowserContext(pageViews("page-1"));
     const part: RuntimePart = new RuntimePart();
     await part.activateAsync(context);
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: "page-1", profileKey: "workspace-1", agentName: "Scout" });
 
-    await context.tools.openSession("conversation-1", { page: "page-1", profileKey: "workspace-1", agentName: "Scout" }).callAsync("browser_snapshot", {});
+    await session.callAsync("browser_snapshot", {});
+    await session.callAsync("browser_snapshot", {});
 
-    expect(context.events.get(BrowserEvents.pageActivity)?.map(t => JsonShapes.isObject(t) ? [t["instance"], t["state"]] : null))
-      .toEqual([["page-1", "Acting"], ["page-1", "Ended"]]);
+    const events: JsonValue[] = context.events.get(BrowserEvents.pageActivity) ?? [];
+    expect(events.map(t => JsonShapes.isObject(t) ? [t["instance"], t["state"]] : null))
+      .toEqual([["page-1", "Acting"], ["page-1", "Idle"], ["page-1", "Acting"], ["page-1", "Idle"]]);
+    expect(new Set(events.map(t => JsonShapes.isObject(t) ? t["activity"] : null)).size).toBe(1);
+    expect(await requestAsync(context, BrowserMethods.readActivities, null)).toEqual([expect.objectContaining({ instance: "page-1", state: "Idle" })]);
     await part.deactivateAsync();
     expect([...context.events.keys()]).toEqual([]);
+  });
+
+  it("ends an agent's control of a page when the window forgets the page, and when the agent's session ends", async () => {
+    const first: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const second: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const context: BrowserContext = new BrowserContext(pageViews(first, second));
+    await new RuntimePart().activateAsync(context);
+    const firstSession: ToolSession = context.tools.openSession("conversation-1", { page: first, profileKey: "workspace-1", agentName: "Scout" });
+    const secondSession: ToolSession = context.tools.openSession("conversation-2", { page: second, profileKey: "workspace-1", agentName: "Scout" });
+    await firstSession.callAsync("browser_snapshot", {});
+    await secondSession.callAsync("browser_snapshot", {});
+
+    expect(await requestAsync(context, BrowserMethods.forgetPage, { instance: first })).toBeNull();
+    secondSession.end();
+
+    expect((context.events.get(BrowserEvents.pageActivity) ?? []).map(t => JsonShapes.isObject(t) ? [t["instance"], t["state"]] : null).slice(-2))
+      .toEqual([[first, "Ended"], [second, "Ended"]]);
+    expect(await requestAsync(context, BrowserMethods.readActivities, null)).toEqual([]);
   });
 
   it("stops a page's call from the window, refuses the session it was taken from until that session ends, and lets another session act", async () => {
