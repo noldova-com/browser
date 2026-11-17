@@ -657,7 +657,7 @@ describe("Pages", () => {
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([heard, unheard, heard, unheard]
       .map((t, i) => ({ instance: t.id, profileKey: "workspace-1", url: i < 2 ? "" : "https://docs.example.com/" })));
     expect(context.titles.filter(t => t.update.title !== undefined).map(t => [t.instance, t.update.title]))
-      .toEqual([[heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
+      .toEqual([[heard.id, "New tab"], [heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
   });
 
   it("opens a restored page in the workspace its record keeps, at the address it last showed", async () => {
