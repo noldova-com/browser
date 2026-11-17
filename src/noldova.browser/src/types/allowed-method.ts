@@ -20,6 +20,7 @@ export type AllowedMethod =
   | "Accessibility.getRootAXNode"
   | "Accessibility.getChildAXNodes"
   | "DOM.getDocument"
+  | "DOM.querySelector"
   | "DOM.describeNode"
   | "DOM.scrollIntoViewIfNeeded"
   | "DOM.getContentQuads"

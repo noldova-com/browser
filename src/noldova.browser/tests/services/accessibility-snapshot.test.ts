@@ -154,8 +154,8 @@ describe("AccessibilitySnapshot", () => {
       node("3", "button", { properties: [{ name: "focused", value: text(false) }, "focused"], backendDOMNodeId: 3 })
     ] });
 
-    expect(AccessibilitySnapshot.findFocused(nodes)?.backendNodeId).toBe(2);
-    expect(AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { properties: [focused] })] }))).toBeNull();
+    expect(AccessibilitySnapshot.findFocused(nodes.nodes)?.backendNodeId).toBe(2);
+    expect(AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { properties: [focused] })] }).nodes)).toBeNull();
   });
 
   it("reads the page's title from the root's name", () => {

@@ -91,8 +91,8 @@ export class AccessibilitySnapshot {
     return new CutText(lines.join(Resources.lineSeparator), false);
   }
 
-  public static findFocused(tree: AccessibilityTree): AccessibilityNode | null {
-    return tree.nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
+  public static findFocused(nodes: readonly AccessibilityNode[]): AccessibilityNode | null {
+    return nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
   }
 
   private static isShown(node: AccessibilityNode): boolean {
