@@ -42,6 +42,10 @@ export class PageActivity implements Disposable {
     return this.page.instance;
   }
 
+  public get viewId(): string {
+    return this.page.viewId;
+  }
+
   // The running call's signal, which also aborts when the person stops the agent.
   public get signal(): AbortSignal {
     return this.callSignal;

@@ -16,10 +16,11 @@ import type { JsonObject } from "../../src/types/json-value.ts";
 
 describe("PageStops", () => {
   let published: JsonObject[];
+  let released: string[];
   let stops: PageStops;
 
   function begin(instance: string, session: string, action: PageAction = PageAction.Reading): PageActivity {
-    return stops.begin(new SessionPage("view-1", instance, "workspace-1", "Scout"), session, action, new AbortController().signal);
+    return stops.begin(new SessionPage(`view-of-${instance}`, instance, "workspace-1", "Scout"), session, action, new AbortController().signal);
   }
 
   function run(instance: string, session: string): PageActivity {
@@ -34,7 +35,28 @@ describe("PageStops", () => {
 
   beforeEach(() => {
     published = [];
-    stops = new PageStops(t => published.push(t));
+    released = [];
+    stops = new PageStops(t => published.push(t), t => released.push(t));
+  });
+
+  it("lets go of a control's view as the control ends, by a stop, a close, its session's end once its call ends, or another session, and knows the views it holds", () => {
+    run("page-1", "session-1");
+    run("page-2", "session-1");
+    const calling: PageActivity = begin("page-3", "session-1");
+    run("page-4", "session-2");
+    const held: boolean[] = [1, 2, 3, 4, 5].map(t => stops.controlsView(`view-of-page-${t}`));
+
+    stops.stop("page-1", false);
+    stops.close("page-2");
+    stops.endSession("session-1");
+    const beforeItsCallEnds: string[] = [...released];
+    stops.finish(calling);
+    run("page-4", "session-3");
+
+    expect(held).toEqual([true, true, true, true, false]);
+    expect(beforeItsCallEnds).toEqual(["view-of-page-1", "view-of-page-2"]);
+    expect(released).toEqual(["view-of-page-1", "view-of-page-2", "view-of-page-3", "view-of-page-4"]);
+    expect(["view-of-page-3", "view-of-page-4"].map(t => stops.controlsView(t))).toEqual([false, true]);
   });
 
   it("keeps one control of a page across a session's calls, resting between them, and lists it", () => {

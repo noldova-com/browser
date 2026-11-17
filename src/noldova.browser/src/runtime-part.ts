@@ -18,7 +18,6 @@ import { Resources } from "./resources.ts";
 import { DatabaseOriginStore } from "./services/database-origin-store.ts";
 import { DatabasePageStore } from "./services/database-page-store.ts";
 import { PageRequests } from "./services/page-requests.ts";
-import type { RuntimeDomains } from "./services/runtime-domains.ts";
 import { ToolHost } from "./services/tool-host.ts";
 import { TypedAddressRequests } from "./services/typed-address-requests.ts";
 import { WorkspaceOrigins } from "./services/workspace-origins.ts";
@@ -139,15 +138,17 @@ export class RuntimePart implements IRuntimePart {
       });
       context.registerMethod(BrowserMethods.readAppName, { handleAsync: () => RuntimePart.answer(() => ProductInfo.current.name) });
       context.onClientClosed(t => holders.close(t));
-      this.stopEvents = context.webViews.onViewEvent(t => RuntimePart.follow(t, sessions, kit.domains, origins, context.log));
+      this.stopEvents = context.webViews.onViewEvent(t => RuntimePart.follow(t, sessions, kit, origins, context.log));
     }
     catch (error) {
       RuntimePart.dispose(registrations);
       return Promise.reject(error);
     }
     this.registrations = registrations;
-    for (const view of context.webViews.list())
+    for (const view of context.webViews.list()) {
       RuntimePart.apply(origins, view.id, view.profileKey, context.log);
+      kit.letGoUnheld(view.id);
+    }
     return Promise.resolve();
   }
 
@@ -159,19 +160,22 @@ export class RuntimePart implements IRuntimePart {
     return Promise.resolve();
   }
 
-  private static follow(event: WebViewEvent, sessions: SessionStates, domains: RuntimeDomains, origins: WorkspaceOrigins, log: IModuleLog): void {
+  // Noldova Desktop keeps a view's control mark through a restart of the runtime part, whose controls end with it, and lists or reports the
+  // views again after it, so each that no control holds stops being marked.
+  private static follow(event: WebViewEvent, sessions: SessionStates, kit: ToolKit, origins: WorkspaceOrigins, log: IModuleLog): void {
     switch (event.kind) {
       case WebViewEventKind.Opened:
         RuntimePart.apply(origins, event.view, String(event.details[Resources.profileKeyField]), log);
+        kit.letGoUnheld(event.view);
         break;
       case WebViewEventKind.Closed:
         sessions.dropView(event.view);
         origins.forgetView(event.view);
-        domains.close(event.view);
+        kit.domains.close(event.view);
         break;
       case WebViewEventKind.Crashed:
         sessions.dropReferences(event.view);
-        domains.drop(event.view);
+        kit.domains.drop(event.view);
         break;
       case WebViewEventKind.ProfileCleared:
         sessions.dropReferences(event.view);

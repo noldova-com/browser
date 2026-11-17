@@ -130,6 +130,7 @@ export class Resources {
   public static readonly coveredCode: string = "browser.covered";
   public static readonly pageNotShowing: string = "The page isn't laid out, so nothing was pressed at that point; ask the person to show its tab.";
   public static readonly pageNotShowingCode: string = "browser.pageNotShowing";
+  public static readonly pageNotControlledCode: string = "browser.notControlled";
   public static readonly screenshotLaidOut: string = Resources.formatScreenshotLaidOut(BrowserLimits.screenshotDrawMilliseconds, BrowserLimits.hiddenPageWidth, BrowserLimits.hiddenPageHeight);
   public static readonly pageHidden: string = "The page has no size even when laid out for the capture, so nothing was captured; ask the person to show its tab.";
   public static readonly pageHiddenCode: string = "browser.pageHidden";
@@ -494,6 +495,14 @@ export class Resources {
 
   public static formatIgnoredLocalSites(places: readonly number[]): string {
     return `The sites on this computer or network ignore the entries that aren't a site's origin, at ${places.join(", ")} in the list.`;
+  }
+
+  public static formatPageNotControlled(viewId: string, cause: string): string {
+    return `The page's view ${viewId} couldn't be kept drawing for the agent, so nothing was done: ${cause}`;
+  }
+
+  public static formatControlNotCleared(viewId: string, error: string): string {
+    return `The page's view ${viewId} wasn't marked as no longer controlled, so it may keep drawing while hidden: ${error}`;
   }
 
   public static formatAgentNotRecorded(error: string): string {
