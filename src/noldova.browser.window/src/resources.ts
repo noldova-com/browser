@@ -20,6 +20,7 @@ import type { RefusedPage } from "./app/models/refused-page.ts";
 export class Resources {
   public static readonly moduleId: string = "browser";
   public static readonly opaqueOrigin: string = "null";
+  public static readonly blankPage: string = "about:blank";
   public static readonly pageDocument: string = "browser.page";
   public static readonly openPageCommand: string = "browser.openPage";
   public static readonly newPageCommand: string = "browser.newPage";

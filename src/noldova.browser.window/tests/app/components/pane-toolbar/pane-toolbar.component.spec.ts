@@ -388,9 +388,16 @@ describe("PaneToolbarComponent", () => {
 
     expect(field().selectionStart).toBe(field().selectionEnd);
     field().blur();
-    await showAsync(state("about:blank"));
+    await showAsync(state("about:srcdoc"));
 
-    expect([glyph(), drawn(), field().value, element.querySelector(".nol-browser-toolbar-security")]).toEqual([undefined, [undefined, undefined], "about:blank", null]);
+    expect([glyph(), drawn(), field().value, element.querySelector(".nol-browser-toolbar-security")]).toEqual([undefined, [undefined, undefined], "about:srcdoc", null]);
+  });
+
+  it("leaves the field empty for a new view's start at about:blank, as when it never heard that start", async () => {
+    const unheard: string = field().value;
+    await showAsync(new ViewStateEvent("about:blank", "about:blank", false, false, false));
+
+    expect([unheard, field().value, field().getAttribute("aria-label")]).toEqual(["", "", "Address"]);
   });
 
   it("shows the address, and marks an http page as not secure", async () => {
@@ -583,7 +590,7 @@ describe("PaneToolbarComponent", () => {
     await loadAsync("https://one.example/");
     await readAsync();
     fixture.componentInstance.openLink.set(() => Promise.resolve());
-    await loadAsync("about:blank");
+    await loadAsync("about:srcdoc");
     await readAsync();
     await loadAsync("https://one.example/");
     await readAsync();
