@@ -121,6 +121,7 @@ export class Resources {
   public static readonly buttonRole: string = "button";
   public static readonly maximumDetailLength: number = 2000;
   public static readonly maximumNameLength: number = 80;
+  public static readonly maximumHostLength: number = 100;
   public static readonly maximumPageTitleLength: number = 300;
   public static readonly notVisible: string = "The element has no box on the page, so it can't be clicked; take a new snapshot.";
   public static readonly notVisibleCode: string = "browser.notVisible";
@@ -521,7 +522,9 @@ export class Resources {
 
   public static formatHost(origin: string): string {
     const host: string = URL.parse(origin)?.host ?? "";
-    return host === "" ? origin : host;
+    if (host === "")
+      return origin;
+    return host.length > Resources.maximumHostLength ? `${Resources.shownCut}${host.slice(1 - Resources.maximumHostLength)}` : host;
   }
 
   public static formatRole(role: string): string {

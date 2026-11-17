@@ -309,7 +309,7 @@ A request's subject is the page's origin, which Noldova Desktop keeps an answer 
 - **Title:** the element by its accessible name and the site by its host, such as `Click "Choose Team" on docs.example.com`, `Type into the Password field on docs.example.com` or `Press Escape on docs.example.com`; an element with no name is named by its role, `Click the checkbox on docs.example.com`, and one with no role of its own as an element.
   A click, an Enter or a key that submits a form names the form instead, `Submit the form "Create your Team account" on docs.example.com`, by its `aria-labelledby` elements' text, its `aria-label` or its `title`, or `Submit a form on docs.example.com` when it has none.
   A navigation names the host: `Open a page on docs.example.com` within the workspace's sites, and `Open status.example.net` for a new one.
-  Every title is one line of at most 200 characters, and the host always fits: the name is cut to what the title leaves beside it, at most 80 characters.
+  Every title is one line of at most 200 characters, and the host always fits: the name is cut to what the title leaves beside it, at most 80 characters, and a host over 100 characters is cut from its start, so its end, the domain the site's owner registered, still shows: a site may name its subdomains anything, such as `bank.example.com.` followed by many labels.
 - **Page:** the page's URL, then its title, cut at 300 characters, for a click, typing or a key.
 - **Button, Link, Field or Element:** the element's name and its role, such as `"Password", textbox`, with Goes to and the address a link leads to; an element the browser can't read, such as one in another site's frame, is an Element that says so.
 - **Key:** the key and its modifiers, for a key.

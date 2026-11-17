@@ -43,6 +43,8 @@ describe("Resources", () => {
 
   it("names a site by its host, or by the origin itself when it has none", () => {
     expect([Resources.formatHost("https://shop.test:8443"), Resources.formatHost("about:blank"), Resources.formatHost("://")]).toEqual(["shop.test:8443", "about:blank", "://"]);
+    expect([Resources.formatHost(`https://${"a".repeat(88)}.example.com`), Resources.formatHost(`https://${"a".repeat(89)}.example.com`)])
+      .toEqual([`${"a".repeat(88)}.example.com`, `…${"a".repeat(87)}.example.com`]);
   });
 
   it("titles a click by the element's name, or by its role when it has none, and a plain element as an element", () => {

@@ -125,11 +125,18 @@ describe("PermissionCards", () => {
     expect(PermissionCards.element(facts([node("BUTTON")]), new ShownElement("button", name, false))[0]?.value).toBe(`"${"Pay ".repeat(19)}Pay…", button`);
   });
 
-  it("cuts a name to the room the title leaves beside a long host, and never inside a character", () => {
-    const host: string = `${"a".repeat(150)}.example.com`;
-    const title: string = PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", "\u{1F600}".repeat(40), false), `https://${host}`);
+  it("cuts a host too long for the title from its start, so its end, the site's own domain, still shows", () => {
+    const host: string = `bank.example.com.${"a".repeat(210)}.evil.example`;
+    const title: string = PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", "Pay", false), `https://${host}`);
 
-    expect([title.length, title]).toEqual([199, `Click "${"\u{1F600}".repeat(12)}…" on ${host}`]);
+    expect([host.length, title]).toEqual([240, `Click "Pay" on …${"a".repeat(86)}.evil.example`]);
+    expect(title).not.toContain("bank.example.com");
+  });
+
+  it("cuts a name never inside a character", () => {
+    const title: string = PermissionCards.clickTitle(facts([node("BUTTON")]), new ShownElement("button", "\u{1F600}".repeat(41), false), "https://docs.example.com");
+
+    expect(title).toBe(`Click "${"\u{1F600}".repeat(39)}…" on docs.example.com`);
   });
 
   it("cuts a long page title at 300 characters after the URL, so the URL shows whole", () => {
