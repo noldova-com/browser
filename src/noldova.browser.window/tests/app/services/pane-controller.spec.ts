@@ -142,6 +142,27 @@ describe("PaneController", () => {
     expect([controller.status.refusedOrigin, unavailable.status]).toEqual(["https://refused.example", PaneStatus.unavailable]);
   });
 
+  it("names a refused address whose origin is opaque when it navigates there or reloads it, and the origin alone when it goes back, and the address it is told", async () => {
+    const { surface, controller } = open();
+    const refusedOrigins: (string | null)[] = [];
+    surface.script("about:srcdoc", { kind: "refuse" });
+    await controller.navigateAsync("about:srcdoc");
+    refusedOrigins.push(controller.status.refusedOrigin);
+    await controller.navigateAsync("data:text/html,one");
+    await controller.navigateAsync("https://two.example/");
+    surface.script("data:text/html,one", { kind: "refuse" });
+    await controller.goBackAsync();
+    refusedOrigins.push(controller.status.refusedOrigin);
+    await controller.navigateAsync("data:text/html,three");
+    surface.script("data:text/html,three", { kind: "refuse" });
+    await controller.reloadAsync();
+    refusedOrigins.push(controller.status.refusedOrigin);
+    controller.refuseNavigation("null", "about:srcdoc");
+    refusedOrigins.push(controller.status.refusedOrigin);
+
+    expect(refusedOrigins).toEqual(["about:srcdoc", "null", "data:text/html,three", "about:srcdoc"]);
+  });
+
   it("follows no navigation once closed or without a view, and tells no listener", async () => {
     const { controller } = open();
     await controller.navigateAsync("https://one.example/");

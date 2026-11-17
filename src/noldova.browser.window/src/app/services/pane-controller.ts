@@ -70,29 +70,31 @@ export class PaneController {
       this.update(this.current.navigate());
   }
 
-  public refuseNavigation(origin: string): void {
+  public refuseNavigation(origin: string, address: string | null = null): void {
     if (!this.isClosed && this.current !== PaneStatus.unavailable)
-      this.update(this.current.refuse(origin));
+      this.update(this.current.refuse(origin, false, address));
   }
 
   public async navigateAsync(url: string): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.startNavigation().navigateAsync(url));
+    return this.followAnswer(await this.startNavigation().navigateAsync(url), url);
   }
 
+  // The history entry back or forward goes to isn't known here, so a refusal of one names its origin alone.
   public async goBackAsync(): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.startNavigation().goBackAsync());
+    return this.followAnswer(await this.startNavigation().goBackAsync(), null);
   }
 
   public async goForwardAsync(): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.startNavigation().goForwardAsync());
+    return this.followAnswer(await this.startNavigation().goForwardAsync(), null);
   }
 
   public async reloadAsync(): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.startNavigation().reloadAsync());
+    const address: string = this.current.url;
+    return this.followAnswer(await this.startNavigation().reloadAsync(), address);
   }
 
   public async stopAsync(): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.requireView().stopAsync());
+    return this.followAnswer(await this.requireView().stopAsync(), null);
   }
 
   public async zoomInAsync(): Promise<number> {
@@ -162,9 +164,9 @@ export class PaneController {
       event.followIn(this.hearing);
   }
 
-  private followAnswer(answer: WebViewNavigation): WebViewNavigation {
+  private followAnswer(answer: WebViewNavigation, address: string | null): WebViewNavigation {
     if (answer.kind === WebViewNavigationKind.Refused && answer.origin !== null && !this.isClosed)
-      this.update(this.current.refuse(answer.origin));
+      this.update(this.current.refuse(answer.origin, false, address));
     return answer;
   }
 

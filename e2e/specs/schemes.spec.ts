@@ -88,6 +88,9 @@ test.describe("schemes", () => {
       await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
         .toEqual([[SRCDOC, false]]);
       expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
+      await app.window.getByRole("button", { name: "Reload", exact: true }).click();
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't name ${SRCDOC} after Reload, from ${start.name}.`).toHaveText(`Browser doesn't open ${SRCDOC}`);
+      expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toBe(requests);
 
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
