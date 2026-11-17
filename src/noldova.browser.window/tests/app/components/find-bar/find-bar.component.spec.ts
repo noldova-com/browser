@@ -325,7 +325,7 @@ describe("FindBarComponent", () => {
       expect([rem(end.left - box.right), rem(end.top + end.height / 2 - (input.top + input.height / 2)), rem(previous.left - end.right)]).toEqual([rem(gap), 0, rem(gap)]);
       expect([rem(next.left - previous.right), rem(close.left - next.right), rem(close.top + close.height / 2 - (bar.top + bar.height / 2))]).toEqual([0.125, 0.125, 0]);
       expect(getComputedStyle(find(".nol-browser-find-count")).color).toBe(isForced ? ForcedColorsFixture.resolve("CanvasText") : getComputedStyle(probe).color);
-      const focused = getComputedStyle(input);
+      const focused = getComputedStyle(field());
       expect([document.activeElement === field(), isForced ? [focused.outlineStyle, focused.outlineColor] : [focused.borderTopColor]])
         .toEqual([true, isForced ? ["solid", ForcedColorsFixture.resolve("Highlight")] : [getComputedStyle(probe).borderTopColor]]);
     });

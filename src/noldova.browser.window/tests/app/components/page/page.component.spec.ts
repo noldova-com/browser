@@ -29,7 +29,7 @@ import { Pages } from "../../../../src/app/services/pages.ts";
 import { AccessibilityTreeFixture } from "../../../fixtures/accessibility-tree.fixture.ts";
 import { ContrastFixture } from "../../../fixtures/contrast.fixture.ts";
 import { EmulatedMediaFixture } from "../../../fixtures/emulated-media.fixture.ts";
-import type { FakeWebView, FakeWebViews } from "../../../fixtures/fake-web-views.fixture.ts";
+import { FakeWebView, type FakeWebViews } from "../../../fixtures/fake-web-views.fixture.ts";
 import { ForcedColorsFixture } from "../../../fixtures/forced-colors.fixture.ts";
 import { LiveRegionFixture } from "../../../fixtures/live-region.fixture.ts";
 import { MotionFixture } from "../../../fixtures/motion.fixture.ts";
