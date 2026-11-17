@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { once } from "node:events";
@@ -25,12 +25,15 @@ import { type ViewRequest, ViewRequests } from "./view-requests.ts";
 
 class AppRun {
   public readonly application: ElectronApplication;
+  // Taken at launch: once the app has quit, Playwright drops its record of the app, and asking for the process then fails.
+  public readonly process: ChildProcess;
   public readonly window: Page;
   public readonly viewRequests: ViewRequests;
   public readonly viewPages: ViewPages;
 
   public constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, viewPages: ViewPages) {
     this.application = application;
+    this.process = application.process();
     this.window = window;
     this.viewRequests = viewRequests;
     this.viewPages = viewPages;
@@ -109,7 +112,7 @@ export class TestApp {
   }
 
   private listen(run: AppRun): void {
-    const child = run.application.process();
+    const child = run.process;
     child.stdout?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
     child.stderr?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
     run.window.on("console", message => this.output.push(`[window ${message.type()}] ${message.text()}\n`));
@@ -200,7 +203,7 @@ export class TestApp {
   }
 
   private async closeAsync(): Promise<void> {
-    const child = this.run.application.process();
+    const child = this.run.process;
     if (child.exitCode !== null || child.signalCode !== null)
       return;
 
