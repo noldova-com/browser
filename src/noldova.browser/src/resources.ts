@@ -370,6 +370,10 @@ export class Resources {
   public static readonly maximumTitleLength: number = 200;
   public static readonly getDocumentMethod: "DOM.getDocument" = "DOM.getDocument";
   public static readonly getPartialAXTreeMethod: "Accessibility.getPartialAXTree" = "Accessibility.getPartialAXTree";
+  public static readonly accessibilityEnableMethod: "Accessibility.enable" = "Accessibility.enable";
+  public static readonly accessibilityDisableMethod: "Accessibility.disable" = "Accessibility.disable";
+  public static readonly getRootAXNodeMethod: "Accessibility.getRootAXNode" = "Accessibility.getRootAXNode";
+  public static readonly getChildAXNodesMethod: "Accessibility.getChildAXNodes" = "Accessibility.getChildAXNodes";
   public static readonly rootLevelDepth: number = 1;
   public static readonly gapMilliseconds: number = 100;
   public static readonly profileKeyField: string = "profileKey";
@@ -502,6 +506,10 @@ export class Resources {
 
   public static formatChangesNotStopped(viewId: string, error: string): string {
     return `The page changes of view ${viewId} weren't stopped: ${error}`;
+  }
+
+  public static formatAccessibilityNotDisabled(viewId: string, error: string): string {
+    return `The view ${viewId} may keep its accessibility tree on: ${error}`;
   }
 
   public static formatLayoutNotReleased(viewId: string, error: string): string {
