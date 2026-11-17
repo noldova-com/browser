@@ -7,7 +7,11 @@ LICENSE file in the root directory of this source tree.
 -->
 
 @if (tab(); as tab) {
-  <nol-browser-toolbar [controller]="tab.controller" [openLink]="openLink" [noticeId]="noticeId" [shownAddress]="refusedAddress()" (addressEntered)="goTo(tab, $event)" (clearBrowsingData)="clearBrowsingData(tab)" />
+  <nol-browser-toolbar [controller]="tab.controller" [openLink]="openLink" [noticeId]="noticeId" [shownAddress]="refusedAddress()" (addressEntered)="goTo(tab, $event)" (clearBrowsingData)="clearBrowsingData(tab)"
+    (findRequested)="openFind(tab)" />
+  @if (isFinding()) {
+    <nol-browser-find-bar [controller]="tab.controller" (closed)="closeFind()" />
+  }
 }
 @if (activity(); as activity) {
   <nol-browser-agent-bar [activity]="activity" (tookOver)="stopAgent(true)" (stopped)="stopAgent(false)" />

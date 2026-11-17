@@ -8,7 +8,7 @@
 
 import type { Exception, ExceptionOptions } from "@noldova/context.exceptions";
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
-import type { IWebViewHandle, IWindowPart } from "@noldova/desktop.window";
+import type { IWebViewFound, IWebViewHandle, IWindowPart } from "@noldova/desktop.window";
 
 /**
  * Why the pane didn't go to an address the person typed: the pane's or the runtime part's refusal, the protocol's `TypedAddressRefusal`
@@ -325,7 +325,7 @@ export declare class ViewKeyEvent extends ViewEvent {
   public readonly kind: typeof ViewEventKind.Key;
 
   /**
-   * The key's name in `webViews.json`: `reload`, `newPage` or `focusAddress`.
+   * The key's name in `webViews.json`: `reload`, `newPage`, `focusAddress` or `find`.
    */
   public readonly name: string;
 
@@ -1590,6 +1590,70 @@ export declare class PaneController {
    * ```
    */
   public resetZoomAsync(): Promise<number>;
+
+  /**
+   * Searches the view's page for the text, ending any running search, and marks the first match, as the find bar does as the person types.
+   *
+   * @param text The text to find; an empty text only ends the running search.
+   * @returns A promise of the number of matches and the 1-based active one, 0 when none, or of a search the engine timed out or that a navigation, a crash or a newer
+   * search ended, with no matches.
+   * @throws {@link PaneUnavailableException} As the rejection, when the pane has no view, the host closed its view, or the controller closed.
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * async function countAsync(controller: PaneController, text: string): Promise<number> {
+   *   return (await controller.findAsync(text)).matches;
+   * }
+   * ```
+   */
+  public findAsync(text: string): Promise<IWebViewFound>;
+
+  /**
+   * Moves the running search to its next match, wrapping at the end, as Enter in the find bar does.
+   *
+   * @returns A promise of the number of matches and the 1-based active one; without a running search, of no matches.
+   * @throws {@link PaneUnavailableException} As the rejection, when the pane has no view, the host closed its view, or the controller closed.
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * async function nextAsync(controller: PaneController): Promise<number> {
+   *   return (await controller.findNextAsync()).active;
+   * }
+   * ```
+   */
+  public findNextAsync(): Promise<IWebViewFound>;
+
+  /**
+   * Moves the running search to its previous match, wrapping at the start, as Shift+Enter in the find bar does.
+   *
+   * @returns A promise of the number of matches and the 1-based active one; without a running search, of no matches.
+   * @throws {@link PaneUnavailableException} As the rejection, when the pane has no view, the host closed its view, or the controller closed.
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * async function previousAsync(controller: PaneController): Promise<number> {
+   *   return (await controller.findPreviousAsync()).active;
+   * }
+   * ```
+   */
+  public findPreviousAsync(): Promise<IWebViewFound>;
+
+  /**
+   * Ends the running search and clears its highlights, as closing the find bar does; nothing happens without a view, or once the controller closed.
+   *
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * function closeFind(controller: PaneController): void {
+   *   controller.endFind();
+   * }
+   * ```
+   */
+  public endFind(): void;
 
   /**
    * Drops the status's refused request, once the person dismissed its notice; listeners hear of the change.

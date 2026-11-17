@@ -9,7 +9,7 @@
 import { ApplicationRef, type ComponentRef, EnvironmentInjector, type Type, createComponent } from "@angular/core";
 import { TestBed } from "@angular/core/testing";
 import { QualifiedName, WebViewEvent, WebViewEventKind, WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
-import type { IWebViewHandle, IWebViewLayer } from "@noldova/desktop.window";
+import type { IWebViewFound, IWebViewHandle, IWebViewLayer } from "@noldova/desktop.window";
 import { FakeWindowWebViews } from "@noldova/desktop.window/testing";
 
 import { ViewEventKind } from "../../src/app/enums/view-event-kind.ts";
@@ -82,10 +82,7 @@ export class FakeWebView implements IWebViewHandle {
   public host: HTMLElement | null = null;
   public isShown: boolean = false;
   public isClosed: boolean = false;
-  public readonly findAsync: IWebViewHandle["findAsync"] = FakeWebView.unused;
-  public readonly findNextAsync: IWebViewHandle["findNextAsync"] = FakeWebView.unused;
-  public readonly findPreviousAsync: IWebViewHandle["findPreviousAsync"] = FakeWebView.unused;
-  public readonly endFind: IWebViewHandle["endFind"] = FakeWebView.unused;
+  public findAnswer: (call: string) => Promise<IWebViewFound> = () => Promise.resolve(FakeWebView.found(0, 0));
   public layerFailure: Error | null = null;
   public layersOpened: number = 0;
   public layerElement: HTMLElement | null = null;
@@ -117,6 +114,30 @@ export class FakeWebView implements IWebViewHandle {
   public async zoomOutAsync(): Promise<number> {
     this.record("zoomOut");
     return this.takeZoom(FakeWebView.ZOOM_STEPS.findLast(t => t < this.factor) ?? this.factor);
+  }
+
+  public static found(active: number, matches: number, isTimedOut: boolean = false, isEnded: boolean = false): IWebViewFound {
+    return { matches, active, isTimedOut, isEnded };
+  }
+
+  public async findAsync(text: string): Promise<IWebViewFound> {
+    const call: string = `find ${text}`;
+    this.record(call);
+    return this.findAnswer(call);
+  }
+
+  public async findNextAsync(): Promise<IWebViewFound> {
+    this.record("findNext");
+    return this.findAnswer("findNext");
+  }
+
+  public async findPreviousAsync(): Promise<IWebViewFound> {
+    this.record("findPrevious");
+    return this.findAnswer("findPrevious");
+  }
+
+  public endFind(): void {
+    this.record("endFind");
   }
 
   public failNextCall(error: Error): void {
@@ -273,10 +294,6 @@ export class FakeWebView implements IWebViewHandle {
     this.calls.push("close");
     this.closeLayer?.();
     this.end();
-  }
-
-  private static unused(): never {
-    throw new Error("The browser's window part doesn't use this member of its web view.");
   }
 
   private static createElement(): HTMLElement {

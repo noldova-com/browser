@@ -1,0 +1,23 @@
+<!--
+@license
+Copyright (c) Noldova.
+
+This source code is licensed under the license found in the
+LICENSE file in the root directory of this source tree.
+-->
+
+<nol-text-field-box class="nol-browser-find-field" [icon]="resources.findFieldGlyph">
+  <input #field nol-text-field type="text" spellcheck="false" autocomplete="off" [attr.aria-label]="resources.findField"
+    [attr.aria-describedby]="countText() === null ? null : countId" (input)="edit()">
+</nol-text-field-box>
+@if (countText(); as count) {
+  <span class="nol-browser-find-count" [id]="countId">{{ count }}</span>
+}
+<div class="nol-browser-find-buttons">
+  <button nol-toolbar-button type="button" [label]="resources.previousMatch" [icon]="resources.previousMatchGlyph" [isUnavailable]="!hasMatches()"
+    [nolTooltip]="resources.previousMatch" [nolTooltipSide]="below" (click)="goPrevious()"></button>
+  <button nol-toolbar-button type="button" [label]="resources.nextMatch" [icon]="resources.nextMatchGlyph" [isUnavailable]="!hasMatches()"
+    [nolTooltip]="resources.nextMatch" [nolTooltipSide]="below" (click)="goNext()"></button>
+  <button nol-toolbar-button type="button" [label]="resources.closeFind" [icon]="resources.closeFindGlyph" [nolTooltip]="resources.closeFind" [nolTooltipSide]="below"
+    (click)="close()"></button>
+</div>

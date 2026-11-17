@@ -1,0 +1,45 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+:host {
+  --nol-browser-find-height: 2.5rem;
+  --nol-browser-find-width: 20rem;
+  --nol-browser-find-button-gap: max(0.125rem, calc(24.5px - 1.5rem));
+
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--nol-space-1);
+  box-sizing: border-box;
+  height: var(--nol-browser-find-height);
+  padding: 0 var(--nol-field-padding);
+}
+
+.nol-browser-find-field {
+  --nol-text-field-width: var(--nol-browser-find-width);
+
+  flex: 0 1 auto;
+}
+
+.nol-browser-find-count {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nol-text-muted);
+  font-size: var(--nol-text-panel);
+  line-height: var(--nol-line-panel);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nol-browser-find-buttons {
+  display: flex;
+  flex: none;
+  gap: var(--nol-browser-find-button-gap);
+}

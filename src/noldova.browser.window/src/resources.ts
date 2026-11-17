@@ -115,6 +115,24 @@ export class Resources {
   public static readonly leastZoom: number = 0.25;
   public static readonly greatestZoom: number = 5;
   public static readonly zoomGroup: string = "-zoom";
+  public static readonly findOnPage: string = "Find on page";
+  public static readonly findGlyph: string = "find_in_page";
+  public static readonly findFieldGlyph: string = "search";
+  public static readonly findKeys: { readonly other: string; readonly mac: string } = { other: "Ctrl+F", mac: "⌘F" };
+  public static readonly findBarLabel: string = "Find on page";
+  public static readonly findField: string = "Find";
+  public static readonly previousMatch: string = "Previous match";
+  public static readonly previousMatchGlyph: string = "keyboard_arrow_up";
+  public static readonly nextMatch: string = "Next match";
+  public static readonly nextMatchGlyph: string = "keyboard_arrow_down";
+  public static readonly closeFind: string = "Close find";
+  public static readonly closeFindGlyph: string = "close";
+  public static readonly noMatches: string = "No matches";
+  public static readonly findTimedOut: string = "The search took too long";
+  public static readonly findEnded: string = "The search stopped";
+  public static readonly findBarId: string = "nol-browser-find-";
+  public static readonly findGroup: string = "-find";
+  public static readonly findCountId: string = "-count";
   public static readonly loading: string = "Loading the page";
   public static readonly loadStarted: string = "Loading the page.";
   public static readonly loadStopped: string = "Stopped loading the page.";
@@ -124,10 +142,12 @@ export class Resources {
   public static readonly reloadKey: string = "reload";
   public static readonly newPageKey: string = "newPage";
   public static readonly focusAddressKey: string = "focusAddress";
+  public static readonly findKey: string = "find";
   public static readonly reloadChord: string = "Mod+R";
   public static readonly reloadFunctionKey: string = "F5";
   public static readonly newPageChord: string = "Mod+T";
   public static readonly focusAddressChord: string = "Mod+L";
+  public static readonly findChord: string = "Mod+F";
   public static readonly enterKey: string = "Enter";
   public static readonly escapeKey: string = "Escape";
   public static readonly macPlatformPrefix: string = "Mac";
@@ -301,6 +321,10 @@ export class Resources {
 
   public static formatZoomed(factor: number): string {
     return `Zoom ${Resources.formatZoom(factor)}.`;
+  }
+
+  public static formatMatches(active: number, matches: number): string {
+    return matches === 0 ? Resources.noMatches : `${String(active)} of ${String(matches)}`;
   }
 
   public static formatLinkRefused(reason: TypedAddressRefusal): string {
