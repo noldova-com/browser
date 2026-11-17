@@ -72,7 +72,7 @@ test.describe("schemes", () => {
       }
     });
 
-  test("ends a top-level about:srcdoc in the engine's error page, loading nothing", async ({ app, servers }) => {
+  test("refuses a top-level about:srcdoc, loading nothing", async ({ app, servers }) => {
     const allowed = await servers.startAsync("allowed.localhost", { "/": ALLOWED_PAGE, "/again": ALLOWED_PAGE });
     await app.allowLocalSitesAsync([allowed.origin]);
     await app.openPageAsync(allowed.url("/"));
@@ -84,7 +84,7 @@ test.describe("schemes", () => {
 
       await app.viewPages.runAsync(start.script(JSON.stringify(SRCDOC)));
 
-      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as a failed load.`).toHaveText(`Can't reach ${SRCDOC}`);
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as refused.`).toHaveText(`Browser doesn't open ${SRCDOC}`);
       await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
         .toEqual([[SRCDOC, false]]);
       expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
@@ -92,7 +92,7 @@ test.describe("schemes", () => {
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
       await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, `The allowed page didn't load again after ${SRCDOC} from ${start.name}.`);
-      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept the failed load after the allowed page loaded again, after ${SRCDOC} from ${start.name}.`).toHaveCount(0);
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept the refusal after the allowed page loaded again, after ${SRCDOC} from ${start.name}.`).toHaveCount(0);
     }
   });
 

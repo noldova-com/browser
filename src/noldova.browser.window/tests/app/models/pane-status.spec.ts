@@ -119,6 +119,16 @@ describe("PaneStatus", () => {
     expect(byAnswer.refuse("https://other.example").refusedOrigin).toBe("https://other.example");
   });
 
+  it("names the refused address in place of an opaque origin, and a refused origin otherwise, by an event or a refusal", () => {
+    const opaque: PaneStatus[] = [loaded.apply(new ViewRefusalEvent("about:srcdoc", "null", false)), loaded.refuse("null", true, "about:srcdoc")];
+    const named: PaneStatus[] = [loaded.apply(new ViewRefusalEvent("https://refused.example/a", "https://refused.example", false)),
+      loaded.refuse("https://refused.example", true, "https://refused.example/a")];
+
+    expect([...opaque, ...named, loaded.refuse("null")].map(t => [t.state, t.refusedOrigin])).toEqual([[PaneState.Refused, "about:srcdoc"],
+      [PaneState.Refused, "about:srcdoc"], [PaneState.Refused, "https://refused.example"], [PaneState.Refused, "https://refused.example"], [PaneState.Refused, "null"]]);
+    expect(opaque[1].refuse("null", true, "about:srcdoc")).toBe(opaque[1]);
+  });
+
   it("keeps a page's own refused navigation shown through its load and stop when the refusal comes first", () => {
     const refused: PaneStatus = loaded.apply(new ViewRefusalEvent("https://refused.example/a", "https://refused.example", false));
     const loading: PaneStatus = refused.apply(state("https://one.example/", "One", true, true, false));
