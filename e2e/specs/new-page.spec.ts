@@ -108,11 +108,12 @@ test.describe("new page", () => {
     await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
 
     await app.window.locator(SETTINGS_BUTTON).focus();
+    await expect(app.window.locator(SETTINGS_BUTTON)).toBeFocused();
     await app.window.evaluate(() => {
       globalThis.addEventListener("keydown", event => {
         if (event.code === "KeyT")
           document.body.setAttribute("data-new-page-key", event.defaultPrevented ? "taken" : "passed");
-      }, { once: true });
+      });
     });
     await app.window.keyboard.press(NEW_PAGE_KEY);
     await expect(app.window.locator("body")).toHaveAttribute("data-new-page-key", "passed");
