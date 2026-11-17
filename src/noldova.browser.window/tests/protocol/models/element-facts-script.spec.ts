@@ -9,6 +9,9 @@
 import { ElementFactsScript } from "@noldova/browser.protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+// The test harness sets its own attributes on the root element.
+const HARNESS_ATTRIBUTES: unknown = expect.any(Array);
+
 describe("ElementFactsScript", () => {
   let read: (element: Node) => unknown;
   let formOf: (element: Node, isForm?: unknown) => unknown;
@@ -37,7 +40,7 @@ describe("ElementFactsScript", () => {
     if (button === null)
       throw new Error("The button is missing.");
 
-    expect(read(button)).toMatchObject({ path: [["#document", []], ["HTML", []], ["BODY", []], ["DIV", []], ["FORM", ["id", "checkout", "class", "Wide"]], ["BUTTON", ["type", "submit"]]] });
+    expect(read(button)).toMatchObject({ path: [["#document", []], ["HTML", HARNESS_ATTRIBUTES], ["BODY", []], ["DIV", []], ["FORM", ["id", "checkout", "class", "Wide"]], ["BUTTON", ["type", "submit"]]] });
   });
 
   it("goes up through open and closed shadow roots to their hosts", () => {
@@ -52,7 +55,7 @@ describe("ElementFactsScript", () => {
     if (link === null)
       throw new Error("The link is missing.");
 
-    expect(read(link)).toMatchObject({ path: [["#document", []], ["HTML", []], ["BODY", []], ["DIV", []], ["SECTION", []], ["#document-fragment", []], ["SPAN", []], ["#document-fragment", []],
+    expect(read(link)).toMatchObject({ path: [["#document", []], ["HTML", HARNESS_ATTRIBUTES], ["BODY", []], ["DIV", []], ["SECTION", []], ["#document-fragment", []], ["SPAN", []], ["#document-fragment", []],
       ["A", ["href", "/plans"]]] });
   });
 
