@@ -123,6 +123,12 @@ Its look follows the app's design, whose rules this section writes out.
   The pane's own keys are declared in `webViews.json`'s `keys`, and Noldova Desktop sends the window part a `Key` event for each one pressed in the page: `reload` on Ctrl+R and F5, Cmd+R on macOS, `newPage` on Ctrl+T and `focusAddress` on Ctrl+L, Cmd on macOS.
   The page document takes the same keys pressed in its own elements, such as the toolbar, ahead of the app's commands, as a field keeps its own keys, and there Escape stops a loading page, except in the address field, where it puts back the page's address.
   Reload reloads the page as the toolbar's Reload does, a new page opens empty on the same workspace at the end of the row, its address field focused, and the address field takes the focus with its whole address selected.
+  Ctrl+T, or Cmd+T on macOS, is also the default key of the window part's command `browser.newPage`, so it is one of the app's shortcuts, which a person may rebind; in the page it goes first, ahead of the declared `newPage`, and Noldova Desktop runs the command with no arguments, as for a press in the window.
+  With no arguments the command opens a new page beside the page whose document holds the focus, in its toolbar or its view, which the window part reads from the page element under the window's focused element, by its `data-instance`; anywhere else it is disabled.
+  In the window's own elements, such as a terminal, a disabled command leaves the press to the part that has the focus; in another module's web view, Noldova Desktop takes the press before the page sees it and doesn't hand a disabled command's press back, so neither part gets it until [desktop#177](https://github.com/noldova-com/desktop/issues/177) is fixed, and a person who needs Ctrl+T in that module's pages can rebind `browser.newPage`.
+- **New page:** the page document declares its tab row's menu place, `browser.pageTabRow` in `menus.json`, so the tab row of each group that holds a page shows `browser.newPage` as Noldova Desktop's icon button before the group's own buttons, at their size and with no gap, with the `add` glyph and the tooltip "New page (Ctrl+T)", or "New page (⌘T)" on macOS, from its key.
+  Noldova Desktop gives the row's command the group, and, while the group's active tab is a page, its document and instance; the command opens an empty page on that page's workspace at the end of the group, which a click in its tab row has made the active one, with its address field focused, as Ctrl+T does.
+  While the group's active tab is another module's document, or a page with no view, such as one that can't open again, the button shows but is disabled.
   The page keeps Escape, which Noldova Desktop never takes from it, so Escape stops a load only from the toolbar.
   In the page, the app's shortcuts go first, so an app that binds one of these keys, such as Ctrl+L to focus its own text field, keeps it there until Noldova Desktop lets a pane's declared key win in its own view.
 - **Zoom:** the person zooms a page by Noldova Desktop's keys and wheel: Ctrl, or Cmd on macOS, with `=`, `-` or `0`, and the wheel, each page keeping its zoom across its navigations; Browser declares none of these keys.
@@ -197,7 +203,7 @@ Its look follows the app's design, whose rules this section writes out.
   Allow goes to the address as the person's own, as typing it does, so the runtime part keeps its origin for the workspace before the page loads; Not now gives the page back as it was; either moves the focus to the toolbar, and the page's next load also takes the state away.
 
 **Not yet:**
-- The page's favicon on its tab waits for a Noldova Desktop release with the web view's `Favicon` event, which 0.0.2 doesn't have; the tab row's new-page button comes next.
+- The page's favicon on its tab waits for a Noldova Desktop release with the web view's `Favicon` event, which 0.0.2 doesn't have.
 - The menu's Find on page, which the design shows, isn't built yet; Noldova Desktop's find calls are there for it.
 - Stop and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
   Until then the bar offers neither while the call's permission card asks, since Noldova Desktop withdraws a card only when the call itself is aborted.

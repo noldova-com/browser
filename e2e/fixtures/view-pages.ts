@@ -40,6 +40,7 @@ interface IViewPageContents {
   isLoading(): boolean;
   readonly navigationHistory: { canGoBack(): boolean };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
+  sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
 }
@@ -258,6 +259,17 @@ export class ViewPages {
         throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
       return String(await view.executeJavaScript(request.code, true));
     }, { url, code: script });
+  }
+
+  public async pressAtAsync(url: string, keyCode: string, modifiers: readonly string[]): Promise<void> {
+    await this.application.evaluate(({ webContents }, request: { url: string; keyCode: string; modifiers: readonly string[] }): void => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === request.url);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
+      for (const type of ["keyDown", "keyUp"] as const)
+        view.sendInputEvent({ type, keyCode: request.keyCode, modifiers: [...request.modifiers] });
+    }, { url, keyCode, modifiers });
   }
 
   public async runAsync(script: string): Promise<string> {

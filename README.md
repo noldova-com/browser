@@ -24,7 +24,7 @@ npm install --save-exact @noldova/browser
 
 | Package | What it is |
 |---|---|
-| `@noldova/browser` | The module: its `module.json`, `settings.json` and `webViews.json`, and its runtime part, which runs the agent tools. |
+| `@noldova/browser` | The module: its `module.json`, `settings.json`, `menus.json` and `webViews.json`, and its runtime part, which runs the agent tools. |
 | `@noldova/browser.window` | The window part: the browser pane and its page documents, in Angular. |
 | `@noldova/browser.protocol` | The names and messages the runtime and window parts share. |
 

@@ -1,0 +1,19 @@
+{
+  "places": [
+    {
+      "name": "browser.pageTabRow",
+      "title": "Page tab row"
+    }
+  ],
+  "groups": [
+    {
+      "name": "browser.pageTabRowNew",
+      "place": "browser.pageTabRow",
+      "items": [
+        {
+          "command": "browser.newPage"
+        }
+      ]
+    }
+  ]
+}
