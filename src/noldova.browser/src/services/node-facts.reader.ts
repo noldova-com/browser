@@ -7,8 +7,9 @@
  */
 
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
+import { ElementFacts } from "../models/element-facts.ts";
 import { NodeFacts } from "../models/node-facts.ts";
-import { NodePath } from "../models/node-path.ts";
+import { PageFacts } from "../models/page-facts.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
@@ -18,66 +19,61 @@ export class NodeFactsReader {
     return NodeFactsReader.readFacts(NodeFactsReader.readObject(reply[Resources.nodeField]));
   }
 
-  public static readAncestors(reply: JsonObject, backendNodeId: number): readonly NodeFacts[] | null {
-    const pending: [JsonObject, readonly NodeFacts[]][] = [[NodeFactsReader.readObject(reply[Resources.rootField]), []]];
-    for (let visit: [JsonObject, readonly NodeFacts[]] | undefined = pending.pop(); visit !== undefined; visit = pending.pop()) {
-      const [node, ancestors]: [JsonObject, readonly NodeFacts[]] = visit;
-      if (node[Resources.backendNodeIdField] === backendNodeId)
-        return ancestors;
+  // The path the pinned function gives, from the document to the element, or none outside the main frame's document.
+  public static readPath(reply: JsonObject): readonly NodeFacts[] | null {
+    const path: JsonValue | undefined = NodeFactsReader.readFunctionFacts(reply)[Resources.pathField];
+    return path === null ? null : NodeFactsReader.readPairs(path);
+  }
 
-      const path: readonly NodeFacts[] = [...ancestors, NodeFactsReader.readFacts(node)];
-      for (const child of NodeFactsReader.readChildren(node))
-        pending.push([child, path]);
+  // The pinned function's facts with the form's subtree, when it was read: the path, the form's elements, its own and those that name it,
+  // the form's name, and the page's title and base URL.
+  public static readElement(reply: JsonObject, form: readonly NodeFacts[] | null): ElementFacts {
+    const facts: JsonObject = NodeFactsReader.readFunctionFacts(reply);
+    const linked: readonly NodeFacts[] = NodeFactsReader.readPairs(facts[Resources.linkedField]);
+    const formName: JsonValue | undefined = facts[Resources.formNameField];
+    const title: JsonValue | undefined = facts[Resources.titleField];
+    const baseUrl: JsonValue | undefined = facts[Resources.baseUrlField];
+    if (typeof formName !== "string" || typeof title !== "string" || typeof baseUrl !== "string")
+      throw new MalformedReplyException();
+    return new ElementFacts(NodeFactsReader.readPath(reply), form === null ? [] : [...form, ...linked], formName, new PageFacts(baseUrl, title));
+  }
+
+  // Every node of a described subtree, the described node first, through shadow roots.
+  public static readSubtree(reply: JsonObject): readonly NodeFacts[] {
+    const all: NodeFacts[] = [];
+    const pending: JsonObject[] = [NodeFactsReader.readObject(reply[Resources.nodeField])];
+    for (let node: JsonObject | undefined = pending.pop(); node !== undefined; node = pending.pop()) {
+      all.push(NodeFactsReader.readFacts(node));
+      pending.push(...[...NodeFactsReader.readChildren(node)].reverse());
     }
-    return null;
-  }
-
-  public static readFormNodes(reply: JsonObject, backendNodeId: number): readonly NodeFacts[] {
-    const root: JsonObject = NodeFactsReader.readObject(reply[Resources.rootField]);
-    const form: JsonObject | null = NodeFactsReader.findForm(root, backendNodeId);
-    if (form === null)
-      return [];
-    const id: string | undefined = NodeFactsReader.readFacts(form).attributes.get(Resources.idAttribute);
-    const linked: readonly JsonObject[] = id === undefined ? [] : NodeFactsReader.readAll(root)
-      .filter(t => NodeFactsReader.readFacts(t).attributes.get(Resources.formAttribute) === id);
-    return [...NodeFactsReader.readAll(form), ...linked].map(t => NodeFactsReader.readFacts(t));
-  }
-
-  public static readFormName(reply: JsonObject, backendNodeId: number): string {
-    const root: JsonObject = NodeFactsReader.readObject(reply[Resources.rootField]);
-    const form: JsonObject | null = NodeFactsReader.findForm(root, backendNodeId);
-    if (form === null)
-      return "";
-    const attributes: ReadonlyMap<string, string> = NodeFactsReader.readFacts(form).attributes;
-    const labels: string = (attributes.get(Resources.ariaLabelledByAttribute) ?? "").split(/\s+/).filter(t => t !== "")
-      .map(id => NodeFactsReader.readAll(root).find(t => NodeFactsReader.readFacts(t).attributes.get(Resources.idAttribute) === id))
-      .map(t => t === undefined ? "" : NodeFactsReader.readText(t))
-      .join(" ");
-    const names: readonly string[] = [labels, attributes.get(Resources.ariaLabelAttribute) ?? "", attributes.get(Resources.titleAttribute) ?? ""]
-      .map(t => NodeFactsReader.collapse(t));
-    return names.find(t => t !== "") ?? "";
-  }
-
-  public static readTitle(reply: JsonObject): string {
-    const title: JsonObject | undefined = NodeFactsReader.readInOrder(NodeFactsReader.readObject(reply[Resources.rootField]))
-      .find(t => t[Resources.nodeNameField] === Resources.titleElement);
-    return title === undefined ? "" : NodeFactsReader.collapse(NodeFactsReader.readText(title));
+    return all;
   }
 
   public static holds(reply: JsonObject, backendNodeId: number): boolean {
     return NodeFactsReader.findNode(NodeFactsReader.readObject(reply[Resources.nodeField]), backendNodeId) !== null;
   }
 
-  public static readBaseUrl(reply: JsonObject): string {
-    const baseUrl: JsonValue | undefined = NodeFactsReader.readObject(reply[Resources.rootField])[Resources.baseURLField];
-    if (typeof baseUrl !== "string")
+  private static readFunctionFacts(reply: JsonObject): JsonObject {
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    return NodeFactsReader.readObject(JsonShapes.isObject(result) ? result[Resources.valueField] : undefined);
+  }
+
+  // Each node as the pinned function gives it, its name and its attributes as name and value in turn, read as the protocol's nodes are.
+  private static readPairs(value: JsonValue | undefined): readonly NodeFacts[] {
+    if (!JsonShapes.isArray(value))
       throw new MalformedReplyException();
-    return baseUrl;
+    return value.map(t => {
+      if (!JsonShapes.isArray(t) || t.length !== 2)
+        throw new MalformedReplyException();
+      return NodeFactsReader.readNamed(t[0], t[1]);
+    });
   }
 
   private static readFacts(node: JsonObject): NodeFacts {
-    const nodeName: JsonValue | undefined = node[Resources.nodeNameField];
-    const pairs: JsonValue = node[Resources.attributesField] ?? [];
+    return NodeFactsReader.readNamed(node[Resources.nodeNameField], node[Resources.attributesField] ?? []);
+  }
+
+  private static readNamed(nodeName: JsonValue | undefined, pairs: JsonValue | undefined): NodeFacts {
     if (typeof nodeName !== "string" || !JsonShapes.isArray(pairs) || pairs.length % 2 !== 0)
       throw new MalformedReplyException();
 
@@ -92,64 +88,12 @@ export class NodeFactsReader {
     return new NodeFacts(nodeName.toUpperCase(), attributes);
   }
 
-  private static findForm(root: JsonObject, backendNodeId: number): JsonObject | null {
-    const found: NodePath | null = NodeFactsReader.findPath(root, backendNodeId);
-    if (found === null)
-      return null;
-    const { node, ancestors }: NodePath = found;
-    const named: string | undefined = NodeFactsReader.readFacts(node).attributes.get(Resources.formAttribute);
-    return (named === undefined
-      ? ancestors.findLast(t => NodeFactsReader.isForm(t, null))
-      : NodeFactsReader.readAll(root).find(t => NodeFactsReader.isForm(t, named))) ?? null;
-  }
 
-  private static readText(node: JsonObject): string {
-    return NodeFactsReader.readInOrder(node).flatMap(t => {
-      const value: JsonValue | undefined = t[Resources.nodeValueField];
-      return t[Resources.nodeNameField] === Resources.textNodeName && typeof value === "string" ? [value] : [];
-    }).join("");
-  }
 
-  private static readInOrder(root: JsonObject): readonly JsonObject[] {
-    const all: JsonObject[] = [];
-    const pending: JsonObject[] = [root];
-    for (let node: JsonObject | undefined = pending.pop(); node !== undefined; node = pending.pop()) {
-      all.push(node);
-      pending.push(...[...NodeFactsReader.readNodes(node[Resources.childrenField])].reverse());
-    }
-    return all;
-  }
 
-  private static collapse(text: string): string {
-    return text.replace(/\s+/g, " ").trim();
-  }
 
-  private static findPath(root: JsonObject, backendNodeId: number): NodePath | null {
-    const pending: NodePath[] = [new NodePath(root, [])];
-    for (let visit: NodePath | undefined = pending.pop(); visit !== undefined; visit = pending.pop()) {
-      const { node, ancestors }: NodePath = visit;
-      if (node[Resources.backendNodeIdField] === backendNodeId)
-        return visit;
-      for (const child of NodeFactsReader.readChildren(node))
-        pending.push(new NodePath(child, [...ancestors, node]));
-    }
-    return null;
-  }
 
-  private static readAll(root: JsonObject): readonly JsonObject[] {
-    const all: JsonObject[] = [];
-    const pending: JsonObject[] = [root];
-    for (let node: JsonObject | undefined = pending.pop(); node !== undefined; node = pending.pop()) {
-      all.push(node);
-      pending.push(...NodeFactsReader.readChildren(node));
-    }
-    return all;
-  }
 
-  private static isForm(node: JsonObject, id: string | null): boolean {
-    const facts: NodeFacts = NodeFactsReader.readFacts(node);
-    return facts.nodeName === Resources.formElement && (id === null || facts.attributes.get(Resources.idAttribute) === id);
-  }
 
   private static findNode(root: JsonObject, backendNodeId: number): JsonObject | null {
     const pending: JsonObject[] = [root];

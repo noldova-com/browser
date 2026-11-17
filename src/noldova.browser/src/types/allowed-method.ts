@@ -22,6 +22,7 @@ export type AllowedMethod =
   | "DOM.getDocument"
   | "DOM.querySelector"
   | "DOM.describeNode"
+  | "DOM.resolveNode"
   | "DOM.scrollIntoViewIfNeeded"
   | "DOM.getContentQuads"
   | "DOM.getNodeForLocation"
@@ -36,4 +37,5 @@ export type AllowedMethod =
   | "Runtime.discardConsoleEntries"
   | "Runtime.addBinding"
   | "Runtime.callFunctionOn"
+  | "Runtime.releaseObject"
   | "Log.enable";

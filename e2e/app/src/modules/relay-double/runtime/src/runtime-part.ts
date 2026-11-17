@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { JsonReader, type JsonValue } from "@noldova/context.json";
+import { type JsonObject, JsonReader, type JsonValue } from "@noldova/context.json";
 import { type IRuntimePart, type IRuntimePartContext, type IRuntimeWebViews, type RequestContext, WebViewFailureException } from "@noldova/desktop.runtime";
 
 import { HeldEvent } from "./held-event.js";
@@ -20,6 +20,7 @@ export class RuntimePart implements IRuntimePart {
   private static readonly OPENING_EVENT: string = "relay-double.opening";
   private static readonly LISTEN_METHOD: string = "relay-double.listen";
   private static readonly ANSWERED: string = "Answered";
+  private static readonly DOCUMENT_ROOT: JsonObject = { depth: 0, pierce: true };
   private static readonly NO_VIEW: string = "The relay double has no web view open; call relay-double.open first.";
 
   private opening: HeldEvent | null = null;
@@ -71,8 +72,13 @@ export class RuntimePart implements IRuntimePart {
   private static async sendAsync(views: IRuntimeWebViews, request: RequestContext): Promise<JsonValue> {
     const payload = JsonReader.fromValue(request.payload);
     const view = payload.hasField("view") ? payload.readString("view") : RuntimePart.ownView(views);
+    const timeout = payload.readNumber("timeout");
     try {
-      await views.relay.sendAsync(view, payload.readString("method"), payload.readObject("params").toJson(), payload.readNumber("timeout"));
+      // A whole-document read goes by the document's node, since webViews.json takes DOM.getDocument as its root alone.
+      const root = payload.hasField("onRoot") && payload.readBoolean("onRoot")
+        ? { backendNodeId: JsonReader.fromValue(await views.relay.sendAsync(view, "DOM.getDocument", RuntimePart.DOCUMENT_ROOT, timeout)).readObject("root").readNumber("backendNodeId") }
+        : {};
+      await views.relay.sendAsync(view, payload.readString("method"), { ...payload.readObject("params").toJson(), ...root }, timeout);
       return RuntimePart.ANSWERED;
     }
     catch (error: unknown) {
