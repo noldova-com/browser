@@ -43,6 +43,7 @@ export class TestApp {
   private static readonly FOLDER_PREFIX: string = "browser-e2e-";
   private static readonly LOGS_FOLDER: string = "logs";
   private static readonly OUTPUT_NAME: string = "main-process-output.txt";
+  private static readonly VIEW_LOG_NAME: string = "views.log";
   private static readonly WINDOW: string = "nol-window";
   private static readonly SETTINGS_BUTTON: string = ".nol-window-row-settings";
 
@@ -51,6 +52,7 @@ export class TestApp {
   private readonly settings: readonly LaunchSetting[];
   private readonly testInfo: TestInfo;
   private readonly output: string[] = [];
+  private readonly viewLog: string[] = [];
   private run: AppRun;
 
   private constructor(run: AppRun, dataDirectory: string, deviceDirectory: string, settings: readonly LaunchSetting[], testInfo: TestInfo) {
@@ -102,6 +104,7 @@ export class TestApp {
   public async restartAsync(): Promise<void> {
     await expect.poll(() => this.viewRequests.inFlightAsync(), { message: "A view's request was still in flight before the restart." }).toEqual([]);
     const carried = await this.viewRequests.takeAsync();
+    this.viewLog.push(...await this.viewPages.takeLogAsync());
     await this.quitAsync();
     this.run = await TestApp.startAsync(this.dataDirectory, this.deviceDirectory, this.settings, carried);
     this.listen(this.run);
@@ -161,6 +164,12 @@ export class TestApp {
         throw new Error("The page has no desktop bridge.");
       return JSON.stringify(await globalThis.desktop.request(request.method, JSON.parse(request.payload)));
     }, { method, payload: JSON.stringify(payload) }));
+  }
+
+  // An app that can't answer any more still leaves what it logged before, and says why the rest is missing.
+  public async attachViewLogAsync(): Promise<void> {
+    const taken = await this.viewPages.takeLogAsync().catch((error: unknown) => [`The app's view log couldn't be read: ${String(error)}`]);
+    await this.testInfo.attach(TestApp.VIEW_LOG_NAME, { body: [...this.viewLog.splice(0), ...taken].join("\n"), contentType: "text/plain" });
   }
 
   public async quitAsync(): Promise<void> {
