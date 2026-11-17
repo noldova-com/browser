@@ -23,8 +23,8 @@ import { SessionPage } from "../../src/models/session-page.ts";
 import { ToolDescriptors } from "../../src/models/tool-descriptors.ts";
 import { ToolKit } from "../../src/models/tool-kit.ts";
 import { Resources } from "../../src/resources.ts";
-import { ShopPage } from "../fixtures/shop-page.fixture.ts";
 import { writtenTo } from "../fixtures/desktop-fakes.fixture.ts";
+import { ShopPage } from "../fixtures/shop-page.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
 describe("ToolKit", () => {

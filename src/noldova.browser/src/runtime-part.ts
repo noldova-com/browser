@@ -139,16 +139,16 @@ export class RuntimePart implements IRuntimePart {
       context.registerMethod(BrowserMethods.readAppName, { handleAsync: () => RuntimePart.answer(() => ProductInfo.current.name) });
       context.onClientClosed(t => holders.close(t));
       this.stopEvents = context.webViews.onViewEvent(t => RuntimePart.follow(t, sessions, kit, origins, context.log));
+      for (const view of context.webViews.list())
+        kit.letGoUnheld(view.id);
     }
     catch (error) {
       RuntimePart.dispose(registrations);
       return Promise.reject(error);
     }
     this.registrations = registrations;
-    for (const view of context.webViews.list()) {
+    for (const view of context.webViews.list())
       RuntimePart.apply(origins, view.id, view.profileKey, context.log);
-      kit.letGoUnheld(view.id);
-    }
     return Promise.resolve();
   }
 
