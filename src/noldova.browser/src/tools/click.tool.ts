@@ -7,7 +7,7 @@
  */
 
 import { PageAction, type PageBox, PagePoint } from "@noldova/browser.protocol";
-import type { IPermissionRequest, IToolDescriptor, ToolCall, ToolResult, ToolRisk } from "@noldova/desktop.runtime";
+import type { IPermissionDetail, IPermissionRequest, IToolDescriptor, ToolCall, ToolResult, ToolRisk } from "@noldova/desktop.runtime";
 
 import { MouseButton } from "../enums/mouse-button.ts";
 import { ElementCoveredException } from "../exceptions/element-covered.exception.ts";
@@ -28,11 +28,11 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { ContentQuads } from "../services/content-quads.ts";
-import { ElementDetails } from "../services/element-details.ts";
 import { HiddenPageLayout } from "../services/hidden-page-layout.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { NodeFactsReader } from "../services/node-facts.reader.ts";
+import { PermissionCards } from "../services/permission-cards.ts";
 import { RiskClassifier } from "../services/risk-classifier.ts";
 import { ViewCalls } from "../services/view-calls.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
@@ -61,11 +61,13 @@ export class ClickTool implements IBrowserTool {
       const facts: ElementFacts = await this.kit.readElementAsync(page.viewId, element.backendNodeId, options);
       const shown: ShownElement = await this.kit.readShownElementAsync(page.viewId, element.backendNodeId, facts, options);
       const risk: ToolRisk = RiskClassifier.classifyClick(facts.path, facts.form);
-      const tag: string = facts.path?.at(-1)?.nodeName ?? "";
       const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options);
       if (box !== null)
         activity.aim(box, null);
-      const request: IPermissionRequest = ToolKit.request(Resources.clickAction, Resources.formatClickTitle(tag), frame.origin, ElementDetails.describe(facts), risk,
+      const details: IPermissionDetail[] = [PermissionCards.page(frame.url, facts.page.title), ...PermissionCards.element(facts, shown)];
+      if (RiskClassifier.submitsClick(facts.path))
+        details.push(...PermissionCards.sends(facts));
+      const request: IPermissionRequest = ToolKit.request(Resources.clickAction, PermissionCards.clickTitle(facts, shown, frame.origin), frame.origin, details, risk,
         ToolKit.actingOptions(risk));
       await this.kit.followAsync(activity, element, request, options, () => this.kit.askAsync(activity, call, request, progress));
       await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);

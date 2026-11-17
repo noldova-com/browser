@@ -144,7 +144,7 @@ These tests prove, for example, that:
 - an input over its limit fails before any relay call;
 - no tool argument, page content or agent output changes the allowed origins;
 - page content comes back in its own content item, after the fixed item that names its origin, with the origin and the untrusted flag as structured fields;
-- snapshots and permission requests mask a secret field's value, and no result carries it;
+- snapshots mask a secret field's value, permission requests give only its length, and no result carries it;
 - logs keep no URL path, query or fragment, typed text, page text, console text or image;
 - a reply or an event of the wrong shape ends the call with an error.
 
@@ -156,7 +156,7 @@ The security model's [risk table](SECURITY-MODEL.md#risk-and-permission) owns ea
 The runtime part's unit specs prove the rules:
 - `src/noldova.browser/tests/services/risk-classifier.test.ts` classifies each kind of click, typing and key: a submit control of a form, Enter in a form field and the type tool's submit option are medium, or high when the form holds a secret field; any input into a secret field is high; every other click, typing and key, and one the tool can't classify, is medium;
 - `src/noldova.browser/tests/models/tool-descriptors.test.ts` checks that each tool's default is the lowest level its calls reach and that no classification passes its maximum;
-- the click, type and press-key specs in `src/noldova.browser/tests/tools/` check each request's risk, options and details: a click is judged by the topmost element at its point, and a request for a secret field masks the text;
+- the click, type and press-key specs in `src/noldova.browser/tests/tools/` check each request's risk, options and details: a click is judged by the topmost element at its point, and a request for a secret field gives only the text's length;
 - `src/noldova.browser/tests/tools/browser-tools.test.ts` sends every tool's calls through Noldova Desktop's own permission center, whose checker refuses a request from a read-only tool;
 - `src/noldova.browser/tests/risk-table.test.ts` has one test for each row of the table, titled with the row's action, which sends the row's calls through Noldova Desktop's own permission center and asserts each request's risk, whether it asks, its options and what a kept answer decides later; its last test reads the table from SECURITY-MODEL.md and fails when a row has no test or a test names no row.
   The row for downloads, uploads, new windows, site permissions, authentication and certificate errors checks that the view's calls and the module's tools include none that would do them, since Noldova Desktop refuses them.

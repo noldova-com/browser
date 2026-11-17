@@ -122,6 +122,38 @@ describe("NodeFactsReader", () => {
     expectMalformed(() => NodeFactsReader.readFormNodes({}, 5));
   });
 
+  it("reads a form's name from the elements that label it, in order, then its label, then its title, on one line, and none outside a form", () => {
+    const form: (attributes: readonly string[]) => JsonObject = (attributes: readonly string[]): JsonObject => ({ root: { backendNodeId: 1, nodeName: "#document", children: [
+      { backendNodeId: 2, nodeName: "H2", attributes: ["id", "heading"], children: [{ backendNodeId: 3, nodeName: "#text", nodeValue: "Create your " },
+        { backendNodeId: 4, nodeName: "EM", children: [{ backendNodeId: 5, nodeName: "#text", nodeValue: "Team" }] }, { backendNodeId: 6, nodeName: "#text", nodeValue: "\n account" }] },
+      { backendNodeId: 7, nodeName: "P", attributes: ["id", "note"], children: [{ backendNodeId: 8, nodeName: "#text", nodeValue: "today" }] },
+      { backendNodeId: 9, nodeName: "FORM", attributes: [...attributes], children: [{ backendNodeId: 10, nodeName: "BUTTON" }] }
+    ] } });
+
+    expect([
+      NodeFactsReader.readFormName(form(["aria-labelledby", " heading  note ", "aria-label", "Sign up", "title", "Join"]), 10),
+      NodeFactsReader.readFormName(form(["aria-labelledby", "missing", "aria-label", " Sign\nup ", "title", "Join"]), 10),
+      NodeFactsReader.readFormName(form(["aria-label", " ", "title", "Join"]), 10),
+      NodeFactsReader.readFormName(form([]), 10),
+      NodeFactsReader.readFormName(DOCUMENT, 8),
+      NodeFactsReader.readFormName(DOCUMENT, 99)
+    ]).toEqual(["Create your Team account today", "Sign up", "Join", "", "", ""]);
+    expectMalformed(() => NodeFactsReader.readFormName({}, 5));
+  });
+
+  it("reads the page's title from its first HTML title element on one line, never an SVG title, and none when it has no title", () => {
+    const svg: JsonObject = { backendNodeId: 9, nodeName: "svg", children: [{ backendNodeId: 10, nodeName: "title", children: [{ backendNodeId: 11, nodeName: "#text", nodeValue: "Chart" }] }] };
+    const page: JsonObject = { root: { backendNodeId: 1, nodeName: "#document", children: [{ backendNodeId: 2, nodeName: "HTML", children: [
+      { backendNodeId: 3, nodeName: "HEAD", children: [{ backendNodeId: 4, nodeName: "TITLE", children: [{ backendNodeId: 5, nodeName: "#text", nodeValue: " Plans\n and pricing " }] },
+        { backendNodeId: 6, nodeName: "TITLE", children: [{ backendNodeId: 7, nodeName: "#text", nodeValue: "Second" }] }] },
+      { backendNodeId: 8, nodeName: "BODY", children: [svg] }
+    ] }] } };
+
+    expect([NodeFactsReader.readTitle(page), NodeFactsReader.readTitle({ root: { backendNodeId: 1, nodeName: "#document", children: [svg] } }), NodeFactsReader.readTitle(DOCUMENT)])
+      .toEqual(["Plans and pricing", "", ""]);
+    expectMalformed(() => NodeFactsReader.readTitle({}));
+  });
+
   it("says whether a node is the described node or inside its subtree, through shadow roots, and not when it is outside or missing", () => {
     const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [{ backendNodeId: 5, nodeName: "BUTTON" }] } };
     const host: JsonObject = { node: { backendNodeId: 6, nodeName: "DIV", shadowRoots: [{ backendNodeId: 7, nodeName: "#document-fragment", children: [{ backendNodeId: 8, nodeName: "A" }] }] } };

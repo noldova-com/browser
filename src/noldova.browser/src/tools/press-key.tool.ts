@@ -14,6 +14,7 @@ import { ArgumentNotOneOfException } from "../exceptions/argument-not-one-of.exc
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import { UnknownKeyException } from "../exceptions/unknown-key.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
+import type { AccessibilityNode } from "../models/accessibility-node.ts";
 import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
@@ -22,14 +23,15 @@ import type { FrameFacts } from "../models/frame-facts.ts";
 import type { KeyDefinition } from "../models/key-definition.ts";
 import type { KeyPress } from "../models/key-press.ts";
 import type { SessionPage } from "../models/session-page.ts";
+import { ShownElement } from "../models/shown-element.ts";
 import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
-import { ElementDetails } from "../services/element-details.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { KeyEvents } from "../services/key-events.ts";
+import { PermissionCards } from "../services/permission-cards.ts";
 import { RiskClassifier } from "../services/risk-classifier.ts";
 import { ViewCalls } from "../services/view-calls.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
@@ -53,22 +55,28 @@ export class PressKeyTool implements IBrowserTool {
     return this.kit.actAsync(call, page, PageAction.PressingKey, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      const focused: number | null = await this.readFocusedAsync(page.viewId, options);
+      const node: AccessibilityNode | null = await this.readFocusedAsync(page.viewId, options);
+      const focused: number | null = node?.backendNodeId ?? null;
       const facts: ElementFacts | null = focused === null ? null : await this.kit.readElementAsync(page.viewId, focused, options);
       const risk: ToolRisk = facts === null ? ToolRisk.Medium : RiskClassifier.classifyKey(key, facts.path, facts.form);
+      const chord: string = [...modifiers, key].join(Resources.keyChordSeparator);
       const details: IPermissionDetail[] = [
-        { label: Resources.keyLabel, kind: PermissionDetailKind.Text, value: [...modifiers, key].join(Resources.keyChordSeparator) },
-        ...facts === null ? [] : ElementDetails.describe(facts)
+        PermissionCards.page(frame.url, facts?.page.title ?? ""),
+        { label: Resources.keyLabel, kind: PermissionDetailKind.Text, value: chord }
       ];
+      if (node !== null && facts !== null)
+        details.push(...PermissionCards.element(facts, new ShownElement(node.role, node.name, RiskClassifier.isSecretField(facts.path))));
+      if (facts !== null && RiskClassifier.submitsKey(key, facts.path))
+        details.push(...PermissionCards.sends(facts));
       const canTakeOver: boolean = RiskClassifier.isSecretField(facts?.path ?? null) && !RiskClassifier.isSubmittingKey(key);
-      await this.kit.askAsync(activity, call, ToolKit.request(Resources.pressKeyAction, Resources.pressKeyTitle, frame.origin, details, risk,
+      await this.kit.askAsync(activity, call, ToolKit.request(Resources.pressKeyAction, PermissionCards.keyTitle(facts, key, chord, frame.origin), frame.origin, details, risk,
         ToolKit.actingOptions(risk, canTakeOver)), progress, focused === null ? null : async () => {
         const handing: CallOptions = ToolKit.handingOver(options);
         await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, handing);
         await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: focused }, handing);
       });
       await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
-      if (await this.readFocusedAsync(page.viewId, options) !== focused)
+      if (((await this.readFocusedAsync(page.viewId, options))?.backendNodeId ?? null) !== focused)
         throw new PageChangedAfterGrantException();
       if (focused !== null && facts !== null)
         await this.kit.confirmRiskAsync(page.viewId, focused, facts, risk, now => RiskClassifier.classifyKey(key, now.path, now.form), options);
@@ -91,7 +99,7 @@ export class PressKeyTool implements IBrowserTool {
     return modifiers;
   }
 
-  private async readFocusedAsync(viewId: string, options: CallOptions): Promise<number | null> {
+  private async readFocusedAsync(viewId: string, options: CallOptions): Promise<AccessibilityNode | null> {
     return AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes(
       await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))));
   }

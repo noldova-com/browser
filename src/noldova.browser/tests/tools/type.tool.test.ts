@@ -56,11 +56,11 @@ describe("TypeTool", () => {
     expect(bench.permissions.requests).toEqual([{
       action: "browser.type",
       subject: ShopPage.ORIGIN,
-      title: "Type into a field",
+      title: "Type into the Search field on shop.test",
       details: [
-        { label: "Element", kind: PermissionDetailKind.Text, value: "<input>" },
-        { label: "Text", kind: PermissionDetailKind.AgentText, value: "red shoes" },
-        { label: "Origin", kind: PermissionDetailKind.Text, value: ShopPage.ORIGIN }
+        { label: "Page", kind: PermissionDetailKind.Text, value: "https://shop.test/cart/, \"Cart\"" },
+        { label: "Field", kind: PermissionDetailKind.Text, value: "\"Search\", searchbox" },
+        { label: "Text", kind: PermissionDetailKind.AgentText, value: "red shoes" }
       ],
       risk: ToolRisk.Medium,
       isAsking: true,
@@ -82,17 +82,19 @@ describe("TypeTool", () => {
     expect(JSON.stringify(result.toJson())).not.toContain("4321");
   });
 
-  it("asks as high risk for a secret field, masks the text in the request, and offers to allow it once, type it themself or deny it", async () => {
+  it("asks as high risk for a secret field, says only how long the text is, and offers to allow it once, type it themself or deny it", async () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.PASSWORD), text: "4321" }));
 
     expect(bench.permissions.requests[0]).toMatchObject({
       action: "browser.typeSecret",
+      title: "Type into the PIN field on shop.test",
       risk: ToolRisk.High,
       isAsking: true,
       options: [PermissionOption.AllowOnce, PermissionOption.TakeOver, PermissionOption.Deny],
       labels: { [PermissionOption.TakeOver]: "I'll type it myself" },
-      details: [{ value: "<input>" }, { label: "Text", kind: PermissionDetailKind.Secret, value: "4321" }, { label: "Origin" }]
+      details: [{ label: "Page" }, { label: "Field", value: "\"PIN\", textbox" }, { label: "Text", kind: PermissionDetailKind.Text, value: "4 characters, hidden" }]
     });
+    expect(JSON.stringify(bench.permissions.requests)).not.toContain("4321");
   });
 
   it("offers only allow once or deny for a secret field it also submits, since the person's own typing wouldn't submit the form", async () => {
@@ -203,10 +205,17 @@ describe("TypeTool", () => {
     expect([bench.activities.map(t => t["box"]), sent("Input.insertText")]).toEqual([[null, null, null, null], [{ text: "red shoes" }]]);
   });
 
+  it("names the form its Enter submits, and the fields the form sends", async () => {
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.COUPON), text: "SAVE10", submit: true }));
+
+    expect(bench.permissions.requests[0]).toMatchObject({ title: "Submit a form on shop.test", details: [{ label: "Page" }, { label: "Field", value: "\"Coupon\", textbox" },
+      { label: "Text", value: "SAVE10" }, { label: "Then" }, { label: "Sends", value: "coupon" }] });
+  });
+
   it("submits with Enter after the text when asked, and says so in the request", async () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red", submit: true }));
 
-    expect(bench.permissions.requests[0]?.details[2]).toEqual({ label: "Then", kind: PermissionDetailKind.Text, value: "Press Enter to submit" });
+    expect(bench.permissions.requests[0]?.details.slice(3)).toEqual([{ label: "Then", kind: PermissionDetailKind.Text, value: "Press Enter to submit" }]);
     expect(sent("Input.dispatchKeyEvent").map(t => [t["type"], t["key"]])).toEqual([["keyDown", "Enter"], ["keyUp", "Enter"]]);
   });
 

@@ -8,8 +8,10 @@
 
 export class PageFacts {
   public readonly baseUrl: string;
+  public readonly title: string;
 
-  public constructor(baseUrl: string) {
+  public constructor(baseUrl: string, title: string) {
     this.baseUrl = baseUrl;
+    this.title = title;
   }
 }

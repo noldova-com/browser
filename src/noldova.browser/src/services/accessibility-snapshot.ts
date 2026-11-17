@@ -72,8 +72,8 @@ export class AccessibilitySnapshot {
     return new CutText(lines.join(Resources.lineSeparator), false);
   }
 
-  public static findFocused(tree: AccessibilityTree): number | null {
-    return tree.nodes.findLast(t => t.isFocused && t.backendNodeId !== null)?.backendNodeId ?? null;
+  public static findFocused(tree: AccessibilityTree): AccessibilityNode | null {
+    return tree.nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
   }
 
   private static isMasked(node: AccessibilityNode, secrets: ReadonlySet<number>): boolean {
