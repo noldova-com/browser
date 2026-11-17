@@ -68,13 +68,18 @@ export class PaneStatus {
     return event.applyTo(this);
   }
 
+  // Noldova Desktop starts each new view at about:blank, titled with that address, and the window part may hear that start or not, so
+  // about:blank is no address, and its title no title, whichever comes first.
   public show(state: ViewStateEvent): PaneStatus {
-    if (state.isLoading && this.holdsRefusedLoad && state.address === this.url)
+    const isBlank: boolean = state.address === Resources.blankPage;
+    const address: string = isBlank ? "" : state.address;
+    const title: string = isBlank && state.title === state.address ? "" : state.title;
+    if (state.isLoading && this.holdsRefusedLoad && address === this.url)
       return new PaneStatus(PaneState.Refused, this.url, this.title, state.canGoBack, state.canGoForward, null, this.refusedOrigin, this.refusedRequest, this.refusedTarget, null,
         this.popup);
     if (state.isLoading)
-      return new PaneStatus(PaneState.Loading, state.address, state.title, state.canGoBack, state.canGoForward, null, null, this.loadRequest(), this.loadTarget(), null, null);
-    return new PaneStatus(this.state === PaneState.Loading ? PaneState.Loaded : this.state, state.address, state.title, state.canGoBack, state.canGoForward, this.failureReason,
+      return new PaneStatus(PaneState.Loading, address, title, state.canGoBack, state.canGoForward, null, null, this.loadRequest(), this.loadTarget(), null, null);
+    return new PaneStatus(this.state === PaneState.Loading ? PaneState.Loaded : this.state, address, title, state.canGoBack, state.canGoForward, this.failureReason,
       this.refusedOrigin, this.refusedRequest, this.refusedTarget, this.refusedAddress, this.popup, this.replaced);
   }
 

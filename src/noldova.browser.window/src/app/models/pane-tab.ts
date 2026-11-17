@@ -23,11 +23,9 @@ export class PaneTab {
     this.controller = new PaneController(view);
   }
 
-  // Noldova Desktop starts each new view at about:blank, and the window part may or may not hear that start, so about:blank is no page.
   public get title(): string {
     const status = this.controller.status;
-    const url: string = status.url === Resources.blankPage ? "" : status.url;
-    return status.title !== "" ? status.title : url !== "" ? url : Resources.newTab;
+    return status.title !== "" ? status.title : status.url !== "" ? status.url : Resources.newTab;
   }
 
   public get showsPage(): boolean {
