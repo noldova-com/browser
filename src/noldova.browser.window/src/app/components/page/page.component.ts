@@ -35,6 +35,7 @@ import { RequestNoticeComponent } from "../request-notice/request-notice.compone
   styleUrl: "./page.component.css",
   host: {
     "class": "nol-browser-page",
+    "[attr.data-instance]": "instance()",
     "(keydown)": "pressKey($event)"
   }
 })

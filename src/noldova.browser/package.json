@@ -21,6 +21,7 @@
   "files": [
     "module.json",
     "settings.json",
+    "menus.json",
     "webViews.json",
     "src/**/*.js",
     "src/**/*.d.ts"
