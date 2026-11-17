@@ -1136,8 +1136,11 @@ describe("PageComponent", () => {
     const view: FakeWebView = await placeAsync();
     view.emit(new ViewStateEvent("https://two.example/", "Two", true, true, false));
     await stableAsync();
+    view.findAnswer = () => Promise.resolve(FakeWebView.found(1, 2));
     press(button("Back"), withMod("f", "KeyF"));
     await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+    await userEvent.keyboard("a");
+    await stableAsync();
 
     const closing: KeyboardEvent = press(findField(), { key: "Escape", code: "Escape" });
     await stableAsync();

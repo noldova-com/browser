@@ -26,7 +26,7 @@ import { ForcedColorsFixture } from "../../../fixtures/forced-colors.fixture.ts"
   template: `@if (isShown()) {
       <nol-browser-find-bar [controller]="controller()" (closed)="closed = closed + 1" />
     }
-    <div class="probe" style="width: var(--nol-field-padding); height: var(--nol-field-height); margin-left: var(--nol-space-1);
+    <div class="probe" style="box-sizing: border-box; width: var(--nol-field-padding); height: var(--nol-field-height); margin-left: var(--nol-space-1);
       color: var(--nol-text-muted); border: 1px solid var(--nol-accent)"></div>`
 })
 class HostComponent {
@@ -104,6 +104,7 @@ describe("FindBarComponent", () => {
     fixture.componentInstance.controller.set(new PaneController(view));
     fixture.autoDetectChanges();
     await fixture.whenStable();
+    await showAsync("https://one.example/", true);
     await showAsync("https://one.example/");
   });
 
@@ -203,12 +204,18 @@ describe("FindBarComponent", () => {
 
   it("shows only the latest search's answer when an earlier one answers after it", async () => {
     const answers: Map<string, (found: IWebViewFound) => void> = new Map<string, (found: IWebViewFound) => void>();
-    view.findAnswer = call => new Promise<IWebViewFound>(resolve => answers.set(call, resolve));
+    const searches: Map<string, Promise<IWebViewFound>> = new Map<string, Promise<IWebViewFound>>();
+    view.findAnswer = call => {
+      const search: Promise<IWebViewFound> = new Promise<IWebViewFound>(resolve => answers.set(call, resolve));
+      searches.set(call, search);
+      return search;
+    };
     await typeAsync("ab");
 
     answers.get("find ab")?.(FakeWebView.found(1, 2));
-    await fixture.whenStable();
+    await vi.waitFor(() => expect(count()).toBe("1 of 2"));
     answers.get("find a")?.(FakeWebView.found(1, 7));
+    await searches.get("find a");
     await fixture.whenStable();
 
     expect([count(), said.map(t => t[0])]).toEqual(["1 of 2", ["1 of 2"]]);
@@ -245,15 +252,19 @@ describe("FindBarComponent", () => {
     expect([fixture.componentInstance.closed, view.calls, count()]).toEqual([2, ["find a", "endFind"], null]);
   });
 
-  it("closes on Escape from its buttons too, and leaves Enter on a button to the button", async () => {
+  it("closes on Escape from its buttons too, once the first Escape has hidden the button's tooltip, and leaves Enter on a button to the button", async () => {
     answer(() => FakeWebView.found(1, 3));
     await typeAsync("a");
-    button("Next match").focus();
+    await pressAsync("{Tab}{Tab}");
+    const focused: Element | null = document.activeElement;
 
     await pressAsync("{Enter}");
+    await vi.waitFor(() => expect(document.querySelector("nol-tooltip")?.textContent?.trim()).toBe("Next match"));
+    await pressAsync("{Escape}");
+    const tipped: number = fixture.componentInstance.closed;
     await pressAsync("{Escape}");
 
-    expect([fixture.componentInstance.closed, view.calls]).toEqual([1, ["find a", "findNext", "endFind"]]);
+    expect([focused, tipped, fixture.componentInstance.closed, view.calls]).toEqual([button("Next match"), 0, 1, ["find a", "findNext", "endFind"]]);
   });
 
   it("leaves Enter and Escape with Ctrl, Alt or Cmd, or while composing, to others", async () => {
@@ -279,7 +290,7 @@ describe("FindBarComponent", () => {
     await showAsync("https://one.example/next", true);
 
     fixture.componentInstance.bar()?.focus();
-    await fixture.whenStable();
+    await vi.waitFor(() => expect(count()).toBe("2 of 4"));
 
     expect([searching, view.calls.at(-1), view.calls.length, count(), document.activeElement, field().selectionStart, field().selectionEnd])
       .toEqual([4, "find plan", 5, "2 of 4", field(), 0, 4]);

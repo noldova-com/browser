@@ -107,15 +107,15 @@ export class PaneController {
     return this.hearing.zoomTo(await this.requireView().setZoomAsync(1));
   }
 
-  public findAsync(text: string): Promise<IWebViewFound> {
+  public async findAsync(text: string): Promise<IWebViewFound> {
     return this.requireView().findAsync(text);
   }
 
-  public findNextAsync(): Promise<IWebViewFound> {
+  public async findNextAsync(): Promise<IWebViewFound> {
     return this.requireView().findNextAsync();
   }
 
-  public findPreviousAsync(): Promise<IWebViewFound> {
+  public async findPreviousAsync(): Promise<IWebViewFound> {
     return this.requireView().findPreviousAsync();
   }
 

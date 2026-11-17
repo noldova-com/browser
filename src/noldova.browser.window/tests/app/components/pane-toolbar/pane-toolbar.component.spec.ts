@@ -699,7 +699,7 @@ describe("PaneToolbarComponent", () => {
       if (isForced)
         await ForcedColorsFixture.activateAsync();
       await loadAsync("https://one.example/");
-      const [copy, , zoom] = await openMenuAsync();
+      const [copy, , , zoom] = await openMenuAsync();
       await measuredAsync();
       const part = (row: Element | undefined, selector: string): HTMLElement => {
         const found: HTMLElement | null | undefined = row?.querySelector<HTMLElement>(selector);

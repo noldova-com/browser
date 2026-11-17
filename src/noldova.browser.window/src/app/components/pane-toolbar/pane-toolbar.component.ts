@@ -226,6 +226,10 @@ export class PaneToolbarComponent {
       this.reloadPage();
   }
 
+  protected requestFind(): void {
+    afterNextRender(() => this.findRequested.emit(), { injector: this.injector });
+  }
+
   protected copyAddress(): void {
     this.run(this.clipboard.writeTextAsync(this.status().url)
       .then(isCopied => this.announcer.announce(isCopied ? Resources.addressCopied : Resources.addressNotCopied, AnnouncementPoliteness.Polite)));
