@@ -22,6 +22,7 @@ export type AllowedMethod =
   | "DOM.getDocument"
   | "DOM.querySelector"
   | "DOM.describeNode"
+  | "DOM.resolveNode"
   | "DOM.scrollIntoViewIfNeeded"
   | "DOM.getContentQuads"
   | "DOM.getNodeForLocation"

@@ -44,7 +44,6 @@ import type { ElementReference } from "./element-reference.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import type { NodeFacts } from "./node-facts.ts";
 import type { PageActivity } from "./page-activity.ts";
-import { PageFacts } from "./page-facts.ts";
 import { PageStops } from "./page-stops.ts";
 import { PaneQueue } from "./pane-queue.ts";
 import type { SessionPage } from "./session-page.ts";
@@ -211,11 +210,7 @@ export class ToolKit {
   }
 
   public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ElementFacts> {
-    const document: JsonObject = await this.calls.sendAsync(viewId, Resources.getDocumentMethod, { depth: Resources.wholeSubtreeDepth, pierce: true }, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
-    const node: NodeFacts = NodeFactsReader.readNode(await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId }, options));
-    const ancestors: readonly NodeFacts[] | null = NodeFactsReader.readAncestors(document, backendNodeId);
-    return new ElementFacts(ancestors === null ? null : [...ancestors, node], NodeFactsReader.readFormNodes(document, backendNodeId),
-      NodeFactsReader.readFormName(document, backendNodeId), new PageFacts(NodeFactsReader.readBaseUrl(document), NodeFactsReader.readTitle(document)));
+    return NodeFactsReader.readElement(await this.changes.readElementAsync(viewId, backendNodeId, options));
   }
 
   public async readTitleOfAsync(viewId: string, documentId: string, options: CallOptions): Promise<string> {

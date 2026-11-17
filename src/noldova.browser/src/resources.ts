@@ -391,6 +391,13 @@ export class Resources {
   public static readonly addBindingMethod: "Runtime.addBinding" = "Runtime.addBinding";
   public static readonly createIsolatedWorldMethod: "Page.createIsolatedWorld" = "Page.createIsolatedWorld";
   public static readonly callFunctionOnMethod: "Runtime.callFunctionOn" = "Runtime.callFunctionOn";
+  public static readonly resolveNodeMethod: "DOM.resolveNode" = "DOM.resolveNode";
+  public static readonly objectField: string = "object";
+  public static readonly objectIdField: string = "objectId";
+  public static readonly pathField: string = "path";
+  public static readonly formField: string = "form";
+  public static readonly formNameField: string = "formName";
+  public static readonly baseUrlField: string = "baseUrl";
   public static readonly executionContextIdField: string = "executionContextId";
   public static readonly resultField: string = "result";
   public static readonly idField: string = "id";

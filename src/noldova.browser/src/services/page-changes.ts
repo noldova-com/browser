@@ -14,7 +14,9 @@ import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageChangesContextMissingException } from "../exceptions/page-changes-context-missing.exception.ts";
 import { PageChangesNotSwitchedException } from "../exceptions/page-changes-not-switched.exception.ts";
+import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
+import { ElementFactsScript } from "../models/element-facts-script.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageTextScript } from "../models/page-text-script.ts";
 import { Resources } from "../resources.ts";
@@ -85,6 +87,24 @@ export class PageChanges {
     if (typeof has !== "boolean")
       throw new MalformedReplyException();
     return has;
+  }
+
+  // The element's facts, as the one pinned function reads them in the page changes' isolated world of the main frame, where the element is
+  // resolved, so the page's own script never sees the call or changes what it reads; the reply holds only those facts, never the whole document.
+  public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<JsonObject> {
+    const { mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    const world: JsonObject = await this.calls.sendAsync(viewId, Resources.createIsolatedWorldMethod, { frameId: mainId, worldName: PageChangeScript.worldName, grantUniveralAccess: false },
+      options);
+    const executionContextId: JsonValue | undefined = world[Resources.executionContextIdField];
+    if (typeof executionContextId !== "number")
+      throw new PageChangesContextMissingException(viewId, mainId);
+    const resolved: JsonObject = await this.calls.sendAsync(viewId, Resources.resolveNodeMethod, { backendNodeId, executionContextId }, options);
+    const element: JsonValue | undefined = resolved[Resources.objectField];
+    const objectId: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.objectIdField] : undefined;
+    if (typeof objectId !== "string")
+      throw new MalformedReplyException();
+    return this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, returnByValue: true, silent: true },
+      options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
   }
 
   private async startAsync(viewId: string, frameId: string, options: CallOptions, contexts: string[]): Promise<void> {
