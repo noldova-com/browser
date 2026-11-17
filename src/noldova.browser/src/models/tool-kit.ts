@@ -131,13 +131,15 @@ export class ToolKit {
   public actAsync<T>(call: ToolCall, page: SessionPage, action: PageAction, work: (activity: PageActivity) => Promise<T>): Promise<T> {
     const generation: number = this.stops.generationOf(page.instance);
     return this.queue.runAsync(page.viewId, async () => {
-      if (this.stops.isTakenOver(page.instance, call.session))
-        throw new TakenOverException();
-      if (this.stops.generationOf(page.instance) !== generation)
-        throw ToolFailures.interrupted(ToolAbortReason.Stopped);
+      this.ensureFree(call, page, generation);
       this.recordAgent(page);
-      if (this.origins.isPassing(page.viewId))
+      if (this.origins.isPassing(page.viewId)) {
         await this.origins.stopPassingAsync(page.viewId, page.profileKey);
+        // The person may stop or take the page, or the session end, while its typed redirects stop passing.
+        this.ensureFree(call, page, generation);
+        if (call.signal.aborted)
+          throw ToolFailures.fromAbort(call.signal.reason);
+      }
       const activity: PageActivity = this.stops.begin(page, call.session, action, call.signal);
       try {
         return await work(activity);
@@ -226,5 +228,12 @@ export class ToolKit {
   public async doneAsync(viewId: string, message: string, element: ShownElement | null, options: CallOptions): Promise<ToolResult> {
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
     return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element);
+  }
+
+  private ensureFree(call: ToolCall, page: SessionPage, generation: number): void {
+    if (this.stops.isTakenOver(page.instance, call.session))
+      throw new TakenOverException();
+    if (this.stops.generationOf(page.instance) !== generation)
+      throw ToolFailures.interrupted(ToolAbortReason.Stopped);
   }
 }

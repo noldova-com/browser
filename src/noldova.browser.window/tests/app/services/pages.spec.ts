@@ -1205,6 +1205,20 @@ describe("Pages", () => {
       expect([pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual(["Idle", "https://www.example.com/"]);
     });
 
+    it("follows the redirects of a load typed on a page a teammate keeps control of between its calls, and joins the page once the load lands", async () => {
+      surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
+      surface().script("https://www.example.com/", { kind: "pending" });
+      const tab = await openAsync();
+      context.emit(BrowserEvents.pageActivity, { instance: tab.id, activity: "control-1", agentName: "Builder", action: "Reading", state: "Idle", box: null, point: null, refusal: null, isHandedOver: false });
+
+      await pages.goToAsync(tab, "example.com");
+      await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/", "navigate https://www.example.com/"]));
+      await viewOf(tab).stopAsync();
+      await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
+
+      expect([passed(), pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual([["https://www.example.com/"], "Idle", "https://www.example.com/"]);
+    });
+
     it("follows no redirect and joins nothing once a teammate's call starts on the page during its typed load, even after the call ended", async () => {
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       surface().script("https://www.example.com/", { kind: "pending" });
