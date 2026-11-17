@@ -16,7 +16,8 @@ export class PageKeys {
     [KeyChord.parse(Resources.reloadChord)]);
   public static readonly newPage: WebViewKey = new WebViewKey(Resources.newPageKey, [KeyChord.parse(Resources.newPageChord)]);
   public static readonly focusAddress: WebViewKey = new WebViewKey(Resources.focusAddressKey, [KeyChord.parse(Resources.focusAddressChord)]);
-  public static readonly all: readonly WebViewKey[] = [PageKeys.reload, PageKeys.newPage, PageKeys.focusAddress];
+  public static readonly find: WebViewKey = new WebViewKey(Resources.findKey, [KeyChord.parse(Resources.findChord)]);
+  public static readonly all: readonly WebViewKey[] = [PageKeys.reload, PageKeys.newPage, PageKeys.focusAddress, PageKeys.find];
 
   public static platformOf(platform: string): string {
     if (platform.startsWith(Resources.macPlatformPrefix))
@@ -31,7 +32,11 @@ export class PageKeys {
       : { [ZoomStep.In]: keys[ZoomStep.In].other, [ZoomStep.Out]: keys[ZoomStep.Out].other, [ZoomStep.Reset]: keys[ZoomStep.Reset].other };
   }
 
-  public static find(event: KeyboardEvent, platform: string): string | null {
+  public static findKeyOf(platform: string): string {
+    return platform === Resources.macPlatform ? Resources.findKeys.mac : Resources.findKeys.other;
+  }
+
+  public static nameOf(event: KeyboardEvent, platform: string): string | null {
     return PageKeys.all.find(t => t.matches(event, platform))?.name ?? null;
   }
 }

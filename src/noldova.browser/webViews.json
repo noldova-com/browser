@@ -69,6 +69,7 @@
   "keys": [
     { "name": "reload", "keys": ["Mod+R", "F5"], "macKeys": ["Mod+R"] },
     { "name": "newPage", "keys": ["Mod+T"] },
-    { "name": "focusAddress", "keys": ["Mod+L"] }
+    { "name": "focusAddress", "keys": ["Mod+L"] },
+    { "name": "find", "keys": ["Mod+F"] }
   ]
 }
