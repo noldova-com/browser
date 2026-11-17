@@ -97,6 +97,8 @@ test.describe("new page", () => {
     await expect(app.window.locator(`${ADDRESS_FIELD}:focus`)).toHaveValue("");
 
     await tabs.first().click();
+    await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+    await expect(view, "The docs page's view didn't become the only one shown.").toHaveCount(1);
     await view.click();
     await expect.poll(() => app.window.evaluate(() => (document.activeElement?.closest(".nol-browser-page") ?? null) !== null),
       { message: "A click in the page didn't move the window's focus into the page's document." }).toBe(true);
