@@ -63,7 +63,7 @@ describe("@noldova/browser.protocol", () => {
     expect([AddressKind, PageAction, PageActivityState, TypedAddressAnswerKind, TypedAddressRefusal].map(t => Object.entries(t))).toEqual([
       [["Public", "Public"], ["Loopback", "Loopback"], ["Private", "Private"], ["LinkLocal", "LinkLocal"], ["Unspecified", "Unspecified"]],
       [["Navigating", "Navigating"], ["Reading", "Reading"], ["Clicking", "Clicking"], ["Typing", "Typing"], ["PressingKey", "PressingKey"], ["Waiting", "Waiting"]],
-      [["Acting", "Acting"], ["Asking", "Asking"], ["Ended", "Ended"]],
+      [["Acting", "Acting"], ["Asking", "Asking"], ["Idle", "Idle"], ["Ended", "Ended"]],
       [["Allowed", "Allowed"], ["Refused", "Refused"]],
       [["NotAnAddress", "NotAnAddress"], ["NotWeb", "NotWeb"], ["TooLong", "TooLong"], ["Credentials", "Credentials"], ["Local", "Local"], ["NeverAllowed", "NeverAllowed"]]
     ]);

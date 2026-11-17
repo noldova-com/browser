@@ -6,45 +6,65 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonObject } from "../types/json-value.ts";
-import type { PageActivity } from "./page-activity.ts";
+import type { PageAction } from "@noldova/browser.protocol";
 
+import type { JsonObject } from "../types/json-value.ts";
+import { PageActivity } from "./page-activity.ts";
+import type { SessionPage } from "./session-page.ts";
+
+// Each page's control by an agent, and the sessions the person took a page from. A page's calls run one at a time, so a page has one control.
 export class PageStops {
-  private readonly running: Map<string, Set<PageActivity>> = new Map<string, Set<PageActivity>>();
+  private readonly controls: Map<string, PageActivity> = new Map<string, PageActivity>();
   private readonly last: Map<string, string> = new Map<string, string>();
   private readonly takenOver: Map<string, Set<string>> = new Map<string, Set<string>>();
   private readonly stopped: Map<string, number> = new Map<string, number>();
+  private readonly publish: (payload: JsonObject) => void;
+
+  public constructor(publish: (payload: JsonObject) => void) {
+    this.publish = publish;
+  }
 
   public generationOf(instance: string): number {
     return this.stopped.get(instance) ?? 0;
   }
 
   public activities(): JsonObject[] {
-    return [...this.running.values()].flatMap(t => [...t].map(activity => activity.toPayload()));
+    return [...this.controls.values()].map(t => t.toPayload());
   }
 
   public isTakenOver(instance: string, session: string): boolean {
     return this.takenOver.get(instance)?.has(session) === true;
   }
 
-  public add(activity: PageActivity): void {
-    const activities: Set<PageActivity> = this.running.get(activity.instance) ?? new Set<PageActivity>();
-    activities.add(activity);
-    this.running.set(activity.instance, activities);
-    this.last.set(activity.instance, activity.session);
+  // Starts a call on the page: the session's control goes on, and another session's control of the page ends.
+  public begin(page: SessionPage, session: string, action: PageAction, callSignal: AbortSignal): PageActivity {
+    this.last.set(page.instance, session);
+    const control: PageActivity | undefined = this.controls.get(page.instance);
+    if (control?.session === session) {
+      control.begin(action, callSignal);
+      return control;
+    }
+    if (control !== undefined)
+      this.end(control);
+    const started: PageActivity = new PageActivity(page, session, action, callSignal, this.publish);
+    this.controls.set(page.instance, started);
+    return started;
   }
 
-  public remove(activity: PageActivity): void {
-    const activities: Set<PageActivity> | undefined = this.running.get(activity.instance);
-    activities?.delete(activity);
-    if (activities?.size === 0)
-      this.running.delete(activity.instance);
+  public finish(control: PageActivity): void {
+    if (control.isOver)
+      this.end(control);
+    else
+      control.rest();
   }
 
   public stop(instance: string, isTakingOver: boolean): void {
     this.stopped.set(instance, this.generationOf(instance) + 1);
-    for (const activity of [...this.running.get(instance) ?? []])
-      activity.stop();
+    const control: PageActivity | undefined = this.controls.get(instance);
+    if (control !== undefined) {
+      control.stop();
+      this.endIdle(control);
+    }
     const session: string | undefined = this.last.get(instance);
     if (!isTakingOver || session === undefined)
       return;
@@ -53,7 +73,21 @@ export class PageStops {
     this.takenOver.set(instance, sessions);
   }
 
+  // The page closed: its control ends, at once or when its running call ends.
+  public close(instance: string): void {
+    const control: PageActivity | undefined = this.controls.get(instance);
+    if (control === undefined)
+      return;
+    control.release();
+    this.endIdle(control);
+  }
+
   public endSession(session: string): void {
+    for (const control of [...this.controls.values()])
+      if (control.session === session) {
+        control.release();
+        this.endIdle(control);
+      }
     for (const [instance, sessions] of this.takenOver) {
       sessions.delete(session);
       if (sessions.size === 0)
@@ -62,5 +96,15 @@ export class PageStops {
     for (const [instance, last] of this.last)
       if (last === session)
         this.last.delete(instance);
+  }
+
+  private endIdle(control: PageActivity): void {
+    if (!control.isCalling)
+      this.end(control);
+  }
+
+  private end(control: PageActivity): void {
+    this.controls.delete(control.instance);
+    control[Symbol.dispose]();
   }
 }
