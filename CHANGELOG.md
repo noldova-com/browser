@@ -17,6 +17,7 @@ Each version's section is written by the pull request that changes the version, 
 - The tab row of a group that holds a Browser page has a New page button, from the page document's tab-row menu place `browser.pageTabRow` in `menus.json` (#32).
 - Find on page opens a find bar under the toolbar, from More or `Mod+F` (#35).
 - A refused request's notice that comes while a page loads stays through that load, its commit and its failure (#24).
+- A new page's tab reads "New tab", its address field stays empty and its record keeps no address while its view is at `about:blank`, whether or not the window part heard the view's start there; before, the tab could read "about:blank" (#62).
 
 ## 0.0.2
 
