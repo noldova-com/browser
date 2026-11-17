@@ -94,7 +94,7 @@ export class PaneController {
   }
 
   public async stopAsync(): Promise<WebViewNavigation> {
-    return this.followAnswer(await this.requireView().stopAsync());
+    return this.followAnswer(await this.requireView().stopAsync(), null);
   }
 
   public async zoomInAsync(): Promise<number> {
