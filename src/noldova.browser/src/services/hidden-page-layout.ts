@@ -9,11 +9,13 @@
 import type { IModuleLog } from "@noldova/desktop.runtime";
 
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
+import { CallTimedOutException } from "../exceptions/call-timed-out.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageCrashedException } from "../exceptions/page-crashed.exception.ts";
 import { PageNotShowingException } from "../exceptions/page-not-showing.exception.ts";
 import { ProfileClearedException } from "../exceptions/profile-cleared.exception.ts";
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
+import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
@@ -31,6 +33,7 @@ export class HiddenPageLayout {
 
   public async holdAsync(viewId: string, options: CallOptions, press: () => Promise<void>): Promise<void> {
     if (await this.readHasSizeAsync(viewId, options)) {
+      await this.wakeAsync(viewId, options);
       await press();
       return;
     }
@@ -38,10 +41,25 @@ export class HiddenPageLayout {
       await this.calls.sendAsync(viewId, Resources.setDeviceMetricsOverrideMethod, Resources.hiddenPageMetrics, options);
       if (!await this.readHasSizeAsync(viewId, options))
         throw new PageNotShowingException();
+      await this.wakeAsync(viewId, options);
       await press();
     }
     finally {
       await this.releaseAsync(viewId, options);
+    }
+  }
+
+  // A hidden view's document that loaded while it was hidden never draws, and its input takes no press until a capture is asked of it, which
+  // the hidden view never answers; so before a press the page is asked for one pixel, and a capture that doesn't come in time is let go.
+  private async wakeAsync(viewId: string, options: CallOptions): Promise<void> {
+    const deadline: number = Math.min(options.deadline, Date.now() + BrowserLimits.inputWakeMilliseconds);
+    try {
+      await this.calls.sendAsync(viewId, Resources.captureScreenshotMethod, Resources.wakeScreenshot,
+        options.withDeadline(deadline).withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+    }
+    catch (error) {
+      if (!(error instanceof CallTimedOutException && deadline < options.deadline))
+        throw error;
     }
   }
 

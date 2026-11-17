@@ -78,7 +78,7 @@ describe("ClickTool", () => {
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
     expect(bench.methods).toEqual(["Page.getFrameTree", "DOM.getDocument", "DOM.describeNode", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
-      "Page.getLayoutMetrics",
+      "Page.getLayoutMetrics", "Page.captureScreenshot",
       "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Input.dispatchMouseEvent", "DOM.getContentQuads",
       "Page.getLayoutMetrics", "DOM.getNodeForLocation", "DOM.getDocument", "DOM.describeNode", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
       "Page.getFrameTree"]);
@@ -365,7 +365,7 @@ describe("ClickTool", () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK), clickCount: 2 }));
 
     const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "DOM.getDocument", "DOM.describeNode"];
-    expect(bench.methods.slice(11, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
+    expect(bench.methods.slice(12, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
       ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent"]);
   });
 

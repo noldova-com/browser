@@ -20,6 +20,7 @@ export class BrowserLimits {
   public static readonly maximumScreenshotSide: number = 1_600;
   public static readonly maximumScreenshotBytes: number = 1024 * 1024;
   public static readonly screenshotDrawMilliseconds: number = 1_000;
+  public static readonly inputWakeMilliseconds: number = 250;
   public static readonly hiddenPageWidth: number = 1280;
   public static readonly hiddenPageHeight: number = 800;
   public static readonly maximumShownUrlLength: number = 2_048;

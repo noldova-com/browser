@@ -53,7 +53,7 @@ export class ScriptedViews {
   public static readonly pane: WebViewPane = new WebViewPane(new QualifiedName("browser", "pane"));
   public static readonly declaration: WebViewDeclaration = WebViewDeclaration.fromJson(DECLARED);
   public static readonly emptyReplies: readonly string[] = [
-    "Page.enable", "DOM.scrollIntoViewIfNeeded", "DOM.focus",
+    "Page.enable", "Page.captureScreenshot", "DOM.scrollIntoViewIfNeeded", "DOM.focus",
     "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride",
     "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText",
     "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Log.enable"
