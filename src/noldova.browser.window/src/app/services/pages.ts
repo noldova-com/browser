@@ -338,7 +338,8 @@ export class Pages {
     this.agentPages.noteAgent(activity.instance, activity.agentName);
     this.arriving?.push(activity);
     this.current.set(Pages.apply(this.current(), activity));
-    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = [...this.shown].find(([t]) => t.id === activity.instance && this.typing.has(t));
+    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = activity.state === PageActivityState.Idle ? undefined
+      : [...this.shown].find(([t]) => t.id === activity.instance && this.typing.has(t));
     if (shown !== undefined)
       this.endTyping(shown[0], shown[1].place, false);
     if (activity.action === PageAction.Navigating && activity.state === PageActivityState.Acting)
@@ -390,6 +391,12 @@ export class Pages {
     return next;
   }
 
+  // Whether one of an agent's calls runs on the page, rather than the agent only keeping control of it between calls.
+  private isCalledOn(instance: string): boolean {
+    const state: PageActivityState | undefined = this.current().get(instance)?.state;
+    return state !== undefined && state !== PageActivityState.Idle;
+  }
+
   private holds(instance: string): boolean {
     return this.pending.has(instance) || [...this.shown.keys()].some(t => t.id === instance);
   }
@@ -424,7 +431,7 @@ export class Pages {
 
   private followRedirect(tab: PaneTab, place: PagePlace, event: ViewRefusalEvent): boolean {
     const typing: TypedLoad | undefined = this.typing.get(tab);
-    if (typing === undefined || this.entries.get(tab) !== typing.entry || this.current().has(tab.id) || typing.hops >= Resources.redirectLimit) {
+    if (typing === undefined || this.entries.get(tab) !== typing.entry || this.isCalledOn(tab.id) || typing.hops >= Resources.redirectLimit) {
       this.endTyping(tab, place);
       return false;
     }
@@ -471,7 +478,7 @@ export class Pages {
     if (!this.passing.delete(tab))
       return;
     const status: PaneStatus = tab.controller.status;
-    const isLanded: boolean = mayJoin && status.state === PaneState.Loaded && !this.current().has(tab.id);
+    const isLanded: boolean = mayJoin && status.state === PaneState.Loaded && !this.isCalledOn(tab.id);
     const log = (error: unknown): void => this.context.log(Resources.formatRedirectsNotEnded(error));
     const landing: Promise<unknown> = isLanded ? this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, status.url).toJson()) : Promise.resolve();
     landing.catch(log).then(() => this.context.requestAsync(BrowserMethods.endTypedRedirects, new PageRequest(tab.id).toJson())).catch(log);

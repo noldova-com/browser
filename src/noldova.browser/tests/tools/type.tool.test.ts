@@ -166,7 +166,7 @@ describe("TypeTool", () => {
     expect([sent("Input.insertText"), bench.activities.at(-1)?.["isHandedOver"]]).toEqual([[], true]);
   });
 
-  it("rings the field while it waits for the person's answer, then acts, and ends", async () => {
+  it("rings the field while it waits for the person's answer, then acts, and rests with no mark", async () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.PASSWORD), text: "4321" }));
 
     const box: JsonObject = { x: 10, y: 10, width: 20, height: 10 };
@@ -175,7 +175,7 @@ describe("TypeTool", () => {
       ["Typing", "Acting", box, null],
       ["Typing", "Asking", box, null],
       ["Typing", "Acting", box, null],
-      ["Typing", "Ended", box, null]
+      ["Typing", "Idle", null, null]
     ]);
   });
 

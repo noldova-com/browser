@@ -124,8 +124,10 @@ export class TestApp {
     await this.setSettingAsync("browser.localSites", origins.join(","));
   }
 
-  public async openPageAsync(url: string, profileKey: string = TestApp.PROFILE_KEY): Promise<void> {
-    await this.requestAsync("agent-double.openPage", { profileKey, url, instance: randomUUID() });
+  public async openPageAsync(url: string, profileKey: string = TestApp.PROFILE_KEY): Promise<string> {
+    const instance = randomUUID();
+    await this.requestAsync("agent-double.openPage", { profileKey, url, instance });
+    return instance;
   }
 
   public async requestAsync(method: string, payload: JsonValue): Promise<JsonValue> {

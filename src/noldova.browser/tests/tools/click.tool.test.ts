@@ -193,7 +193,7 @@ describe("ClickTool", () => {
     });
   });
 
-  it("tells the windows it is clicking, rings the element before it asks, then shows where the click lands, and ends", async () => {
+  it("tells the windows it is clicking, rings the element before it asks, then shows where the click lands, and rests with no mark", async () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }));
 
     const box: JsonObject = { x: 10, y: 10, width: 20, height: 10 };
@@ -203,7 +203,7 @@ describe("ClickTool", () => {
       ["page-1", "Builder", "Clicking", "Asking", box, null],
       ["page-1", "Builder", "Clicking", "Acting", box, null],
       ["page-1", "Builder", "Clicking", "Acting", box, { x: 20, y: 15 }],
-      ["page-1", "Builder", "Clicking", "Ended", box, { x: 20, y: 15 }]
+      ["page-1", "Builder", "Clicking", "Idle", null, null]
     ]);
     expect(new Set(bench.activities.map(t => t["activity"])).size).toBe(1);
   });
@@ -379,11 +379,11 @@ describe("ClickTool", () => {
     expect(mouseEvents().length).toBe(3);
   });
 
-  it("ends its activity when it fails after the person allowed it, with no ring for an element that has no box", async () => {
+  it("rests when it fails after the person allowed it, with no ring for an element that has no box", async () => {
     bench.surface.answer("DOM.getContentQuads", { quads: [] });
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ElementNotVisibleException, { reason: "Refused" });
-    expect(bench.activities.map(t => [t["state"], t["box"]])).toEqual([["Acting", null], ["Asking", null], ["Acting", null], ["Ended", null]]);
+    expect(bench.activities.map(t => [t["state"], t["box"]])).toEqual([["Acting", null], ["Asking", null], ["Acting", null], ["Idle", null]]);
   });
 
   it("says an element with no box can't be clicked", async () => {

@@ -41,7 +41,7 @@ import { ElementFacts } from "./element-facts.ts";
 import type { ElementReference } from "./element-reference.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import type { NodeFacts } from "./node-facts.ts";
-import { PageActivity } from "./page-activity.ts";
+import type { PageActivity } from "./page-activity.ts";
 import { PageFacts } from "./page-facts.ts";
 import { PageStops } from "./page-stops.ts";
 import { PaneQueue } from "./pane-queue.ts";
@@ -56,7 +56,6 @@ export class ToolKit {
   private static readonly ACTING_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny];
   private static readonly TAKING_OVER_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.TakeOver, PermissionOption.Deny];
   private static readonly HIGH_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.Deny];
-  private readonly publish: (payload: JsonObject) => void;
   private readonly recordAgent: (page: SessionPage) => void;
   public readonly webViews: IRuntimeWebViews;
   public readonly sessions: SessionStates;
@@ -68,7 +67,7 @@ export class ToolKit {
   public readonly changes: PageChanges;
   public readonly queue: PaneQueue = new PaneQueue();
   public readonly gate: PermissionGate = new PermissionGate();
-  public readonly stops: PageStops = new PageStops();
+  public readonly stops: PageStops;
   public readonly log: IModuleLog;
 
   public constructor(
@@ -81,7 +80,7 @@ export class ToolKit {
     this.webViews = webViews;
     this.sessions = sessions;
     this.origins = origins;
-    this.publish = publish;
+    this.stops = new PageStops(publish);
     this.recordAgent = recordAgent;
     this.log = log;
     this.pages = new SessionPages(webViews);
@@ -139,14 +138,12 @@ export class ToolKit {
       this.recordAgent(page);
       if (this.origins.isPassing(page.viewId))
         await this.origins.stopPassingAsync(page.viewId, page.profileKey);
-      const activity: PageActivity = new PageActivity(page, call.session, action, call.signal, this.publish);
-      this.stops.add(activity);
+      const activity: PageActivity = this.stops.begin(page, call.session, action, call.signal);
       try {
         return await work(activity);
       }
       finally {
-        this.stops.remove(activity);
-        activity[Symbol.dispose]();
+        this.stops.finish(activity);
       }
     });
   }

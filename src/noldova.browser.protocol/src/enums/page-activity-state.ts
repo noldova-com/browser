@@ -9,6 +9,7 @@
 export const PageActivityState = {
   Acting: "Acting",
   Asking: "Asking",
+  Idle: "Idle",
   Ended: "Ended"
 } as const;
 

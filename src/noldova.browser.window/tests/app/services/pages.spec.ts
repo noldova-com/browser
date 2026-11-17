@@ -152,6 +152,16 @@ describe("Pages", () => {
     expect(underlines()).toEqual([]);
   });
 
+  it("keeps an agent's control of a page between its calls, until the control ends", () => {
+    const control: JsonObject = { instance: "page-1", activity: "control-1", agentName: "Scout", action: "Reading", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
+    context.emit(BrowserEvents.pageActivity, control);
+    context.emit(BrowserEvents.pageActivity, { ...control, state: "Idle" });
+    const resting: unknown[] = [...pages.activities().values()].map(t => [t.activity, t.state]);
+    context.emit(BrowserEvents.pageActivity, { ...control, state: "Ended" });
+
+    expect([resting, pages.activities().size]).toEqual([[["control-1", "Idle"]], 0]);
+  });
+
   it("opens a page's document with no underline when a teammate's call on it already runs, and adds none to one already open", async () => {
     const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const opening = vi.spyOn(context, "openDocument");
@@ -1179,6 +1189,20 @@ describe("Pages", () => {
       await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "end"]));
 
       expect([tab.controller.status.state, tab.controller.status.url]).toEqual([PaneState.Loaded, "https://www.example.com/"]);
+    });
+
+    it("joins the page a teammate only keeps control of between its calls, once the typed load lands, and ends the redirects its view followed", async () => {
+      surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
+      surface().script("https://www.example.com/", { kind: "pending" });
+      const tab = await openAsync();
+
+      await pages.goToAsync(tab, "example.com");
+      await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/", "navigate https://www.example.com/"]));
+      context.emit(BrowserEvents.pageActivity, { instance: tab.id, activity: "control-1", agentName: "Builder", action: "Reading", state: "Idle", box: null, point: null, refusal: null, isHandedOver: false });
+      await viewOf(tab).stopAsync();
+      await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
+
+      expect([pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual(["Idle", "https://www.example.com/"]);
     });
 
     it("follows no redirect and joins nothing once a teammate's call starts on the page during its typed load, even after the call ended", async () => {
