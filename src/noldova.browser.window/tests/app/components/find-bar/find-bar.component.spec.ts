@@ -20,17 +20,21 @@ import { ViewStateEvent } from "../../../../src/app/models/view-state-event.ts";
 import { PaneController } from "../../../../src/app/services/pane-controller.ts";
 import { FakeWebView, FakeWebViews } from "../../../fixtures/fake-web-views.fixture.ts";
 import { ForcedColorsFixture } from "../../../fixtures/forced-colors.fixture.ts";
+import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 
 @Component({
   imports: [FindBarComponent],
-  template: `@if (isShown()) {
-      <nol-browser-find-bar [controller]="controller()" (closed)="closed = closed + 1" />
-    }
+  template: `<div class="frame" [style.width.px]="width()">
+      @if (isShown()) {
+        <nol-browser-find-bar [controller]="controller()" (closed)="closed = closed + 1" />
+      }
+    </div>
     <div class="probe" style="box-sizing: border-box; width: var(--nol-field-padding); height: var(--nol-field-height); margin-left: var(--nol-space-1);
       color: var(--nol-text-muted); border: 1px solid var(--nol-accent)"></div>`
 })
 class HostComponent {
   public readonly isShown: WritableSignal<boolean> = signal(true);
+  public readonly width: WritableSignal<number | null> = signal(null);
   public readonly controller: WritableSignal<PaneController> = signal(new PaneController(null));
   public closed: number = 0;
   public readonly bar: Signal<FindBarComponent | undefined> = viewChild(FindBarComponent);
@@ -115,7 +119,7 @@ describe("FindBarComponent", () => {
     }
     finally {
       AppearanceFixture.reset();
-      await ForcedColorsFixture.resetAsync();
+      await Promise.all([ForcedColorsFixture.resetAsync(), ZoomFixture.resetAsync()]);
     }
   });
 
@@ -320,6 +324,26 @@ describe("FindBarComponent", () => {
     await vi.waitFor(() => expect(errors).toEqual([failure]));
     expect(count()).toBeNull();
   });
+
+  for (const [width, zoom] of [[10, 1], [15, 1], [10, 2], [15, 2]] as const) {
+    it(`lets the longest count give way first, ending in an ellipsis, so Close find stays whole inside the bar and nothing scrolls sideways, in a ${width}rem pane${zoom === 2 ? " at 200% zoom" : ""}`, async () => {
+      const ratio: number = devicePixelRatio;
+      await ZoomFixture.zoomAsync(zoom);
+      await vi.waitFor(() => expect(devicePixelRatio).toBe(ratio * zoom));
+      fixture.componentInstance.width.set(AppearanceFixture.toPixels(width));
+      answer(() => FakeWebView.found(0, 0, true));
+      await typeAsync("a");
+      const bar: HTMLElement = find("nol-browser-find-bar");
+      const box: DOMRect = bar.getBoundingClientRect();
+      const counted: HTMLElement = find(".nol-browser-find-count");
+      const [previous, close] = ["Previous match", "Close find"].map(t => button(t).getBoundingClientRect());
+      if (previous === undefined || close === undefined)
+        throw new Error("The find bar lacks a button.");
+
+      expect([count(), bar.scrollWidth <= bar.clientWidth, close.right <= box.right + 0.5, close.width >= 24, counted.getBoundingClientRect().right <= previous.left + 0.5,
+        counted.scrollWidth > counted.clientWidth, getComputedStyle(counted).textOverflow]).toEqual(["The search took too long", true, true, true, true, true, "ellipsis"]);
+    });
+  }
 
   for (const [mode, isForced] of [[ThemeMode.Light, false], [ThemeMode.Dark, false], [ThemeMode.Dark, true]] as const) {
     it(`sets the field a field's height from the row's inset, 20rem wide, then the count in the muted text and the buttons, each 0.25rem after the last, in the ${isForced ? "forced colours" : mode} look`, async () => {

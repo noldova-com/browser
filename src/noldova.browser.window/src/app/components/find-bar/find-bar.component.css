@@ -27,12 +27,15 @@
 }
 
 .nol-browser-find-count {
-  flex: none;
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--nol-text-muted);
   font-size: var(--nol-text-panel);
   line-height: var(--nol-line-panel);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .nol-browser-find-buttons {
