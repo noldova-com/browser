@@ -80,7 +80,8 @@ describe("webViews.json", () => {
   it("declares the debugging calls and the events the built tools send and take, and takes its views' new windows", async () => {
     const methods: readonly string[] = ["Page.enable", "Page.getFrameTree", "Page.getNavigationHistory", "Page.getLayoutMetrics", "Page.createIsolatedWorld",
       "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Log.enable",
-      "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "DOM.getDocument", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
+      "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Accessibility.enable", "Accessibility.disable", "Accessibility.getRootAXNode",
+      "Accessibility.getChildAXNodes", "DOM.getDocument", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
       "DOM.getNodeForLocation", "DOM.focus", "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
       "Input.insertText"];
 
@@ -92,9 +93,11 @@ describe("webViews.json", () => {
     });
   });
 
-  it("holds the bounds that keep the tools' calls to what they send: whole documents read once, three clicks, short key texts, bounded captures", async () => {
+  it("holds the bounds that keep the tools' calls to what they send: whole documents read once, three clicks, short key texts, bounded captures, and a tree read a node's children at a time", async () => {
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ methods: expect.arrayContaining([
       { name: "DOM.getDocument", parameters: { depth: { required: true, values: [-1] }, pierce: { required: true, values: [true] } } },
+      { name: "Accessibility.getRootAXNode" },
+      { name: "Accessibility.getChildAXNodes", parameters: { id: { required: true, maxLength: 64 } } },
       { name: "DOM.describeNode", parameters: { backendNodeId: { required: true, minimum: 1 }, depth: { values: [-1] }, pierce: { values: [true] } } },
       expect.objectContaining({ name: "Input.dispatchMouseEvent", parameters: expect.objectContaining({ clickCount: expect.objectContaining({ minimum: 1, maximum: 3 }),
         button: expect.objectContaining({ values: ["left", "middle", "right"] }) }) }),
