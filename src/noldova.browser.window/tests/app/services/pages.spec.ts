@@ -647,6 +647,19 @@ describe("Pages", () => {
     expect([viewOf(tab).calls, tab.controller.status, requestsOf(BrowserMethods.rememberPage)]).toEqual([[], PaneStatus.empty, [{ instance: tab.id, profileKey: "workspace-1", url: "" }]]);
   });
 
+  it("keeps no about:blank in an empty page's record or tab, whether or not it heard its view's start there", async () => {
+    const heard = await openAsync();
+    const unheard = await openAsync();
+    loading(viewOf(heard), "about:blank", false, "about:blank");
+    for (const tab of [heard, unheard])
+      loading(viewOf(tab), "https://docs.example.com/", true);
+
+    expect(requestsOf(BrowserMethods.rememberPage)).toEqual([heard, unheard, heard, unheard]
+      .map((t, i) => ({ instance: t.id, profileKey: "workspace-1", url: i < 2 ? "" : "https://docs.example.com/" })));
+    expect(context.titles.filter(t => t.update.title !== undefined).map(t => [t.instance, t.update.title]))
+      .toEqual([[heard.id, "New tab"], [heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
+  });
+
   it("opens a restored page in the workspace its record keeps, at the address it last showed", async () => {
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage

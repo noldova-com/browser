@@ -26,6 +26,21 @@ describe("PaneTab", () => {
     expect(titles).toEqual(["New tab", "https://example.test/", "Example"]);
   });
 
+  it("is titled New tab at about:blank, whether or not it heard the view's start there, and its address once it goes on", () => {
+    const heard = new FakeWebViews().open("workspace-1");
+    const unheard = new FakeWebViews().open("workspace-1");
+    const heardTab = new PaneTab("1", heard);
+    const unheardTab = new PaneTab("2", unheard);
+
+    heard.emit(new ViewStateEvent("about:blank", "", false, false, false));
+    const titles: string[] = [heardTab.title, unheardTab.title];
+    for (const view of [heard, unheard])
+      view.emit(new ViewStateEvent("https://example.test/", "", true, false, false));
+    titles.push(heardTab.title, unheardTab.title);
+
+    expect(titles).toEqual(["New tab", "New tab", "https://example.test/", "https://example.test/"]);
+  });
+
   it("shows its page while it loads or has loaded, and a message in every other state", () => {
     const view = new FakeWebViews().open("workspace-1");
     const tab = new PaneTab("3", view);

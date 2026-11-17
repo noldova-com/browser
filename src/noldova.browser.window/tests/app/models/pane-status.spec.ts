@@ -85,6 +85,16 @@ describe("PaneStatus", () => {
     });
   });
 
+  it("has no address or title at about:blank, titled with its address or not, and the same next state whether or not it heard about:blank first", () => {
+    const heard: PaneStatus = PaneStatus.empty.apply(state("about:blank", "about:blank", false));
+    const untitled: PaneStatus = PaneStatus.empty.apply(state("about:blank", "", false));
+    const next: PaneStatus[] = [heard, PaneStatus.empty].map(t => t.apply(state("https://one.example/", "", true)));
+
+    expect([heard, untitled].map(t => [t.url, t.title])).toEqual([["", ""], ["", ""]]);
+    expect(next.map(t => [t.state, t.url, t.title])).toEqual([[PaneState.Loading, "https://one.example/", ""], [PaneState.Loading, "https://one.example/", ""]]);
+    expect(PaneStatus.empty.apply(state("about:blank", "Drafts", false)).title).toBe("Drafts");
+  });
+
   it("follows a state that changes only the title or the history, and keeps its own state", () => {
     const titled: PaneStatus = loaded.apply(state("https://one.example/", "One, again", false, true, true));
 
