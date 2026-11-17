@@ -374,6 +374,25 @@ describe("RuntimePart", () => {
     expect(await requestAsync(context, BrowserMethods.readAppName, null, "cli", null)).toBe(ProductFile.NAME);
   });
 
+  it("marks as no longer controlled each view it lists as it activates or hears open, but one an agent's control holds, which it marks until the control ends", async () => {
+    const surface: ScriptedViews = pageViews("page-1", "page-2");
+    const marks: unknown[][] = [];
+    surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
+      marks.push([viewId, isControlled]);
+      return Promise.resolve();
+    });
+    const context: BrowserContext = new BrowserContext(surface);
+    await new RuntimePart().activateAsync(context);
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: "page-1", profileKey: "workspace-1", agentName: "Scout" });
+
+    await session.callAsync("browser_snapshot", {});
+    surface.open("view-1", "workspace-1");
+    surface.open("view-3", "workspace-1");
+    session.end();
+
+    expect(marks).toEqual([["view-1", false], ["view-2", false], ["view-1", true], ["view-3", false], ["view-1", false]]);
+  });
+
   it("gives a view that opens its workspace's origins, as the module's database keeps them", async () => {
     const surface: ScriptedViews = new ScriptedViews([]);
     await partOf().part.activateAsync(new BrowserContext(surface, await databaseWithAsync("workspace-1", ["https://kept.example"])));

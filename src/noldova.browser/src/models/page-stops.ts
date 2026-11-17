@@ -19,9 +19,12 @@ export class PageStops {
   private readonly takenOver: Map<string, Set<string>> = new Map<string, Set<string>>();
   private readonly stopped: Map<string, number> = new Map<string, number>();
   private readonly publish: (payload: JsonObject) => void;
+  private readonly release: (viewId: string) => void;
 
-  public constructor(publish: (payload: JsonObject) => void) {
+  // Release hears each control's end with the view it marked, as the view stops being controlled.
+  public constructor(publish: (payload: JsonObject) => void, release: (viewId: string) => void) {
     this.publish = publish;
+    this.release = release;
   }
 
   public generationOf(instance: string): number {
@@ -30,6 +33,10 @@ export class PageStops {
 
   public activities(): JsonObject[] {
     return [...this.controls.values()].map(t => t.toPayload());
+  }
+
+  public controlsView(viewId: string): boolean {
+    return [...this.controls.values()].some(t => t.viewId === viewId || t.markedViewId === viewId);
   }
 
   public isTakenOver(instance: string, session: string): boolean {
@@ -41,7 +48,7 @@ export class PageStops {
     this.last.set(page.instance, session);
     const control: PageActivity | undefined = this.controls.get(page.instance);
     if (control?.session === session) {
-      control.begin(action, callSignal);
+      control.begin(page, action, callSignal);
       return control;
     }
     if (control !== undefined)
@@ -106,5 +113,8 @@ export class PageStops {
   private end(control: PageActivity): void {
     this.controls.delete(control.instance);
     control[Symbol.dispose]();
+    const marked: string | null = control.markedViewId;
+    if (marked !== null)
+      this.release(marked);
   }
 }

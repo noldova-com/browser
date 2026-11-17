@@ -422,6 +422,12 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
 
   <a id="a-press-on-a-hidden-page"></a>The page may be hidden while the click runs, since the person answers its request on the chat that covers it.
   A hidden view holds a mouse move until the page draws, 5 seconds or more, and on macOS a press after it never arrived; Noldova Desktop keeps the page drawing with focus emulation from an agent's first press or focus on the view, and refuses a module's own call to change it ([desktop#52](https://github.com/noldova-com/desktop/issues/52)), so the click asks for none.
+  A document the view loads while hidden, after a GET or a POST navigation, is made hidden and never paints, and the engine drops every input but a move until a document's first paint.
+  So before each of an agent's calls on a page, the runtime part marks the page's view as controlled with Noldova Desktop's `setControlledAsync` ([desktop#204](https://github.com/noldova-com/desktop/pull/204), in 0.0.3), and Noldova Desktop keeps a marked view drawing while it is hidden, under the shown tab and taking no pointer, so the click's press reaches the new document.
+  The mark lasts as long as the agent's control: it ends when the person takes the page over or stops it, the page closes, the session ends, or another session acts on the page.
+  A call that finds the page in another view than the control marked, as after the window opened the page again, ends the earlier view's mark before marking the new one, and the control's end ends the mark it holds then.
+  A call whose view can't be marked does nothing and fails as `Unavailable` with `browser.notControlled`, since its press might never arrive; a mark that can't be ended is logged, unless its view had already closed.
+  Noldova Desktop keeps a mark through a restart of the runtime part, whose controls end with it, so the runtime part ends the mark of each view it lists as it starts, or hears open, that no control holds.
   A view shown before keeps its size while hidden and takes the press at that size.
   A view never yet shown has no size, and setting its bounds while it is hidden gives it none, so the click lays the page out at 1280 by 800, `BrowserLimits.hiddenPageWidth` by `BrowserLimits.hiddenPageHeight`, with a metrics override until the press ends; the hit test still decides what is topmost, on that layout.
   Both end however the press ends, a stop included, and the page never shows.
@@ -492,6 +498,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | `browser.toolsOff` | `Unavailable` | The person turned the browser's tools off for agents in Settings |
 | `browser.malformedReply` | `Unavailable` | A reply or an event doesn't have the expected shape |
 | `browser.protocol` | `Unavailable` | The page engine refused a call |
+| `browser.notControlled` | `Unavailable` | Noldova Desktop didn't mark the page's view as controlled, so a hidden page might not draw and the input might not reach it; nothing was done |
 | `browser.viewsUnavailable` | `Unavailable` | Noldova Desktop couldn't reach the app's window for the call |
 | `browser.internal` | `Unavailable` | The module made a call Noldova Desktop refused, or another fault in the module |
 

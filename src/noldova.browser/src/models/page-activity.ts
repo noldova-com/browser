@@ -16,9 +16,10 @@ import type { SessionPage } from "./session-page.ts";
 // ends. Each of its calls moves it from Idle to Acting, maybe Asking, and back.
 export class PageActivity implements Disposable {
   private readonly id: string = crypto.randomUUID();
-  private readonly page: SessionPage;
   private readonly publish: (payload: JsonObject) => void;
   private readonly stopper: AbortController = new AbortController();
+  private page: SessionPage;
+  private marked: string | null = null;
   private action: PageAction;
   private state: PageActivityState = PageActivityState.Acting;
   private callSignal: AbortSignal;
@@ -42,6 +43,15 @@ export class PageActivity implements Disposable {
     return this.page.instance;
   }
 
+  public get viewId(): string {
+    return this.page.viewId;
+  }
+
+  // The view the control marked as controlled, which may be an earlier view of the page than its current one, or none.
+  public get markedViewId(): string | null {
+    return this.marked;
+  }
+
   // The running call's signal, which also aborts when the person stops the agent.
   public get signal(): AbortSignal {
     return this.callSignal;
@@ -60,7 +70,9 @@ export class PageActivity implements Disposable {
     return this.stopper.signal.aborted || this.isHandedOver || this.isReleased;
   }
 
-  public begin(action: PageAction, callSignal: AbortSignal): void {
+  // A call may find the page in another view than the last call did, as when the window opened it again.
+  public begin(page: SessionPage, action: PageAction, callSignal: AbortSignal): void {
+    this.page = page;
     this.action = action;
     this.callSignal = AbortSignal.any([callSignal, this.stopper.signal]);
     this.box = null;
@@ -75,6 +87,10 @@ export class PageActivity implements Disposable {
     this.point = null;
     this.move(PageActivityState.Idle);
     this.refusal = null;
+  }
+
+  public mark(viewId: string | null): void {
+    this.marked = viewId;
   }
 
   public stop(): void {
