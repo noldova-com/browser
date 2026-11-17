@@ -201,6 +201,17 @@ describe("PageStateComponent", () => {
     expect(fixture.componentInstance.leaves).toBe(1);
   });
 
+  it("names a refused address whose origin is opaque, and calls one with no address this page", async () => {
+    await showAsync(state(false), new ViewRefusalEvent("about:srcdoc", "null", false));
+    const named: string | undefined = shown()[1];
+    view.emit(new ViewStateEvent("https://one.example/", "One", true, false, false));
+    await fixture.whenStable();
+    fixture.componentInstance.controller()?.refuseNavigation("null");
+    await fixture.whenStable();
+
+    expect([named, shown()[1]]).toEqual(["Browser doesn't open about:srcdoc", "Browser doesn't open this page"]);
+  });
+
   it("says a page stopped working, and reloads it", async () => {
     await showAsync(state(false), new ViewCrashEvent());
 

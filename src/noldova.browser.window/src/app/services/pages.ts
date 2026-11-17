@@ -463,7 +463,7 @@ export class Pages {
   }
 
   private refuseRedirect(tab: PaneTab, place: PagePlace, event: ViewRefusalEvent): void {
-    tab.controller.refuseNavigation(event.origin);
+    tab.controller.refuseNavigation(event.origin, event.address);
     this.endTyping(tab, place);
   }
 
