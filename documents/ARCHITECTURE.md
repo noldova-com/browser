@@ -120,9 +120,9 @@ Its look follows the app's design, whose rules this section writes out.
 - **Visibility:** Noldova Desktop hides the view while its document is inactive or out of place.
 - **Layering:** the page's view is an element of the window's page, so Noldova Desktop's menus, dialogs, cards and notifications, and the module's own menu and dialog, lie over the live page like over any other element, and the page under them stays live.
 - **Keys:** keys pressed in the page don't reach the window's key handling, so Noldova Desktop forwards the app's own shortcuts from the view.
-  The pane's own keys are declared in `webViews.json`'s `keys`, and Noldova Desktop sends the window part a `Key` event for each one pressed in the page: `reload` on Ctrl+R and F5, Cmd+R on macOS, `newPage` on Ctrl+T and `focusAddress` on Ctrl+L, Cmd on macOS.
+  The pane's own keys are declared in `webViews.json`'s `keys`, and Noldova Desktop sends the window part a `Key` event for each one pressed in the page: `reload` on Ctrl+R and F5, Cmd+R on macOS, `newPage` on Ctrl+T, `focusAddress` on Ctrl+L and `find` on Ctrl+F, Cmd on macOS.
   The page document takes the same keys pressed in its own elements, such as the toolbar, ahead of the app's commands, as a field keeps its own keys, and there Escape stops a loading page, except in the address field, where it puts back the page's address.
-  Reload reloads the page as the toolbar's Reload does, a new page opens empty on the same workspace at the end of the row, its address field focused, and the address field takes the focus with its whole address selected.
+  Reload reloads the page as the toolbar's Reload does, a new page opens empty on the same workspace at the end of the row, its address field focused, the address field takes the focus with its whole address selected, and find opens the find bar, or focuses its field with its text selected.
   The page keeps Escape, which Noldova Desktop never takes from it, so Escape stops a load only from the toolbar.
   In the page, the app's shortcuts go first, so an app that binds one of these keys, such as Ctrl+L to focus its own text field, keeps it there until Noldova Desktop lets a pane's declared key win in its own view.
 - **Zoom:** the person zooms a page by Noldova Desktop's keys and wheel: Ctrl, or Cmd on macOS, with `=`, `-` or `0`, and the wheel, each page keeping its zoom across its navigations; Browser declares none of these keys.
@@ -149,9 +149,14 @@ Its look follows the app's design, whose rules this section writes out.
   The page's notice says why, such as "Type a web address, such as example.com.", until a load starts or the person presses Escape.
   A runtime request that failed goes to the error handler, and the notice says that Browser couldn't allow the address's site in the workspace and to try again.
   A page opened without an address starts with the focus in the field.
-- **Menu:** More, the kit's toolbar button after the address field and its own tab stop, opens the kit's menu with Copy address, which copies the page's URL and says so politely, Open in external browser, which opens an `http:` or `https:` page in the system's default browser through Noldova Desktop's `openLinkAsync`, and Clear browsing data…, each with its glyph.
-  Copy address is unavailable while there is no page, Open in external browser also for another scheme, and Clear browsing data… while the page has no view; the menu lies over the live page.
+- **Menu:** More, the kit's toolbar button after the address field and its own tab stop, opens the kit's menu with Copy address, which copies the page's URL and says so politely, Open in external browser, which opens an `http:` or `https:` page in the system's default browser through Noldova Desktop's `openLinkAsync`, Find on page, which shows the find key, Zoom, and Clear browsing data…, each with its glyph.
+  Copy address and Find on page are unavailable while there is no page, Open in external browser also for another scheme, and Clear browsing data… while the page has no view; the menu lies over the live page.
+  Find on page, or the find key, opens the find bar.
   Clear browsing data… asks first, in the kit's dialog over the live page, with the focus on Cancel; Clear has the runtime part clear the workspace's partition with the request `browser.clearBrowsingData`, so every page of that workspace forgets its sites.
+- **Find bar:** a 2.5rem row under the toolbar, 0.375rem in from the document's sides, with the kit's text field, 20rem wide with a search glyph, then Previous match, Next match and Close find, the kit's toolbar buttons 0.25rem after the field; it is a search region named Find on page, and it opens with the focus in its field.
+  Each edit searches the page through the view's `findAsync`, and the field's end shows the active match and the matches, such as "2 of 5", or "No matches", which describes the field and is said politely, a later count replacing an earlier one; an emptied field ends the search with `endFind`, and only the latest search's answer shows.
+  Enter and Next match go to the next match, Shift+Enter and Previous match to the previous one, both unavailable without a match; Escape and Close find end the search, close the bar and move the focus to Reload.
+  A search that takes the engine longer than its limit says "The search took too long", and one a navigation, a crash or a newer search ended says "The search stopped", rather than no matches; a navigation or a crash clears the count and keeps the text, and the next Enter searches again.
 - **States:** a loading or loaded page shows in its view; every other state hides the view and shows, in the middle of the view's place, a large glyph, a heading, what happened and what the person can do, the first action the main one, and announces the heading politely.
   Its sides come in from 2rem to 0.75rem on a narrow page, and its column never grows past its width, so at the pane's 10rem, and at 200% zoom, its text and buttons stay inside it, as does its actions row, which would otherwise take its widest button's width.
   An empty page says "Type an address to open a page"; a failed load says "Can't reach" and the host, why, with Try again and Copy address; a refused navigation names the origin Browser doesn't open, with Back while the page has history; a crashed page says "This page stopped working", with Reload.
@@ -198,7 +203,6 @@ Its look follows the app's design, whose rules this section writes out.
 
 **Not yet:**
 - The page's favicon on its tab waits for a Noldova Desktop release with the web view's `Favicon` event, which 0.0.2 doesn't have; the tab row's new-page button comes next.
-- The menu's Find on page, which the design shows, isn't built yet; Noldova Desktop's find calls are there for it.
 - Stop and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
   Until then the bar offers neither while the call's permission card asks, since Noldova Desktop withdraws a card only when the call itself is aborted.
 
@@ -213,6 +217,9 @@ The page's components take their sizes from the UI kit's tokens, and define on t
 | Toolbar | `--nol-browser-toolbar-gap` | `0.125rem` | The space between the row's controls, and after "Not secure"'s glyph beside More |
 | Toolbar | `--nol-browser-toolbar-button-gap` | `max(var(--nol-browser-toolbar-gap), calc(24.5px - 1.5rem))` | The space between Back, Forward and Reload, which keeps their targets 24px apart |
 | Toolbar | `--nol-browser-progress-height` | `2px` | The progress bar's space under the row |
+| Find bar | `--nol-browser-find-height` | `2.5rem` | The find bar's row |
+| Find bar | `--nol-browser-find-width` | `20rem` | The find field's width, which shrinks in a narrower pane |
+| Find bar | `--nol-browser-find-button-gap` | `max(0.125rem, calc(24.5px - 1.5rem))` | The space between Previous match, Next match and Close find, which keeps their targets 24px apart |
 | State | `--nol-browser-state-inset` | `2rem` | The state's inset from the view's place, its sides down to the kit's `--nol-space-3` on a narrow page |
 | State | `--nol-browser-state-glyph-size` | `2.5rem` | The state's large glyph |
 | State | `--nol-browser-state-text-width` | `28rem` | The widest the state's text grows |

@@ -7,7 +7,7 @@
  */
 
 import { WebViewNavigationKind, type WebViewNavigation } from "@noldova/desktop.protocol";
-import type { IWebViewHandle } from "@noldova/desktop.window";
+import type { IWebViewFound, IWebViewHandle } from "@noldova/desktop.window";
 
 import type { AddressRefusal } from "../enums/address-refusal.ts";
 import type { RefusedRequest } from "../enums/refused-request.ts";
@@ -105,6 +105,23 @@ export class PaneController {
 
   public async resetZoomAsync(): Promise<number> {
     return this.hearing.zoomTo(await this.requireView().setZoomAsync(1));
+  }
+
+  public findAsync(text: string): Promise<IWebViewFound> {
+    return this.requireView().findAsync(text);
+  }
+
+  public findNextAsync(): Promise<IWebViewFound> {
+    return this.requireView().findNextAsync();
+  }
+
+  public findPreviousAsync(): Promise<IWebViewFound> {
+    return this.requireView().findPreviousAsync();
+  }
+
+  public endFind(): void {
+    if (this.view !== null && !this.isClosed)
+      this.view.endFind();
   }
 
   public dismissRequest(): void {

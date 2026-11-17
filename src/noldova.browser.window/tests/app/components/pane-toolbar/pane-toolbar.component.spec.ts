@@ -29,7 +29,7 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [PaneToolbarComponent],
   template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
-    (clearBrowsingData)="cleared = cleared + 1" /></div>
+    (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
     <div class="probe" style="background: var(--nol-input); border: 1px solid var(--nol-input-border); color: var(--nol-text-strong); outline: 1px solid var(--nol-accent)"></div>
     <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>`
 })
@@ -40,6 +40,7 @@ class HostComponent {
   public readonly shownAddress: WritableSignal<string | null> = signal(null);
   public readonly entered: string[] = [];
   public cleared: number = 0;
+  public findings: number = 0;
   public readonly toolbar: Signal<PaneToolbarComponent> = viewChild.required(PaneToolbarComponent);
 }
 
@@ -136,7 +137,7 @@ describe("PaneToolbarComponent", () => {
   }
 
   async function openZoomAsync(): Promise<HTMLButtonElement[]> {
-    (await openMenuAsync())[2]?.click();
+    (await openMenuAsync())[3]?.click();
     await fixture.whenStable();
     await vi.waitFor(() => expect(zoomItems().length).toBe(3));
     return zoomItems();
@@ -151,7 +152,7 @@ describe("PaneToolbarComponent", () => {
   }
 
   async function shownZoomAsync(): Promise<string | undefined> {
-    const shown: string | undefined = percent((await openMenuAsync())[2]);
+    const shown: string | undefined = percent((await openMenuAsync())[3]);
     await closeMenusAsync();
     return shown;
   }
@@ -449,7 +450,7 @@ describe("PaneToolbarComponent", () => {
     expect([tip.textContent?.trim(), tip.getBoundingClientRect().top >= button("More").getBoundingClientRect().bottom - 0.5, button("More").textContent?.trim()]).toEqual(["More", true, "more_horiz"]);
   });
 
-  it("opens Copy address, Open in external browser, Zoom and Clear browsing data under More, each with its glyph", async () => {
+  it("opens Copy address, Open in external browser, Find on page, Zoom and Clear browsing data under More, each with its glyph", async () => {
     fixture.componentInstance.openLink.set(() => Promise.resolve());
     await loadAsync("https://one.example/");
 
@@ -458,6 +459,7 @@ describe("PaneToolbarComponent", () => {
     expect(labels(opened)).toEqual([
       ["content_copy", "Copy address", null],
       ["open_in_new", "Open in external browser", null],
+      ["search", "Find on page", null],
       ["zoom_in", "Zoom", null],
       ["delete_sweep", "Clear browsing data…", null]
     ]);
@@ -478,7 +480,7 @@ describe("PaneToolbarComponent", () => {
       await userEvent.keyboard(key);
       await fixture.whenStable();
 
-      await vi.waitFor(() => expect([key, items().length, document.activeElement]).toEqual([key, 4, items()[0]]));
+      await vi.waitFor(() => expect([key, items().length, document.activeElement]).toEqual([key, 5, items()[0]]));
       await userEvent.keyboard("{Escape}");
       await fixture.whenStable();
       expect([key, items(), document.activeElement]).toEqual([key, [], button("More")]);
@@ -493,7 +495,7 @@ describe("PaneToolbarComponent", () => {
 
     await userEvent.keyboard("{ArrowDown}");
 
-    expect([document.activeElement === items()[1], items().map(t => t.getAttribute("aria-disabled"))]).toEqual([true, ["true", "true", null, null]]);
+    expect([document.activeElement === items()[1], items().map(t => t.getAttribute("aria-disabled"))]).toEqual([true, ["true", "true", "true", null, null]]);
     await userEvent.keyboard("{Enter}");
     await userEvent.keyboard("{ArrowUp}{Enter}");
     await fixture.whenStable();
@@ -548,7 +550,7 @@ describe("PaneToolbarComponent", () => {
     await loadAsync("https://one.example/");
     button("More").focus();
     await userEvent.keyboard("{ArrowUp}");
-    await vi.waitFor(() => expect(document.activeElement).toBe(items()[3]));
+    await vi.waitFor(() => expect(document.activeElement).toBe(items()[4]));
 
     await userEvent.keyboard("{Enter}");
     await fixture.whenStable();
@@ -556,7 +558,21 @@ describe("PaneToolbarComponent", () => {
     expect([fixture.componentInstance.cleared, items(), document.activeElement, errors]).toEqual([1, [], button("More"), []]);
   });
 
-  it("makes Copy address unavailable without a page, Open in external browser for an address that isn't a web page's or without a link call, and Zoom and Clear browsing data without a view", async () => {
+  it("asks the page to find on it from Find on page, which shows Noldova Desktop's find key, and does nothing for it without a page", async () => {
+    (await openMenuAsync())[2]?.click();
+    await closeMenusAsync();
+    const shown: number = fixture.componentInstance.findings;
+    await loadAsync("https://one.example/");
+    const find = (await openMenuAsync())[2];
+
+    expect(trail(find)).toBe(navigator.platform.startsWith("Mac") ? "⌘F" : "Ctrl+F");
+    find?.click();
+    await fixture.whenStable();
+
+    expect([shown, fixture.componentInstance.findings, items(), document.activeElement]).toEqual([0, 1, [], button("More")]);
+  });
+
+  it("makes Copy address and Find on page unavailable without a page, Open in external browser for an address that isn't a web page's or without a link call, and Zoom and Clear browsing data without a view", async () => {
     const states: (string | null)[][] = [];
     const readAsync = async (): Promise<void> => {
       states.push((await openMenuAsync()).map(t => t.getAttribute("aria-disabled")));
@@ -575,12 +591,13 @@ describe("PaneToolbarComponent", () => {
     await fixture.whenStable();
     await readAsync();
 
-    expect(states).toEqual([["true", "true", null, null], [null, "true", null, null], [null, "true", null, null], [null, null, null, null], ["true", "true", "true", "true"]]);
+    expect(states).toEqual([["true", "true", "true", null, null], [null, "true", null, null, null], [null, "true", null, null, null], [null, null, null, null, null],
+      ["true", "true", "true", "true", "true"]]);
   });
 
   it("shows the page's zoom at More's Zoom, which opens Zoom in, Zoom out and Reset to 100%, each with its glyph and Noldova Desktop's key", async () => {
     await loadAsync("https://one.example/");
-    const zoom = (await openMenuAsync())[2];
+    const zoom = (await openMenuAsync())[3];
 
     expect([percent(zoom), trail(zoom), zoom?.querySelector(".nol-menu-item-chevron") !== null, zoom?.getAttribute("aria-haspopup")]).toEqual(["100%", undefined, false, "menu"]);
     zoom?.click();
@@ -621,7 +638,7 @@ describe("PaneToolbarComponent", () => {
     await userEvent.keyboard("{ArrowDown}");
     await vi.waitFor(() => expect(document.activeElement).toBe(items()[0]));
 
-    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowRight}");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowRight}");
     await vi.waitFor(() => expect(document.activeElement).toBe(zoomItems()[0]));
     await userEvent.keyboard("{Enter}");
     await fixture.whenStable();
@@ -634,7 +651,7 @@ describe("PaneToolbarComponent", () => {
     await loadAsync("https://one.example/");
     await showAsync(new ViewZoomEvent(1.5));
     const first = await shownZoomAsync();
-    const zoom = (await openMenuAsync())[2];
+    const zoom = (await openMenuAsync())[3];
     await showAsync(new ViewZoomEvent(0.67));
     const open = percent(zoom);
     await closeMenusAsync();

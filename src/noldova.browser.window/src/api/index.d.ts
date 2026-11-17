@@ -325,7 +325,7 @@ export declare class ViewKeyEvent extends ViewEvent {
   public readonly kind: typeof ViewEventKind.Key;
 
   /**
-   * The key's name in `webViews.json`: `reload`, `newPage` or `focusAddress`.
+   * The key's name in `webViews.json`: `reload`, `newPage`, `focusAddress` or `find`.
    */
   public readonly name: string;
 

@@ -1072,6 +1072,69 @@ describe("PageComponent", () => {
       .toEqual([[true, 0, length, length], true, [true, 0, length, length], true, [true, 0, length, length]]);
   });
 
+  function findField(): HTMLInputElement {
+    return find<HTMLInputElement>("nol-browser-find-bar input");
+  }
+
+  it("opens the find bar between the toolbar and the page area from the find key Noldova Desktop sends from the page, its field focused, and the view's place under it", async () => {
+    const view: FakeWebView = await placeAsync();
+    const tags = (parent: Element): string[] => [...parent.children].map(t => t.tagName.toLowerCase());
+
+    view.emitOther(WebViewEventKind.Key, { name: "find" });
+    await stableAsync();
+    await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+    const [toolbar, bar, area] = [find("nol-browser-toolbar"), find("nol-browser-find-bar"), find(".nol-browser-page-view")].map(t => t.getBoundingClientRect());
+
+    expect(tags(find("nol-browser-page"))).toEqual(["nol-browser-toolbar", "nol-browser-find-bar", "div"]);
+    expect([Math.round((bar?.top ?? 0) - (toolbar?.bottom ?? 0)), Math.round((area?.top ?? 0) - (bar?.bottom ?? 0))]).toEqual([0, 0]);
+    await vi.waitFor(() => expect(boundsOf(view.element.getBoundingClientRect())).toEqual(boundsOf(find(".nol-browser-page-view").getBoundingClientRect())));
+  });
+
+  it("opens the find bar from Ctrl+F, or Cmd+F, in the toolbar and from More's Find on page, and selects its text again from the key in its own field", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.findAnswer = () => Promise.resolve(FakeWebView.found(1, 2));
+
+    const inToolbar: KeyboardEvent = press(button("Back"), withMod("f", "KeyF"));
+    await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+    await userEvent.keyboard("plan");
+    await stableAsync();
+    findField().setSelectionRange(4, 4);
+    const inField: KeyboardEvent = press(findField(), withMod("f", "KeyF"));
+    const selected: (number | null)[] = [findField().selectionStart, findField().selectionEnd];
+    button("Back").focus();
+    button("More").click();
+    await stableAsync();
+    menuItem("Find on page")?.click();
+    await stableAsync();
+
+    expect([inToolbar.defaultPrevented, inField.defaultPrevented, selected, document.activeElement === findField(), document.querySelectorAll("nol-browser-find-bar").length])
+      .toEqual([true, true, [0, 4], true, 1]);
+    expect(view.calls.filter(t => t.startsWith("find"))).toEqual(["find p", "find pl", "find pla", "find plan"]);
+  });
+
+  it("closes the find bar on Escape, ending its search, and gives the focus to Reload without stopping a loading page", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.emit(new ViewStateEvent("https://two.example/", "Two", true, true, false));
+    await stableAsync();
+    press(button("Back"), withMod("f", "KeyF"));
+    await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+
+    const closing: KeyboardEvent = press(findField(), { key: "Escape", code: "Escape" });
+    await stableAsync();
+
+    expect([closing.defaultPrevented, document.querySelector("nol-browser-find-bar"), document.activeElement, view.calls.filter(t => t === "stop" || t === "endFind")])
+      .toEqual([true, null, button("Reload", "Stop"), ["endFind"]]);
+  });
+
+  it("opens no find bar for the find key while the page has nothing loaded", async () => {
+    await openAsync();
+
+    const pressed: KeyboardEvent = press(button("Back"), withMod("f", "KeyF"));
+    await stableAsync();
+
+    expect([pressed.defaultPrevented, document.querySelector("nol-browser-find-bar")]).toEqual([true, null]);
+  });
+
   it("leaves alone an input method's key, a held key's repeats, a press already handled, another key, and a key it doesn't take", async () => {
     const view: FakeWebView = await placeAsync();
     button("Back").addEventListener("keydown", t => t.preventDefault(), { once: true });
@@ -1081,7 +1144,7 @@ describe("PageComponent", () => {
       press(field(), withMod("r", "KeyR", { isComposing: true })), press(button("Back"), withMod("r", "KeyR", { repeat: true })),
       press(button("Back"), withMod("x", "KeyX")), press(button("Back"), { key: "Escape", code: "Escape" })
     ].map(t => t.defaultPrevented);
-    view.emitOther(WebViewEventKind.Key, { name: "find" });
+    view.emitOther(WebViewEventKind.Key, { name: "print" });
     await stableAsync();
 
     expect([handled.defaultPrevented, pressed, view.calls.filter(t => t === "reload" || t === "stop"), context.opened.length]).toEqual([true, [false, false, false, false], [], 1]);
