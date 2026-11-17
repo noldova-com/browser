@@ -84,14 +84,14 @@ describe("PageActivity", () => {
     activity.aim(new PageBox(5, 6, 7, 8), null);
     activity.rest();
     const next: AbortController = new AbortController();
-    activity.begin(PageAction.Clicking, next.signal);
+    activity.begin(new SessionPage("view-2", "page-1", "workspace-1", "Scout"), PageAction.Clicking, next.signal);
     call.abort(ToolAbortReason.Cancelled);
 
     expect(published.slice(2).map(t => [t["action"], t["state"], t["box"], t["point"], t["refusal"]])).toEqual([
       ["Typing", "Idle", null, null, { url: "https://docs.example.com/pricing", origin: "https://docs.example.com" }],
       ["Clicking", "Acting", null, null, null]
     ]);
-    expect([resting, activity.isCalling, activity.signal.aborted]).toEqual([false, true, false]);
+    expect([resting, activity.isCalling, activity.signal.aborted, activity.viewId]).toEqual([false, true, false, "view-2"]);
     next.abort(ToolAbortReason.Cancelled);
     expect(activity.signal.reason).toBe(ToolAbortReason.Cancelled);
   });

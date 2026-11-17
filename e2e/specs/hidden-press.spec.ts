@@ -75,15 +75,21 @@ test.describe("a press on a hidden page", () => {
         .toBe("mousedown,mouseup,click");
     });
 
-    test(`a person's press reaches the document a page loaded by a ${navigation.name} navigation while its tab was hidden, once the tab is shown`, async ({ app, servers }) => {
+    test(`a person's press reaches the document a page loaded by a ${navigation.name} navigation while its tab was hidden, once the tab is shown after an agent's call`, async ({ app, servers }) => {
       const docs = await servers.startAsync("docs.localhost", { "/": PAGE("One"), [navigation.path]: PAGE(navigation.title) });
-      await hideAndNavigateAsync(app, docs, navigation);
+      const instance = await hideAndNavigateAsync(app, docs, navigation);
       const target = docs.url(navigation.path);
+      await callToolAsync(app, { page: instance, profileKey: PROFILE_KEY }, "browser_snapshot", {});
 
       await app.window.getByRole("tab", { name: navigation.title, exact: true }).click();
-      await expect(app.window.locator(".nol-browser-page-view").filter({ visible: true })).toHaveCount(1);
-      await app.viewPages.runAtAsync(target, "new Promise(resolve => requestAnimationFrame(() => resolve(true)))");
-      await app.viewPages.clickAtAsync(target, 50, 50);
+      const view = app.window.locator(".nol-browser-page-view").filter({ visible: true });
+      await expect(view).toHaveCount(1);
+      await expect.poll(() => app.viewPages.runAtAsync(target, "performance.getEntriesByName(\"first-contentful-paint\").length > 0"),
+        { message: "The page shown again never painted." }).toBe("true");
+      const box = await view.boundingBox();
+      if (box === null)
+        throw new Error("The shown page's view has no box.");
+      await app.window.mouse.click(box.x + 50, box.y + 50);
 
       await expect.poll(() => app.viewPages.runAtAsync(target, "seen.join()"), { message: "The person's press never reached the page shown again." })
         .toBe("mousedown,mouseup,click");
