@@ -138,7 +138,7 @@ describe("AccessibilityWalk", () => {
 
       const tree: AccessibilityTree = await readAsync(ROOT_LINE_BYTES, new AbortController().signal, Date.now() + 600_000);
 
-      expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "4"], false]);
+      expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "4", "20"], false]);
       expect(calls().slice(3)).toEqual([...["1", "2", "3", "4"].map(t => ["Accessibility.getChildAXNodes", { id: t }]), ["Accessibility.disable", {}]]);
     });
 
