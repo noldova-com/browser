@@ -27,6 +27,7 @@ class AppRun {
   public readonly application: ElectronApplication;
   // Taken at launch: once the app has quit, Playwright drops its record of the app, and asking for the process then fails.
   public readonly process: ChildProcess;
+  public readonly closed: Promise<void>;
   public readonly window: Page;
   public readonly viewRequests: ViewRequests;
   public readonly viewPages: ViewPages;
@@ -34,6 +35,7 @@ class AppRun {
   public constructor(application: ElectronApplication, window: Page, viewRequests: ViewRequests, viewPages: ViewPages) {
     this.application = application;
     this.process = application.process();
+    this.closed = new Promise(resolve => application.once("close", () => resolve()));
     this.window = window;
     this.viewRequests = viewRequests;
     this.viewPages = viewPages;
@@ -116,6 +118,11 @@ export class TestApp {
     child.stdout?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
     child.stderr?.setEncoding("utf8").on("data", (chunk: string) => this.output.push(chunk));
     run.window.on("console", message => this.output.push(`[window ${message.type()}] ${message.text()}\n`));
+  }
+
+  // Settles once Playwright has seen the app close, after which it no longer answers for the app.
+  public async closedAsync(): Promise<void> {
+    await this.run.closed;
   }
 
   public async waitForStartAsync(): Promise<void> {

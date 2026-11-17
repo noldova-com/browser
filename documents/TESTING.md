@@ -206,6 +206,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   `doubles.spec.ts` asks each double to open as soon as it takes the request, before the start check: the relay double's window part activates after the agent double's, so its test checks the gap, while the agent double's part is nearly always listening by then, so its test checks the wiring, its `listen` call and method.
   `e2e/tests/held-event.test.ts` checks the hold itself, in both doubles' copies, over Noldova Desktop's own event channel.
 - **`npm run test:e2e`** type-checks `e2e` and runs `e2e/specs` with Playwright, one test at a time, each test in an app of its own with new data and device folders, which it quits through Noldova Desktop's command line.
+  `test-app.spec.ts` quits an app it launches itself twice, the second time after Playwright has seen it close, so a quit never asks Playwright for an app it already closed ([#63](https://github.com/noldova-com/browser/issues/63)).
 
 - Playwright drives the app as the base's desktop UI automation does.
 - The production security settings stay as they are: the view's sandbox and context isolation stay on, and the view has no preload.
