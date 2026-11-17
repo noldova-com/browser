@@ -190,12 +190,12 @@ describe("ClickTool", () => {
     expect(bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params)).toEqual([{ objectId: `node-${ShopPage.LINK}` }]);
   });
 
-  it("fails as stale, asking nothing, when the page went to another document while its element was read, and still releases the element", async () => {
+  it("refuses its stale reference, asking nothing, when the page went to another document while its element was read, and still releases the element", async () => {
     bench.failHearing();
     const frames: JsonObject[] = [ShopPage.frame("L1"), ShopPage.frame("L1"), ShopPage.frame("L2")];
     bench.surface.answerWith("Page.getFrameTree", () => frames.shift() ?? {});
 
-    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), StaleReferenceException, { reason: "Stale" });
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), StaleReferenceException, { reason: "Refused", moduleCode: "browser.staleReference" });
     expect([bench.permissions.requests.length, bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").length]).toEqual([0, 1]);
   });
 
