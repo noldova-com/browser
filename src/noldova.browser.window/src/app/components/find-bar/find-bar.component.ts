@@ -60,7 +60,7 @@ export class FindBarComponent {
       let was: PaneStatus = controller.status;
       onCleanup(controller.onChange(t => {
         if (t.state !== PaneState.Loaded || t.url !== was.url)
-          this.reset();
+          this.end(controller);
         was = t;
       }));
       onCleanup(() => this.end(controller));

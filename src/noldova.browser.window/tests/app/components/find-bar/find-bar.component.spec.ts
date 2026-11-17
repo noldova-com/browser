@@ -221,11 +221,15 @@ describe("FindBarComponent", () => {
     expect([count(), said.map(t => t[0])]).toEqual(["1 of 2", ["1 of 2"]]);
   });
 
-  it("clears the count when the page navigates or crashes, keeps the text, and starts a new search on Enter; a new title alone keeps the count", async () => {
+  it("ends the search and clears the count when the page navigates, starts a load that commits nothing, moves to a part or crashes, keeps the text, and starts a new search on Enter; a new title alone keeps the count", async () => {
     answer(() => FakeWebView.found(1, 3));
     await typeAsync("a");
     await showAsync("https://one.example/", false, "Renamed");
     const kept: string | null = count();
+    await showAsync("https://one.example/", true, "Renamed");
+    await showAsync("https://one.example/", false, "Renamed");
+    const downloaded: [string | null, string[]] = [count(), [...view.calls]];
+    await pressAsync("{Enter}");
 
     await showAsync("https://one.example/next", true);
     const navigated: [string | null, string] = [count(), field().value];
@@ -238,7 +242,8 @@ describe("FindBarComponent", () => {
     view.emit(new ViewCrashEvent());
     await fixture.whenStable();
 
-    expect([kept, navigated, searched, moved, count(), view.calls]).toEqual(["1 of 3", [null, "a"], "1 of 3", null, null, ["find a", "find a", "find a"]]);
+    expect([kept, downloaded, navigated, searched, moved, count(), view.calls]).toEqual(["1 of 3", [null, ["find a", "endFind"]], [null, "a"], "1 of 3", null, null,
+      ["find a", "endFind", "find a", "endFind", "find a", "endFind", "find a", "endFind"]]);
   });
 
   it("closes on Escape and on Close find, ending a running search once", async () => {
@@ -293,7 +298,7 @@ describe("FindBarComponent", () => {
     await vi.waitFor(() => expect(count()).toBe("2 of 4"));
 
     expect([searching, view.calls.at(-1), view.calls.length, count(), document.activeElement, field().selectionStart, field().selectionEnd])
-      .toEqual([4, "find plan", 5, "2 of 4", field(), 0, 4]);
+      .toEqual([4, "find plan", 6, "2 of 4", field(), 0, 4]);
   });
 
   it("ends the search when it goes away", async () => {
