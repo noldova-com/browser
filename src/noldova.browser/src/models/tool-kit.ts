@@ -210,7 +210,13 @@ export class ToolKit {
   }
 
   public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ElementFacts> {
-    return NodeFactsReader.readElement(await this.changes.readElementAsync(viewId, backendNodeId, options));
+    const objectId: string = await this.changes.resolveElementAsync(viewId, backendNodeId, options);
+    const reply: JsonObject = await this.changes.readElementAsync(viewId, objectId, options);
+    const path: readonly NodeFacts[] | null = NodeFactsReader.readPath(reply);
+    // Only a submit is rated by its form, so only then is the form read, which on a page wrapped in one form is the whole page.
+    const isSubmitting: boolean = path !== null && (RiskClassifier.submitsClick(path) || RiskClassifier.submitsEnter(path));
+    const form: JsonObject | null = isSubmitting ? await this.changes.readFormAsync(viewId, objectId, options) : null;
+    return NodeFactsReader.readElement(reply, form === null ? null : NodeFactsReader.readSubtree(form));
   }
 
   public async readTitleOfAsync(viewId: string, documentId: string, options: CallOptions): Promise<string> {

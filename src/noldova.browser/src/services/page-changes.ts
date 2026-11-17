@@ -88,9 +88,9 @@ export class PageChanges {
     return has;
   }
 
-  // The element's facts, as the one pinned function reads them in the page changes' isolated world of the main frame, where the element is
-  // resolved, so the page's own script never sees the call or changes what it reads; the reply holds only those facts, never the whole document.
-  public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<JsonObject> {
+  // The element as an object in the page changes' isolated world of the main frame, where the pinned function reads it, so the page's own
+  // script never sees the calls or changes what they read.
+  public async resolveElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<string> {
     const { mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
     const world: JsonObject = await this.calls.sendAsync(viewId, Resources.createIsolatedWorldMethod, { frameId: mainId, worldName: PageChangeScript.worldName, grantUniveralAccess: false },
       options);
@@ -102,7 +102,28 @@ export class PageChanges {
     const objectId: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.objectIdField] : undefined;
     if (typeof objectId !== "string")
       throw new MalformedReplyException();
-    return this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, returnByValue: true, silent: true },
+    return objectId;
+  }
+
+  // The resolved element's facts, by value, so the reply holds only those facts, never the whole document.
+  public async readElementAsync(viewId: string, objectId: string, options: CallOptions): Promise<JsonObject> {
+    return this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
+      { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, arguments: [{ value: false }], returnByValue: true, silent: true },
+      options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+  }
+
+  // The whole subtree of the form the resolved element belongs to, through every shadow root, closed ones too, which the function in the
+  // isolated world can't enter; none when the element belongs to no form.
+  public async readFormAsync(viewId: string, objectId: string, options: CallOptions): Promise<JsonObject | null> {
+    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
+      { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, arguments: [{ value: true }], returnByValue: false, silent: true }, options);
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    if (JsonShapes.isObject(result) && result[Resources.subtypeField] === Resources.nullSubtype)
+      return null;
+    const form: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.objectIdField] : undefined;
+    if (typeof form !== "string")
+      throw new MalformedReplyException();
+    return this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId: form, depth: Resources.wholeSubtreeDepth, pierce: true },
       options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
   }
 

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("ElementFactsScript", () => {
   let read: (element: Node) => unknown;
+  let formOf: (element: Node, isForm?: unknown) => unknown;
   let root: HTMLElement;
   let title: string;
 
@@ -18,7 +19,8 @@ describe("ElementFactsScript", () => {
     const made: unknown = new Function(`return (${ElementFactsScript.functionDeclaration});`)();
     if (typeof made !== "function")
       throw new Error("The script's declaration isn't a function.");
-    read = (element: Node): unknown => made.call(element);
+    read = (element: Node): unknown => made.call(element, false);
+    formOf = (element: Node, isForm: unknown = true): unknown => made.call(element, isForm);
     title = document.title;
     root = document.createElement("div");
     document.body.append(root);
@@ -54,7 +56,7 @@ describe("ElementFactsScript", () => {
       ["A", ["href", "/plans"]]] });
   });
 
-  it("gives no path, form or form name for an element outside the document, and still the page's title and base URL", () => {
+  it("gives no path, linked elements or form name for an element outside the document, and still the page's title and base URL", () => {
     document.title = "Plans";
     const loose: HTMLElement = document.createElement("form");
     loose.innerHTML = "<button>Pay</button>";
@@ -62,34 +64,38 @@ describe("ElementFactsScript", () => {
     if (button === null)
       throw new Error("The button is missing.");
 
-    expect(read(button)).toEqual({ path: null, form: [], formName: "", title: "Plans", baseUrl: document.baseURI });
+    expect(read(button)).toEqual({ path: null, linked: [], formName: "", title: "Plans", baseUrl: document.baseURI });
   });
 
-  it("reads the elements of the nearest form above the element, through a shadow root, and those that name the form, never a field's typed value", () => {
-    root.innerHTML = "<form id=\"checkout\"><div id=\"host\"></div><button>Pay</button></form><input form=\"checkout\" type=\"password\" name=\"pin\">"
-      + "<input form=\"elsewhere\" name=\"other\">";
-    const host: Element | null = root.querySelector("#host");
-    const button: Element | null = root.querySelector("button");
-    if (host === null || button === null)
-      throw new Error("The form is missing.");
-    host.attachShadow({ mode: "open" }).innerHTML = "<input name=\"code\" value=\"preset\">";
-    const typed: HTMLInputElement | null = host.shadowRoot?.querySelector("input") ?? null;
-    if (typed === null)
-      throw new Error("The shadow field is missing.");
-    typed.value = "typed";
-
-    expect(read(button)).toMatchObject({ form: [
-      ["FORM", ["id", "checkout"]], ["DIV", ["id", "host"]], ["INPUT", ["name", "code", "value", "preset"]], ["BUTTON", []], ["INPUT", ["form", "checkout", "type", "password", "name", "pin"]]
-    ] });
-  });
-
-  it("reads the form its form attribute names, wherever it is, with the elements that name it, and no form when the document holds none of that id", () => {
-    root.innerHTML = "<form id=\"sign-in\"><input type=\"password\"></form><form id=\"search\"><button form=\"sign-in\">Go</button><button form=\"missing\">Lost</button></form>";
+  it("gives the element's form as the element itself: the nearest form above it, even from inside a closed shadow root, or the form its form attribute names", () => {
+    root.innerHTML = "<form id=\"checkout\"><div id=\"host\"></div></form><form id=\"sign-in\"></form><button form=\"sign-in\">Go</button>"
+      + "<button form=\"missing\">Lost</button><a href=\"/\">Home</a>";
+    const [checkout, signIn]: readonly Element[] = [...root.querySelectorAll("form")];
     const [named, missing]: readonly Element[] = [...root.querySelectorAll("button")];
-    if (named === undefined || missing === undefined)
-      throw new Error("The buttons are missing.");
+    const host: Element | null = root.querySelector("#host");
+    const link: Element | null = root.querySelector("a");
+    if (checkout === undefined || signIn === undefined || named === undefined || missing === undefined || host === null || link === null)
+      throw new Error("The page is missing.");
+    const closed: ShadowRoot = host.attachShadow({ mode: "closed" });
+    closed.innerHTML = "<button>Pay</button>";
+    const pay: Element | null = closed.querySelector("button");
+    if (pay === null)
+      throw new Error("The shadow button is missing.");
 
-    expect([read(named), read(missing)]).toMatchObject([{ form: [["FORM", ["id", "sign-in"]], ["INPUT", ["type", "password"]], ["BUTTON", ["form", "sign-in"]]] }, { form: [] }]);
+    expect(formOf(pay)).toBe(checkout);
+    expect(formOf(named)).toBe(signIn);
+    expect([formOf(missing), formOf(link), formOf(document.createElement("button")), formOf(pay, "yes")]).toEqual([null, null, null, null]);
+  });
+
+  it("lists the elements that name the element's form by its id, never a field's typed value", () => {
+    root.innerHTML = "<form id=\"checkout\"><button>Pay</button></form><input form=\"checkout\" type=\"password\" name=\"pin\" value=\"preset\"><input form=\"elsewhere\">";
+    const button: Element | null = root.querySelector("button");
+    const pin: HTMLInputElement | null = root.querySelector("input");
+    if (button === null || pin === null)
+      throw new Error("The form is missing.");
+    pin.value = "typed";
+
+    expect(read(button)).toMatchObject({ linked: [["INPUT", ["form", "checkout", "type", "password", "name", "pin", "value", "preset"]]] });
   });
 
   it("reads a form's name from the elements that label it, in order, then its label, then its title, on one line, and none outside a form", () => {

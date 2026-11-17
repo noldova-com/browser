@@ -7,9 +7,11 @@
  */
 
 export class ElementFactsScript {
-  public static readonly functionDeclaration: string = `function () {
+  public static readonly functionDeclaration: string = `function (isForm) {
+  if (typeof isForm !== "boolean")
+    return null;
   const read = node => [node.nodeName, node.nodeType === 1 ? node.getAttributeNames().flatMap(name => [name, node.getAttribute(name) ?? ""]) : []];
-  const isForm = node => node.nodeType === 1 && node.nodeName.toUpperCase() === "FORM";
+  const isFormElement = node => node.nodeType === 1 && node.nodeName.toUpperCase() === "FORM";
   const collapse = text => text.replace(/\\s+/g, " ").trim();
   const all = (root, isPierced) => {
     const found = [];
@@ -28,14 +30,15 @@ export class ElementFactsScript {
   const path = [];
   for (let node = this; node !== null; node = node instanceof ShadowRoot ? node.host : node.parentNode)
     path.unshift(node);
-  if (path[0] !== document)
-    return { path: null, form: [], formName: "", title: "", baseUrl: document.baseURI };
-
-  const everything = all(document, true);
+  const isInDocument = path[0] === document;
+  const everything = isInDocument ? all(document, true) : [];
   const named = this.nodeType === 1 ? this.getAttribute("form") : null;
-  const form = named === null ? path.slice(0, -1).findLast(isForm) : everything.find(t => isForm(t) && t.getAttribute("id") === named);
+  const form = !isInDocument ? undefined
+    : named === null ? path.slice(0, -1).findLast(isFormElement) : everything.find(t => isFormElement(t) && t.getAttribute("id") === named);
+  if (isForm)
+    return form ?? null;
   const id = form === undefined ? null : form.getAttribute("id");
-  const members = form === undefined ? [] : [...all(form, true), ...(id === null ? [] : everything.filter(t => t.nodeType === 1 && t.getAttribute("form") === id))];
+  const linked = id === null ? [] : everything.filter(t => t.nodeType === 1 && t.getAttribute("form") === id);
   const labels = form === undefined ? "" : (form.getAttribute("aria-labelledby") ?? "").split(/\\s+/).filter(t => t !== "")
     .map(label => everything.find(t => t.nodeType === 1 && t.getAttribute("id") === label))
     .map(t => t === undefined ? "" : t.textContent)
@@ -43,8 +46,8 @@ export class ElementFactsScript {
   const names = form === undefined ? [] : [labels, form.getAttribute("aria-label") ?? "", form.getAttribute("title") ?? ""].map(collapse);
   const title = all(document, false).find(t => t.nodeName === "TITLE");
   return {
-    path: path.map(read),
-    form: members.filter(t => t.nodeType === 1).map(read),
+    path: isInDocument ? path.map(read) : null,
+    linked: linked.map(read),
     formName: names.find(t => t !== "") ?? "",
     title: title === undefined ? "" : collapse(title.textContent),
     baseUrl: document.baseURI

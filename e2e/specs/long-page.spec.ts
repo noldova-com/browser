@@ -24,10 +24,10 @@ const PAGE = "<!doctype html><title>Long page</title><form action=\"/sent\"><inp
 const ROWS = 12_000;
 
 // The document's whole tree passes Noldova Desktop's 4 MiB reply limit with rows of short text, while its accessibility tree stays small.
-// The checkout form's PIN field sits in an open shadow root, so only a read that goes through shadow roots finds the form's secret.
+// The checkout form's PIN field sits in a closed shadow root, so only a read of the form that pierces closed shadow roots finds its secret.
 const LONG_DOCUMENT = "<!doctype html><title>Long document</title><h2 id=\"checkout-name\">Checkout</h2>"
   + "<form aria-labelledby=\"checkout-name\" action=\"/sent\"><div id=\"pin\"></div><button>Pay</button></form><a id=\"first\" href=\"#rows\">First link</a>"
-  + "<script>document.getElementById('pin').attachShadow({ mode: 'open' }).innerHTML = '<input type=\"password\" aria-label=\"PIN\">';</script>"
+  + "<script>document.getElementById('pin').attachShadow({ mode: 'closed' }).innerHTML = '<input type=\"password\" aria-label=\"PIN\">';</script>"
   + `<div id="rows"><script>document.write(Array.from({ length: ${ROWS} }, (_, i) => '<div><span>Row ' + i + '</span></div>').join(''))</script></div>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {

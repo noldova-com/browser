@@ -174,7 +174,7 @@ describe("ClickTool", () => {
 
   it("runs nothing when the page loaded another document while the request waited", async () => {
     bench.failHearing();
-    const frames: JsonObject[] = [ShopPage.frame("L1"), ShopPage.frame("L2")];
+    const frames: JsonObject[] = [ShopPage.frame("L1"), ShopPage.frame("L1"), ShopPage.frame("L2")];
     bench.surface.answerWith("Page.getFrameTree", () => frames.shift() ?? {});
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), PageChangedAfterGrantException, { reason: "Stale" });
@@ -353,11 +353,11 @@ describe("ClickTool", () => {
   it("gives no title when the page went to another document between the title and the frame read after it", async () => {
     bench.failHearing();
     let reads: number = 0;
-    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(++reads < 4 ? "L1" : "L2"));
+    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(++reads < 6 ? "L1" : "L2"));
 
     const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }));
 
-    expect([reads, result.structured]).toEqual([4, { page: { url: "https://shop.test/cart/", title: "" }, element: { role: "link", name: "Help", isSecret: false } }]);
+    expect([reads, result.structured]).toEqual([6, { page: { url: "https://shop.test/cart/", title: "" }, element: { role: "link", name: "Help", isSecret: false } }]);
   });
 
   it("checks the element again before each press of a double click", async () => {
@@ -574,6 +574,17 @@ describe("ClickTool", () => {
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.FORM_BUTTON) })), PermissionDeniedException, { reason: "Denied" });
     expect(bench.sendingMarks).toBe(0);
+  });
+
+  it("asks at high risk for a button whose form holds a password field inside a closed shadow root, as it reads the form's whole subtree", async () => {
+    ShopPage.serve(bench, ShopPage.FORM_BUTTON);
+    ShopPage.showDocument(bench, ShopPage.document(false, true));
+
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.FORM_BUTTON) }));
+
+    expect(bench.permissions.requests.map(t => t.risk)).toEqual([ToolRisk.High]);
+    expect(bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["objectId"] !== undefined).map(t => t.params))
+      .toContainEqual({ objectId: "form-4", depth: -1, pierce: true });
   });
 
   it("presses nothing and fails as stale when the form the button submits gained a password field while the medium-risk card waited", async () => {

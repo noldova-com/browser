@@ -103,7 +103,7 @@ describe("webViews.json", () => {
       { name: "Accessibility.getRootAXNode" },
       { name: "Accessibility.getChildAXNodes", parameters: { id: { required: true, maxLength: 64 } } },
       { name: "DOM.resolveNode", parameters: { backendNodeId: { required: true, minimum: 1 }, executionContextId: { required: true, minimum: 1 } } },
-      { name: "DOM.describeNode", parameters: { backendNodeId: { required: true, minimum: 1 }, depth: { values: [-1] }, pierce: { values: [true] } } },
+      { name: "DOM.describeNode", parameters: { backendNodeId: { minimum: 1 }, objectId: { maxLength: 128 }, depth: { values: [-1] }, pierce: { values: [true] } } },
       expect.objectContaining({ name: "Input.dispatchMouseEvent", parameters: expect.objectContaining({ clickCount: expect.objectContaining({ minimum: 1, maximum: 3 }),
         button: expect.objectContaining({ values: ["left", "middle", "right"] }) }) }),
       expect.objectContaining({ name: "Input.dispatchKeyEvent", parameters: expect.objectContaining({ text: expect.objectContaining({ maxLength: 2 }),
@@ -130,7 +130,7 @@ describe("webViews.json", () => {
       { name: "Runtime.callFunctionOn", parameters: {
         functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration] },
         uniqueContextId: { maxLength: 64 }, objectId: { maxLength: 128 },
-        arguments: {}, returnByValue: { required: true, values: [true] }, silent: { required: true, values: [true] }
+        arguments: {}, returnByValue: { required: true, values: [true, false] }, silent: { required: true, values: [true] }
       } }
     ]) });
   });

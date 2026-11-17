@@ -33,7 +33,7 @@ function answer(value: JsonValue): JsonObject {
 
 const FACTS: JsonObject = {
   path: [["#document", []], ["HTML", []], ["form", ["ID", "checkout"]], ["button", ["type", "submit"]]],
-  form: [["form", ["ID", "checkout"]], ["input", ["Type", "Password"]]],
+  linked: [["input", ["FORM", "checkout", "Type", "Password"]]],
   formName: "Checkout",
   title: "Cart",
   baseUrl: "https://shop.test/cart/"
@@ -69,17 +69,20 @@ describe("NodeFactsReader", () => {
   });
 
   it("reads the pinned function's facts: the path root first and the form's elements, with names normalized, the form's name and the page", () => {
-    const facts: ElementFacts = NodeFactsReader.readElement(answer(FACTS));
+    const form: readonly NodeFacts[] = [new NodeFacts("FORM", new Map([["id", "checkout"]]))];
+    const facts: ElementFacts = NodeFactsReader.readElement(answer(FACTS), form);
 
     expect(facts).toBeInstanceOf(ElementFacts);
     expect(facts.path?.map(t => t.nodeName)).toEqual(["#DOCUMENT", "HTML", "FORM", "BUTTON"]);
+    expect(NodeFactsReader.readPath(answer(FACTS))).toEqual(facts.path);
     expect(facts.path?.at(-2)?.attributes.get("id")).toBe("checkout");
-    expect(facts.form.map(t => [t.nodeName, [...t.attributes]])).toEqual([["FORM", [["id", "checkout"]]], ["INPUT", [["type", "Password"]]]]);
+    expect(facts.form.map(t => [t.nodeName, [...t.attributes]])).toEqual([["FORM", [["id", "checkout"]]], ["INPUT", [["form", "checkout"], ["type", "Password"]]]]);
     expect([facts.formName, facts.page]).toEqual(["Checkout", new PageFacts("https://shop.test/cart/", "Cart")]);
+    expect(NodeFactsReader.readElement(answer(FACTS), null).form).toEqual([]);
   });
 
   it("reads no path for an element outside the main frame's document", () => {
-    expect(NodeFactsReader.readElement(answer({ ...FACTS, path: null, form: [] })).path).toBeNull();
+    expect([NodeFactsReader.readElement(answer({ ...FACTS, path: null }), null).path, NodeFactsReader.readPath(answer({ ...FACTS, path: null }))]).toEqual([null, null]);
   });
 
   it("refuses an answer of another shape", () => {
@@ -93,14 +96,25 @@ describe("NodeFactsReader", () => {
       answer({ ...FACTS, path: ["A", []] }),
       answer({ ...FACTS, path: [[1, []]] }),
       answer({ ...FACTS, path: [["A", "href"]] }),
-      answer({ ...FACTS, form: null }),
-      answer({ ...FACTS, form: [["INPUT", ["type"]]] }),
+      answer({ ...FACTS, linked: null }),
+      answer({ ...FACTS, linked: [["INPUT", ["type"]]] }),
       answer({ ...FACTS, formName: null }),
       answer({ ...FACTS, title: 1 }),
       answer({ ...FACTS, baseUrl: null })
     ];
     for (const reply of answers)
-      expectMalformed(() => NodeFactsReader.readElement(reply));
+      expectMalformed(() => NodeFactsReader.readElement(reply, []));
+  });
+
+  it("reads every node of a described subtree, the node first, through shadow roots, closed ones too, in document order", () => {
+    const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [
+      { backendNodeId: 5, nodeName: "DIV", shadowRoots: [{ backendNodeId: 6, nodeName: "#document-fragment", shadowRootType: "closed", children: [
+        { backendNodeId: 7, nodeName: "INPUT", attributes: ["type", "password"] }] }] },
+      { backendNodeId: 8, nodeName: "BUTTON" }
+    ] } };
+
+    expect(NodeFactsReader.readSubtree(form).map(t => t.nodeName)).toEqual(["FORM", "DIV", "#DOCUMENT-FRAGMENT", "INPUT", "BUTTON"]);
+    expectMalformed(() => NodeFactsReader.readSubtree({}));
   });
 
   it("says whether a node is the described node or inside its subtree, through shadow roots, and not when it is outside or missing", () => {

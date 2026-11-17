@@ -108,30 +108,48 @@ describe("PageChanges", () => {
     await expect(changes.hasTextAsync("view-1", "Order placed", options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
   });
 
-  it("reads an element's facts with the pinned function on the element resolved in the main frame's world, its reply bound by the tree's limit", async () => {
-    const facts: JsonObject = { path: null, form: [], formName: "", title: "x".repeat(200_000), baseUrl: "https://shop.test/" };
+  it("resolves the element in the main frame's world, reads its facts by value with its reply bound by the tree's limit, and describes its form's subtree through shadow roots", async () => {
+    const facts: JsonObject = { path: null, linked: [], formName: "", title: "x".repeat(200_000), baseUrl: "https://shop.test/" };
+    const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [{ backendNodeId: 5, nodeName: "INPUT", attributes: ["type", "password"] }], text: "y".repeat(200_000) } };
     surface.answer("DOM.resolveNode", { object: { type: "object", objectId: "element-5" } });
-    surface.answer("Runtime.callFunctionOn", { result: { type: "object", value: facts } });
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => params["returnByValue"] === true
+      ? { result: { type: "object", value: facts } }
+      : { result: { type: "object", subtype: "node", objectId: "form-4" } });
+    surface.answer("DOM.describeNode", form);
 
-    const reply: JsonObject = await changes.readElementAsync("view-1", 5, options);
+    const objectId: string = await changes.resolveElementAsync("view-1", 5, options);
+    const read: readonly JsonObject[] = [await changes.readElementAsync("view-1", objectId, options), await changes.readFormAsync("view-1", objectId, options) ?? {}];
 
-    expect(reply).toEqual({ result: { type: "object", value: facts } });
+    expect([objectId, read]).toEqual(["element-5", [{ result: { type: "object", value: facts } }, form]]);
     expect(surface.calls.map(t => [t.method, t.params])).toEqual([
       ["Page.getFrameTree", {}],
       ["Page.createIsolatedWorld", { frameId: "F1", worldName: PageChangeScript.worldName, grantUniveralAccess: false }],
       ["DOM.resolveNode", { backendNodeId: 5, executionContextId: 1 }],
-      ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", returnByValue: true, silent: true }]
+      ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", arguments: [{ value: false }], returnByValue: true, silent: true }],
+      ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", arguments: [{ value: true }], returnByValue: false, silent: true }],
+      ["DOM.describeNode", { objectId: "form-4", depth: -1, pierce: true }]
     ]);
   });
 
-  it("fails an element's read as the hearing does when the main frame's world has no context, and reads a resolved element without an object as malformed", async () => {
+  it("reads no form for an element in none, and a form answer without an object as malformed", async () => {
+    surface.answer("Runtime.callFunctionOn", { result: { type: "object", subtype: "null", value: null } });
+    const none: JsonObject | null = await changes.readFormAsync("view-1", "element-5", options);
+    for (const result of [{}, { result: "form" }, { result: { type: "object", subtype: "node" } }]) {
+      surface.answer("Runtime.callFunctionOn", result);
+      await expect(changes.readFormAsync("view-1", "element-5", options)).rejects.toBeInstanceOf(MalformedReplyException);
+    }
+
+    expect([none, surface.calls.some(t => t.method === "DOM.describeNode")]).toEqual([null, false]);
+  });
+
+  it("fails an element's resolving as the hearing does when the main frame's world has no context, and reads a resolved element without an object as malformed", async () => {
     for (const resolved of [{}, { object: "element-5" }, { object: { type: "object" } }]) {
       surface.answer("DOM.resolveNode", resolved);
-      await expect(changes.readElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(MalformedReplyException);
+      await expect(changes.resolveElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(MalformedReplyException);
     }
     surface.answer("Page.createIsolatedWorld", {});
 
-    await expect(changes.readElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
+    await expect(changes.resolveElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
   });
 
   it("starts the view's tracker, adds the binding after it, and starts the function in the world of each frame with an id, the main frame's first", async () => {

@@ -19,22 +19,43 @@ export class NodeFactsReader {
     return NodeFactsReader.readFacts(NodeFactsReader.readObject(reply[Resources.nodeField]));
   }
 
-  // The pinned function's facts by value: the path from the document to the element, or none outside the main frame's document, the form's
-  // elements, the form's name, and the page's title and base URL.
-  public static readElement(reply: JsonObject): ElementFacts {
-    const result: JsonValue | undefined = reply[Resources.resultField];
-    const facts: JsonObject = NodeFactsReader.readObject(JsonShapes.isObject(result) ? result[Resources.valueField] : undefined);
-    const path: JsonValue | undefined = facts[Resources.pathField];
+  // The path the pinned function gives, from the document to the element, or none outside the main frame's document.
+  public static readPath(reply: JsonObject): readonly NodeFacts[] | null {
+    const path: JsonValue | undefined = NodeFactsReader.readFunctionFacts(reply)[Resources.pathField];
+    return path === null ? null : NodeFactsReader.readPairs(path);
+  }
+
+  // The pinned function's facts with the form's subtree, when it was read: the path, the form's elements, its own and those that name it,
+  // the form's name, and the page's title and base URL.
+  public static readElement(reply: JsonObject, form: readonly NodeFacts[] | null): ElementFacts {
+    const facts: JsonObject = NodeFactsReader.readFunctionFacts(reply);
+    const linked: readonly NodeFacts[] = NodeFactsReader.readPairs(facts[Resources.linkedField]);
     const formName: JsonValue | undefined = facts[Resources.formNameField];
     const title: JsonValue | undefined = facts[Resources.titleField];
     const baseUrl: JsonValue | undefined = facts[Resources.baseUrlField];
     if (typeof formName !== "string" || typeof title !== "string" || typeof baseUrl !== "string")
       throw new MalformedReplyException();
-    return new ElementFacts(path === null ? null : NodeFactsReader.readPairs(path), NodeFactsReader.readPairs(facts[Resources.formField]), formName, new PageFacts(baseUrl, title));
+    return new ElementFacts(NodeFactsReader.readPath(reply), form === null ? [] : [...form, ...linked], formName, new PageFacts(baseUrl, title));
+  }
+
+  // Every node of a described subtree, the described node first, through shadow roots.
+  public static readSubtree(reply: JsonObject): readonly NodeFacts[] {
+    const all: NodeFacts[] = [];
+    const pending: JsonObject[] = [NodeFactsReader.readObject(reply[Resources.nodeField])];
+    for (let node: JsonObject | undefined = pending.pop(); node !== undefined; node = pending.pop()) {
+      all.push(NodeFactsReader.readFacts(node));
+      pending.push(...[...NodeFactsReader.readChildren(node)].reverse());
+    }
+    return all;
   }
 
   public static holds(reply: JsonObject, backendNodeId: number): boolean {
     return NodeFactsReader.findNode(NodeFactsReader.readObject(reply[Resources.nodeField]), backendNodeId) !== null;
+  }
+
+  private static readFunctionFacts(reply: JsonObject): JsonObject {
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    return NodeFactsReader.readObject(JsonShapes.isObject(result) ? result[Resources.valueField] : undefined);
   }
 
   // Each node as the pinned function gives it, its name and its attributes as name and value in turn, read as the protocol's nodes are.

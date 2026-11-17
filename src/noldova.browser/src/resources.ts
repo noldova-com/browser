@@ -394,8 +394,10 @@ export class Resources {
   public static readonly resolveNodeMethod: "DOM.resolveNode" = "DOM.resolveNode";
   public static readonly objectField: string = "object";
   public static readonly objectIdField: string = "objectId";
+  public static readonly subtypeField: string = "subtype";
+  public static readonly nullSubtype: string = "null";
+  public static readonly linkedField: string = "linked";
   public static readonly pathField: string = "path";
-  public static readonly formField: string = "form";
   public static readonly formNameField: string = "formName";
   public static readonly baseUrlField: string = "baseUrl";
   public static readonly executionContextIdField: string = "executionContextId";
