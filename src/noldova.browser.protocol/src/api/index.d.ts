@@ -1727,6 +1727,32 @@ export declare class LocalSites {
 }
 
 /**
+ * The function the runtime part's risk check runs on an element, with `Runtime.callFunctionOn` by the element's object in the module's own
+ * isolated world of the main frame, so the page's own script can't change what it reads; `webViews.json` pins it, so Noldova Desktop's host
+ * refuses any other function.
+ * It reads only what the page's markup holds, never a field's value, and changes nothing.
+ * Given false, it returns by value the names and attributes of the element and of each node above it to the document, through shadow roots,
+ * closed ones too, or no path for an element outside the main frame's document; the elements that name the element's form by its id with
+ * their `form` attribute; the form's name; and the document's title and base URL.
+ * Given true, it returns the element's form itself, the nearest form above it or the one its `form` attribute names, or null, so the runtime
+ * part can read the form's whole subtree with `DOM.describeNode`, which, unlike the function, enters closed shadow roots.
+ * Given anything else, it returns null.
+ */
+export declare class ElementFactsScript {
+  /**
+   * The function's text, which takes one argument, whether to return the element's form rather than its facts, and runs on the element.
+   *
+   * @example
+   * ```ts
+   * import { ElementFactsScript } from "@noldova/browser.protocol";
+   *
+   * const declaration: string = ElementFactsScript.functionDeclaration;
+   * ```
+   */
+  public static readonly functionDeclaration: string;
+}
+
+/**
  * The function that tells the runtime part when a frame's page may have moved an element, which the runtime part runs with
  * `Runtime.callFunctionOn` in the module's own isolated world of each frame, and which `webViews.json` pins, so Noldova Desktop's host refuses
  * any other function.

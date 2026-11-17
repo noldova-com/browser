@@ -176,6 +176,24 @@ describe("ScriptedViews", () => {
     ]);
   });
 
+  it("reports a view's worlds again, and only that view's, when its runtime is enabled, as the engine does", async () => {
+    const views: ScriptedViews = new ScriptedViews(["view", "other"]);
+    const seen: string[] = [];
+    views.relay.onProtocolEvent("view", (t: WebViewProtocolEvent) => seen.push(`${t.method} ${JSON.stringify(t.params)}`));
+    views.relay.onProtocolEvent("other", (t: WebViewProtocolEvent) => seen.push(`other ${t.method}`));
+    views.serveWorlds();
+
+    await views.relay.sendAsync("view", "Runtime.enable", {}, 1_000);
+    await views.relay.sendAsync("view", "Page.createIsolatedWorld", { frameId: "F1", worldName: "noldova-browser-changes", grantUniveralAccess: false }, 1_000);
+    seen.length = 0;
+    const answered: JsonValue = await views.relay.sendAsync("view", "Runtime.enable", {}, 1_000);
+    await views.relay.sendAsync("other", "Runtime.enable", {}, 1_000);
+
+    expect([answered, seen]).toEqual([{}, [
+      'Runtime.executionContextCreated {"context":{"id":1,"uniqueId":"view.1","name":"noldova-browser-changes","origin":"https://shop.test","auxData":{"frameId":"F1"}}}'
+    ]]);
+  });
+
   it("records navigations and allowed origins and returns the scripted outcome", async () => {
     const views: ScriptedViews = new ScriptedViews(["view"]);
 

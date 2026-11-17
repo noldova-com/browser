@@ -9,9 +9,11 @@
 import { describe, expect, it } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
+import { ElementFacts } from "../../src/models/element-facts.ts";
 import { NodeFacts } from "../../src/models/node-facts.ts";
+import { PageFacts } from "../../src/models/page-facts.ts";
 import { NodeFactsReader } from "../../src/services/node-facts.reader.ts";
-import type { JsonObject } from "../../src/types/json-value.ts";
+import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 
 function expectMalformed(read: () => unknown): void {
   try {
@@ -25,28 +27,16 @@ function expectMalformed(read: () => unknown): void {
   expect.fail("The reply was accepted.");
 }
 
-const DOCUMENT: JsonObject = {
-  root: {
-    backendNodeId: 1,
-    nodeName: "#document",
-    baseURL: "https://shop.test/cart/",
-    children: [{
-      backendNodeId: 2,
-      nodeName: "HTML",
-      children: [{
-        backendNodeId: 3,
-        nodeName: "BODY",
-        children: [
-          { backendNodeId: 4, nodeName: "FORM", attributes: ["id", "checkout"], children: [{ backendNodeId: 5, nodeName: "BUTTON", attributes: ["type", "submit"] }] },
-          { backendNodeId: 6, nodeName: "DIV", shadowRoots: [{ backendNodeId: 7, nodeName: "#document-fragment", children: [{ backendNodeId: 8, nodeName: "A" }] }] },
-          { backendNodeId: 20, nodeName: "FORM", children: [{ backendNodeId: 21, nodeName: "INPUT", attributes: ["type", "password"] }, { backendNodeId: 22, nodeName: "BUTTON" }] },
-          { backendNodeId: 23, nodeName: "INPUT", attributes: ["form", "checkout", "type", "password"] },
-          { backendNodeId: 24, nodeName: "BUTTON", attributes: ["form", "checkout"] },
-          { backendNodeId: 25, nodeName: "BUTTON", attributes: ["form", "missing"] }
-        ]
-      }]
-    }]
-  }
+function answer(value: JsonValue): JsonObject {
+  return { result: { type: "object", value } };
+}
+
+const FACTS: JsonObject = {
+  path: [["#document", []], ["HTML", []], ["form", ["ID", "checkout"]], ["button", ["type", "submit"]]],
+  linked: [["input", ["FORM", "checkout", "Type", "Password"]]],
+  formName: "Checkout",
+  title: "Cart",
+  baseUrl: "https://shop.test/cart/"
 };
 
 describe("NodeFactsReader", () => {
@@ -78,80 +68,54 @@ describe("NodeFactsReader", () => {
       expectMalformed(() => NodeFactsReader.readNode(reply));
   });
 
-  it("reads a node's ancestors from the document, root first", () => {
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 5)?.map(t => t.nodeName)).toEqual(["#DOCUMENT", "HTML", "BODY", "FORM"]);
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 5)?.at(-1)?.attributes.get("id")).toBe("checkout");
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 5)?.every(t => t instanceof NodeFacts)).toBe(true);
+  it("reads the pinned function's facts: the path root first and the form's elements, with names normalized, the form's name and the page", () => {
+    const form: readonly NodeFacts[] = [new NodeFacts("FORM", new Map([["id", "checkout"]]))];
+    const facts: ElementFacts = NodeFactsReader.readElement(answer(FACTS), form);
+
+    expect(facts).toBeInstanceOf(ElementFacts);
+    expect(facts.path?.map(t => t.nodeName)).toEqual(["#DOCUMENT", "HTML", "FORM", "BUTTON"]);
+    expect(NodeFactsReader.readPath(answer(FACTS))).toEqual(facts.path);
+    expect(facts.path?.at(-2)?.attributes.get("id")).toBe("checkout");
+    expect(facts.form.map(t => [t.nodeName, [...t.attributes]])).toEqual([["FORM", [["id", "checkout"]]], ["INPUT", [["form", "checkout"], ["type", "Password"]]]]);
+    expect([facts.formName, facts.page]).toEqual(["Checkout", new PageFacts("https://shop.test/cart/", "Cart")]);
+    expect(NodeFactsReader.readElement(answer(FACTS), null).form).toEqual([]);
   });
 
-  it("finds a node inside a shadow root", () => {
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 8)?.map(t => t.nodeName)).toEqual(["#DOCUMENT", "HTML", "BODY", "DIV", "#DOCUMENT-FRAGMENT"]);
+  it("reads no path for an element outside the main frame's document", () => {
+    expect([NodeFactsReader.readElement(answer({ ...FACTS, path: null }), null).path, NodeFactsReader.readPath(answer({ ...FACTS, path: null }))]).toEqual([null, null]);
   });
 
-  it("gives the root no ancestors and a missing node none at all", () => {
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 1)).toEqual([]);
-    expect(NodeFactsReader.readAncestors(DOCUMENT, 99)).toBeNull();
-  });
-
-  it("refuses a document of another shape", () => {
-    const documents: readonly JsonObject[] = [
+  it("refuses an answer of another shape", () => {
+    const answers: readonly JsonObject[] = [
       {},
-      { root: { backendNodeId: 1, nodeName: "#document", children: "none" } },
-      { root: { backendNodeId: 1, nodeName: "#document", children: [3] } },
-      { root: { backendNodeId: 1, nodeName: 3, children: [{ backendNodeId: 2, nodeName: "HTML" }] } }
+      { result: "facts" },
+      { result: {} },
+      answer("facts"),
+      answer({ ...FACTS, path: "none" }),
+      answer({ ...FACTS, path: [["A"]] }),
+      answer({ ...FACTS, path: ["A", []] }),
+      answer({ ...FACTS, path: [[1, []]] }),
+      answer({ ...FACTS, path: [["A", "href"]] }),
+      answer({ ...FACTS, linked: null }),
+      answer({ ...FACTS, linked: [["INPUT", ["type"]]] }),
+      answer({ ...FACTS, formName: null }),
+      answer({ ...FACTS, title: 1 }),
+      answer({ ...FACTS, baseUrl: null })
     ];
-    for (const document of documents)
-      expectMalformed(() => NodeFactsReader.readAncestors(document, 2));
+    for (const reply of answers)
+      expectMalformed(() => NodeFactsReader.readElement(reply, []));
   });
 
-  it("reads the document's base URL", () => {
-    expect(NodeFactsReader.readBaseUrl(DOCUMENT)).toBe("https://shop.test/cart/");
-    expectMalformed(() => NodeFactsReader.readBaseUrl({ root: { nodeName: "#document" } }));
-  });
+  it("reads every node of a described subtree, the node first, through shadow roots, closed ones too, in document order, and fails a list of children that is no list", () => {
+    const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [
+      { backendNodeId: 5, nodeName: "DIV", shadowRoots: [{ backendNodeId: 6, nodeName: "#document-fragment", shadowRootType: "closed", children: [
+        { backendNodeId: 7, nodeName: "INPUT", attributes: ["type", "password"] }] }] },
+      { backendNodeId: 8, nodeName: "BUTTON" }
+    ] } };
 
-  it("reads the nodes of a node's form: its nearest form's own and those that name the form, or the form its form attribute names", () => {
-    const names = (backendNodeId: number): string[] => NodeFactsReader.readFormNodes(DOCUMENT, backendNodeId).map(t => t.nodeName).sort();
-
-    expect([names(5), names(24), names(21)]).toEqual([["BUTTON", "BUTTON", "FORM", "INPUT"], ["BUTTON", "BUTTON", "FORM", "INPUT"], ["BUTTON", "FORM", "INPUT"]]);
-    expect(NodeFactsReader.readFormNodes(DOCUMENT, 24).find(t => t.nodeName === "INPUT")?.attributes.get("type")).toBe("password");
-    expect(NodeFactsReader.readFormNodes(DOCUMENT, 24).every(t => t instanceof NodeFacts)).toBe(true);
-  });
-
-  it("reads no form nodes for a node outside any form, one naming a form the document doesn't hold, or a node it doesn't hold", () => {
-    expect([NodeFactsReader.readFormNodes(DOCUMENT, 8), NodeFactsReader.readFormNodes(DOCUMENT, 25), NodeFactsReader.readFormNodes(DOCUMENT, 99)]).toEqual([[], [], []]);
-    expectMalformed(() => NodeFactsReader.readFormNodes({}, 5));
-  });
-
-  it("reads a form's name from the elements that label it, in order, then its label, then its title, on one line, and none outside a form", () => {
-    const form: (attributes: readonly string[]) => JsonObject = (attributes: readonly string[]): JsonObject => ({ root: { backendNodeId: 1, nodeName: "#document", children: [
-      { backendNodeId: 2, nodeName: "H2", attributes: ["id", "heading"], children: [{ backendNodeId: 3, nodeName: "#text", nodeValue: "Create your " },
-        { backendNodeId: 4, nodeName: "EM", children: [{ backendNodeId: 5, nodeName: "#text", nodeValue: "Team" }] }, { backendNodeId: 6, nodeName: "#text", nodeValue: "\n account" }] },
-      { backendNodeId: 7, nodeName: "P", attributes: ["id", "note"], children: [{ backendNodeId: 8, nodeName: "#text", nodeValue: "today" }] },
-      { backendNodeId: 9, nodeName: "FORM", attributes: [...attributes], children: [{ backendNodeId: 10, nodeName: "BUTTON" }] }
-    ] } });
-
-    expect([
-      NodeFactsReader.readFormName(form(["aria-labelledby", " heading  note ", "aria-label", "Sign up", "title", "Join"]), 10),
-      NodeFactsReader.readFormName(form(["aria-labelledby", "missing", "aria-label", " Sign\nup ", "title", "Join"]), 10),
-      NodeFactsReader.readFormName(form(["aria-label", " ", "title", "Join"]), 10),
-      NodeFactsReader.readFormName(form([]), 10),
-      NodeFactsReader.readFormName(DOCUMENT, 8),
-      NodeFactsReader.readFormName(DOCUMENT, 99)
-    ]).toEqual(["Create your Team account today", "Sign up", "Join", "", "", ""]);
-    expectMalformed(() => NodeFactsReader.readFormName({}, 5));
-  });
-
-  it("reads the page's title from its first HTML title element on one line, never an SVG title, and none when it has no title", () => {
-    const svg: JsonObject = { backendNodeId: 9, nodeName: "svg", children: [{ backendNodeId: 10, nodeName: "title", children: [{ backendNodeId: 11, nodeName: "#text", nodeValue: "Chart" }] }] };
-    const page: JsonObject = { root: { backendNodeId: 1, nodeName: "#document", children: [{ backendNodeId: 2, nodeName: "HTML", children: [
-      { backendNodeId: 3, nodeName: "HEAD", children: [{ backendNodeId: 4, nodeName: "TITLE", children: [{ backendNodeId: 5, nodeName: "#text", nodeValue: " Plans\n and pricing " }] },
-        { backendNodeId: 6, nodeName: "TITLE", children: [{ backendNodeId: 7, nodeName: "#text", nodeValue: "Second" }] }] },
-      { backendNodeId: 8, nodeName: "BODY", children: [svg] }
-    ] }] } };
-
-    expect([NodeFactsReader.readTitle(page), NodeFactsReader.readTitle({ root: { backendNodeId: 1, nodeName: "#document", children: [svg] } }), NodeFactsReader.readTitle(DOCUMENT)])
-      .toEqual(["Plans and pricing", "", ""]);
-    expectMalformed(() => NodeFactsReader.readTitle({}));
+    expect(NodeFactsReader.readSubtree(form).map(t => t.nodeName)).toEqual(["FORM", "DIV", "#DOCUMENT-FRAGMENT", "INPUT", "BUTTON"]);
+    expectMalformed(() => NodeFactsReader.readSubtree({}));
+    expectMalformed(() => NodeFactsReader.readSubtree({ node: { backendNodeId: 4, nodeName: "FORM", children: {} } }));
   });
 
   it("says whether a node is the described node or inside its subtree, through shadow roots, and not when it is outside or missing", () => {
