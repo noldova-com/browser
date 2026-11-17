@@ -23,6 +23,7 @@ const ADDRESS_FIELD = "input.nol-browser-toolbar-field";
 const SETTINGS_BUTTON = ".nol-window-row-settings";
 const TOOLTIP = ".cdk-overlay-container nol-tooltip";
 const NEW_PAGE_KEY = "ControlOrMeta+KeyT";
+const MODIFIER = process.platform === "darwin" ? "meta" : "control";
 const KEY_LABEL = process.platform === "darwin" ? "⌘T" : "Ctrl+T";
 
 interface IButtonGeometry {
@@ -102,7 +103,7 @@ test.describe("new page", () => {
     await view.click();
     await expect.poll(() => app.window.evaluate(() => (document.activeElement?.closest(".nol-browser-page") ?? null) !== null),
       { message: "A click in the page didn't move the window's focus into the page's document." }).toBe(true);
-    await app.window.keyboard.press(NEW_PAGE_KEY);
+    await app.viewPages.pressAtAsync(docs.url("/"), "T", [MODIFIER]);
     await expect(tabs).toHaveCount(3);
     await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
 
