@@ -7,7 +7,7 @@
  */
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
-import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
+import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArgumentNotOneOfException } from "../../src/exceptions/argument-not-one-of.exception.ts";
@@ -196,7 +196,11 @@ describe("PressKeyTool", () => {
   });
 
   it("finds the focused element through the document when the page's whole tree is too large for one reply", async () => {
-    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+      if (params["depth"] === undefined)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
+      return { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Long" } }] };
+    });
     bench.surface.answerWith("DOM.getDocument", (params: JsonObject) => params["depth"] === 0 ? { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } } : ShopPage.document());
     bench.surface.answer("DOM.querySelector", { nodeId: 70 });
     bench.surface.answerWith("Accessibility.getPartialAXTree", (params: JsonObject) => params["nodeId"] === 70

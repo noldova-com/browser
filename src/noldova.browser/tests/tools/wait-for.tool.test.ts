@@ -82,7 +82,11 @@ describe("WaitForTool", () => {
   it("checks the page's shown text with the pinned function when the page's whole tree is too large for one reply, again when the page reports a change", async () => {
     vi.useFakeTimers(FAKED);
     const shown: boolean[] = [false, false, true];
-    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+      if (params["depth"] === undefined)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
+      return tree([]);
+    });
     bench.surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => ({ result: { type: "boolean",
       value: params["functionDeclaration"] === PageTextScript.functionDeclaration ? shown.shift() ?? false : true } }));
 

@@ -116,7 +116,7 @@ describe("AccessibilityWalk", () => {
       const leading: AccessibilityTree = await readAsync(ROOT_LINE_BYTES - 1);
       const after: AccessibilityTree = await readAsync(ROOT_LINE_BYTES + BUTTON_LINE_BYTES);
 
-      expect([leading.nodes, leading.isWhole, leading.isFromView]).toEqual([[], false, true]);
+      expect([leading.nodes.map(t => t.id), leading.isWhole, leading.isFromView]).toEqual([["1"], false, true]);
       expect([after.nodes.map(t => t.id), after.isWhole, after.isFromView]).toEqual([["1", "3", "6", "4", "5"], false, true]);
     });
 

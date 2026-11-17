@@ -11,6 +11,7 @@ import type { IModuleLog } from "@noldova/desktop.runtime";
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageCrashedException } from "../exceptions/page-crashed.exception.ts";
+import { PageNotShowingException } from "../exceptions/page-not-showing.exception.ts";
 import { ProfileClearedException } from "../exceptions/profile-cleared.exception.ts";
 import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
@@ -97,7 +98,7 @@ export class AccessibilityWalk {
         { x: Math.round(view.pageX + view.width / 2), y: Math.round(view.pageY + view.height / 4), includeUserAgentShadowDOM: false }, options);
     }
     catch (error) {
-      if (!(error instanceof ProtocolFailedException))
+      if (!(error instanceof PageNotShowingException))
         throw error;
       return null;
     }
