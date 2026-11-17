@@ -43,9 +43,10 @@ export class ToolBench implements Disposable {
   public sendingMarks: number = 0;
 
   public constructor() {
+    // The worlds' own Runtime.enable answer, which reports the contexts the view holds again, replaces the empty one.
+    this.surface.acknowledge(...ScriptedViews.emptyReplies);
     this.surface.serveWorlds();
     this.surface.instances.set(ToolBench.VIEW, "page-1");
-    this.surface.acknowledge(...ScriptedViews.emptyReplies);
     this.surface.answer("Accessibility.getFullAXTree", { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Cart" } }] });
     this.permissions.automaticDecision = PermissionDecision.AllowedOnce;
     this.kit = new ToolKit(this.surface.webViews, this.sessions, new WorkspaceOrigins(this.surface.webViews, new DatabaseOriginStore(this.database), []), t => this.activities.push(t),

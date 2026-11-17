@@ -110,8 +110,12 @@ describe("ClickTool", () => {
       { label: "Sends", kind: PermissionDetailKind.Text, value: "coupon" }
     ]);
     expect(mouseEvents().length).toBe(3);
-    expect(bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["depth"] === -1).map(t => t.params))
-      .toEqual([1, 2].map(() => ({ backendNodeId: ShopPage.FORM_BUTTON, depth: -1, pierce: true })));
+    const subtrees: readonly JsonObject[] = bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["depth"] === -1).map(t => t.params);
+    // The form is read with the button before the card and again before the press; the button's own subtree for each hit check.
+    expect([subtrees.filter(t => "objectId" in t), subtrees.filter(t => "backendNodeId" in t)]).toEqual([
+      [1, 2].map(() => ({ objectId: "form-4", depth: -1, pierce: true })),
+      [1, 2].map(() => ({ backendNodeId: ShopPage.FORM_BUTTON, depth: -1, pierce: true }))
+    ]);
   });
 
   it("asks as high risk, every time and with no allow for the chat, to click the submit button of a form that holds a secret field", async () => {
