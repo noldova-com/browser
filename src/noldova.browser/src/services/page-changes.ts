@@ -14,12 +14,18 @@ import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageChangesContextMissingException } from "../exceptions/page-changes-context-missing.exception.ts";
 import { PageChangesNotSwitchedException } from "../exceptions/page-changes-not-switched.exception.ts";
+import { PageCrashedException } from "../exceptions/page-crashed.exception.ts";
+import { ProfileClearedException } from "../exceptions/profile-cleared.exception.ts";
+import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
+import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageTextScript } from "../models/page-text-script.ts";
+import { ResolvedElement } from "../models/resolved-element.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
+import { FrameTreeReader } from "./frame-tree.reader.ts";
 import { JsonShapes } from "./json-shapes.ts";
 import type { RuntimeDomains } from "./runtime-domains.ts";
 import { ToolFailures } from "./tool-failures.ts";
@@ -89,9 +95,10 @@ export class PageChanges {
   }
 
   // The element as an object in the page changes' isolated world of the main frame, where the pinned function reads it, so the page's own
-  // script never sees the calls or changes what they read.
-  public async resolveElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<string> {
-    const { mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+  // script never sees the calls or changes what they read, with the document the world was found in; the caller releases the object.
+  public async resolveElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ResolvedElement> {
+    const tree: JsonObject = await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options);
+    const { mainId }: PageFrames = PageChanges.readFrames(tree);
     const world: JsonObject = await this.calls.sendAsync(viewId, Resources.createIsolatedWorldMethod, { frameId: mainId, worldName: PageChangeScript.worldName, grantUniveralAccess: false },
       options);
     const executionContextId: JsonValue | undefined = world[Resources.executionContextIdField];
@@ -102,7 +109,7 @@ export class PageChanges {
     const objectId: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.objectIdField] : undefined;
     if (typeof objectId !== "string")
       throw new MalformedReplyException();
-    return objectId;
+    return new ResolvedElement(objectId, FrameTreeReader.read(tree).documentId);
   }
 
   // The resolved element's facts, by value, so the reply holds only those facts, never the whole document.
@@ -123,8 +130,28 @@ export class PageChanges {
     const form: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.objectIdField] : undefined;
     if (typeof form !== "string")
       throw new MalformedReplyException();
-    return this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId: form, depth: Resources.wholeSubtreeDepth, pierce: true },
-      options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+    try {
+      return await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId: form, depth: Resources.wholeSubtreeDepth, pierce: true },
+        options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+    }
+    finally {
+      await this.releaseAsync(viewId, form, options);
+    }
+  }
+
+  // Lets the engine drop an object the module made, which it otherwise keeps, with the node it holds, for as long as its world lives; an
+  // object whose document has gone, or whose view closed, crashed or lost its profile, has nothing left to release.
+  public async releaseAsync(viewId: string, objectId: string, options: CallOptions): Promise<void> {
+    try {
+      await this.calls.sendAsync(viewId, Resources.releaseObjectMethod, { objectId }, ViewCalls.releasing(options));
+    }
+    catch (error) {
+      if (!(error instanceof CallFailureException))
+        throw error;
+      if (!(error instanceof ProtocolFailedException || error instanceof ViewClosedException || error instanceof PageCrashedException
+        || error instanceof ProfileClearedException))
+        this.log.write(Resources.formatObjectNotReleased(viewId, String(error)));
+    }
   }
 
   private async startAsync(viewId: string, frameId: string, options: CallOptions, contexts: string[]): Promise<void> {

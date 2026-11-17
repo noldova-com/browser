@@ -67,7 +67,7 @@ describe("TypeTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods.slice(5, 14)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn",
+    expect(bench.methods.slice(7, 18)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
       "Input.insertText"]);
     expect([sent("DOM.focus"), sent("Input.insertText"), sent("Input.dispatchKeyEvent")]).toEqual([[{ backendNodeId: ShopPage.SEARCH }], [{ text: "red shoes" }], []]);
     expect(result.content[0]?.value).toBe("Typed.");

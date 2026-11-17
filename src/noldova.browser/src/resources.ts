@@ -392,6 +392,7 @@ export class Resources {
   public static readonly createIsolatedWorldMethod: "Page.createIsolatedWorld" = "Page.createIsolatedWorld";
   public static readonly callFunctionOnMethod: "Runtime.callFunctionOn" = "Runtime.callFunctionOn";
   public static readonly resolveNodeMethod: "DOM.resolveNode" = "DOM.resolveNode";
+  public static readonly releaseObjectMethod: "Runtime.releaseObject" = "Runtime.releaseObject";
   public static readonly objectField: string = "object";
   public static readonly objectIdField: string = "objectId";
   public static readonly subtypeField: string = "subtype";
@@ -528,6 +529,10 @@ export class Resources {
 
   public static formatChangesNotStopped(viewId: string, error: string): string {
     return `The page changes of view ${viewId} weren't stopped: ${error}`;
+  }
+
+  public static formatObjectNotReleased(viewId: string, error: string): string {
+    return `The view ${viewId} may keep an element the risk check read: ${error}`;
   }
 
   public static formatAccessibilityNotDisabled(viewId: string, error: string): string {

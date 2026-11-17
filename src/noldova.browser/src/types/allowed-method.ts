@@ -37,4 +37,5 @@ export type AllowedMethod =
   | "Runtime.discardConsoleEntries"
   | "Runtime.addBinding"
   | "Runtime.callFunctionOn"
+  | "Runtime.releaseObject"
   | "Log.enable";

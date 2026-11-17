@@ -56,7 +56,7 @@ export class ScriptedViews {
     "Page.enable", "DOM.scrollIntoViewIfNeeded", "DOM.focus",
     "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride",
     "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText",
-    "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Log.enable"
+    "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.releaseObject", "Log.enable"
   ];
   private readonly views: Set<string>;
   private readonly foreignViews: ReadonlySet<string>;

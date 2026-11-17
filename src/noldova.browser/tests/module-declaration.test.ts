@@ -81,7 +81,7 @@ describe("webViews.json", () => {
 
   it("declares the debugging calls and the events the built tools send and take, and takes its views' new windows", async () => {
     const methods: readonly string[] = ["Page.enable", "Page.getFrameTree", "Page.getNavigationHistory", "Page.getLayoutMetrics", "Page.createIsolatedWorld",
-      "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Log.enable",
+      "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Runtime.releaseObject", "Log.enable",
       "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Accessibility.enable", "Accessibility.disable", "Accessibility.getRootAXNode",
       "Accessibility.getChildAXNodes", "DOM.getDocument", "DOM.querySelector", "DOM.resolveNode", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
       "DOM.getNodeForLocation", "DOM.focus", "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
@@ -131,7 +131,8 @@ describe("webViews.json", () => {
         functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration] },
         uniqueContextId: { maxLength: 64 }, objectId: { maxLength: 128 },
         arguments: {}, returnByValue: { required: true, values: [true, false] }, silent: { required: true, values: [true] }
-      } }
+      } },
+      { name: "Runtime.releaseObject", parameters: { objectId: { required: true, maxLength: 128 } } }
     ]) });
   });
 });

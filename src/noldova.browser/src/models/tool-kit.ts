@@ -17,6 +17,7 @@ import { MalformedReplyException } from "../exceptions/malformed-reply.exception
 import { PageNotControlledException } from "../exceptions/page-not-controlled.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import { RiskRoseException } from "../exceptions/risk-rose.exception.ts";
+import { StaleReferenceException } from "../exceptions/stale-reference.exception.ts";
 import { TakenOverException } from "../exceptions/taken-over.exception.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
@@ -46,6 +47,7 @@ import type { NodeFacts } from "./node-facts.ts";
 import type { PageActivity } from "./page-activity.ts";
 import { PageStops } from "./page-stops.ts";
 import { PaneQueue } from "./pane-queue.ts";
+import type { ResolvedElement } from "./resolved-element.ts";
 import type { SessionPage } from "./session-page.ts";
 import type { SessionStates } from "./session-states.ts";
 import { ShownElement } from "./shown-element.ts";
@@ -210,13 +212,22 @@ export class ToolKit {
   }
 
   public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ElementFacts> {
-    const objectId: string = await this.changes.resolveElementAsync(viewId, backendNodeId, options);
-    const reply: JsonObject = await this.changes.readElementAsync(viewId, objectId, options);
-    const path: readonly NodeFacts[] | null = NodeFactsReader.readPath(reply);
-    // Only a submit is rated by its form, so only then is the form read, which on a page wrapped in one form is the whole page.
-    const isSubmitting: boolean = path !== null && (RiskClassifier.submitsClick(path) || RiskClassifier.submitsEnter(path));
-    const form: JsonObject | null = isSubmitting ? await this.changes.readFormAsync(viewId, objectId, options) : null;
-    return NodeFactsReader.readElement(reply, form === null ? null : NodeFactsReader.readSubtree(form));
+    const element: ResolvedElement = await this.changes.resolveElementAsync(viewId, backendNodeId, options);
+    try {
+      const reply: JsonObject = await this.changes.readElementAsync(viewId, element.objectId, options);
+      const path: readonly NodeFacts[] | null = NodeFactsReader.readPath(reply);
+      // Only a submit is rated by its form, so only then is the form read, which on a page wrapped in one form is the whole page.
+      const isSubmitting: boolean = path !== null && (RiskClassifier.submitsClick(path) || RiskClassifier.submitsEnter(path));
+      const form: JsonObject | null = isSubmitting ? await this.changes.readFormAsync(viewId, element.objectId, options) : null;
+      // The world is found by its context number, which a navigation can pass to the new document's own world, whose script could change
+      // what the function reads, so the facts count only from the document the world was found in.
+      if ((await this.readFrameAsync(viewId, options)).documentId !== element.documentId)
+        throw new StaleReferenceException();
+      return NodeFactsReader.readElement(reply, form === null ? null : NodeFactsReader.readSubtree(form));
+    }
+    finally {
+      await this.changes.releaseAsync(viewId, element.objectId, options);
+    }
   }
 
   public async readTitleOfAsync(viewId: string, documentId: string, options: CallOptions): Promise<string> {

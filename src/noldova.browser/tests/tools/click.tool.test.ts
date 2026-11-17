@@ -77,10 +77,10 @@ describe("ClickTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
+    expect(bench.methods).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
       "Page.getLayoutMetrics",
       "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Input.dispatchMouseEvent", "DOM.getContentQuads",
-      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
+      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
       "Page.getFrameTree"]);
     expect(bench.surface.calls.find(t => t.method === "Accessibility.getPartialAXTree")?.params).toEqual({ backendNodeId: ShopPage.LINK, fetchRelatives: false });
     expect(mouseEvents()).toEqual([
@@ -176,9 +176,32 @@ describe("ClickTool", () => {
     expect(mouseEvents()[0]).toEqual({ type: "mouseMoved", x: 20, y: 15 });
   });
 
-  it("runs nothing when the page loaded another document while the request waited", async () => {
+  it("releases the element it read, both before asking and before the press", async () => {
+    bench.failHearing();
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }));
+
+    expect(bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params)).toEqual([1, 2].map(() => ({ objectId: `node-${ShopPage.LINK}` })));
+  });
+
+  it("releases the element when its read fails", async () => {
+    bench.surface.fail("Runtime.callFunctionOn", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Gone"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ProtocolFailedException, { moduleCode: "browser.protocol" });
+    expect(bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params)).toEqual([{ objectId: `node-${ShopPage.LINK}` }]);
+  });
+
+  it("fails as stale, asking nothing, when the page went to another document while its element was read, and still releases the element", async () => {
     bench.failHearing();
     const frames: JsonObject[] = [ShopPage.frame("L1"), ShopPage.frame("L1"), ShopPage.frame("L2")];
+    bench.surface.answerWith("Page.getFrameTree", () => frames.shift() ?? {});
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), StaleReferenceException, { reason: "Stale" });
+    expect([bench.permissions.requests.length, bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").length]).toEqual([0, 1]);
+  });
+
+  it("runs nothing when the page loaded another document while the request waited", async () => {
+    bench.failHearing();
+    const frames: JsonObject[] = [ShopPage.frame("L1"), ShopPage.frame("L1"), ShopPage.frame("L1"), ShopPage.frame("L2")];
     bench.surface.answerWith("Page.getFrameTree", () => frames.shift() ?? {});
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), PageChangedAfterGrantException, { reason: "Stale" });
@@ -243,7 +266,7 @@ describe("ClickTool", () => {
     bench.permissions.answerNext(PermissionDecision.Denied);
     await CallFailures.expectAsync(clicking, PermissionDeniedException, { reason: "Denied" });
 
-    expect(asking).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Accessibility.getPartialAXTree", "DOM.getContentQuads",
+    expect(asking).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Accessibility.getPartialAXTree", "DOM.getContentQuads",
       "Page.getFrameTree", "Page.enable", "Runtime.disable", "Runtime.enable", "Log.enable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Page.createIsolatedWorld",
       "Runtime.callFunctionOn", "Page.getFrameTree", "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation"]);
     expect(bench.surface.calls.slice(asking.length).map(t => [t.method, t.params["arguments"]])).toEqual([["Runtime.callFunctionOn", [{ value: false }]]]);
@@ -357,19 +380,19 @@ describe("ClickTool", () => {
   it("gives no title when the page went to another document between the title and the frame read after it", async () => {
     bench.failHearing();
     let reads: number = 0;
-    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(++reads < 6 ? "L1" : "L2"));
+    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(++reads < 8 ? "L1" : "L2"));
 
     const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }));
 
-    expect([reads, result.structured]).toEqual([6, { page: { url: "https://shop.test/cart/", title: "" }, element: { role: "link", name: "Help", isSecret: false } }]);
+    expect([reads, result.structured]).toEqual([8, { page: { url: "https://shop.test/cart/", title: "" }, element: { role: "link", name: "Help", isSecret: false } }]);
   });
 
   it("checks the element again before each press of a double click", async () => {
     bench.failHearing();
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK), clickCount: 2 }));
 
-    const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn"];
-    expect(bench.methods.slice(13, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
+    const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject"];
+    expect(bench.methods.slice(15, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
       ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent"]);
   });
 

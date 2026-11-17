@@ -12,6 +12,7 @@ import { ToolAbortReason, ToolFailureCode, WebViewFailureException } from "@nold
 import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CallFailureException } from "../../src/exceptions/call-failure.exception.ts";
 import { CallRefusedException } from "../../src/exceptions/call-refused.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
@@ -21,6 +22,7 @@ import { PageChangesNotSwitchedException } from "../../src/exceptions/page-chang
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
+import { ResolvedElement } from "../../src/models/resolved-element.ts";
 import { ConsoleBuffers } from "../../src/services/console-buffers.ts";
 import { PageChanges } from "../../src/services/page-changes.ts";
 import { RuntimeDomains } from "../../src/services/runtime-domains.ts";
@@ -117,18 +119,55 @@ describe("PageChanges", () => {
       : { result: { type: "object", subtype: "node", objectId: "form-4" } });
     surface.answer("DOM.describeNode", form);
 
-    const objectId: string = await changes.resolveElementAsync("view-1", 5, options);
-    const read: readonly JsonObject[] = [await changes.readElementAsync("view-1", objectId, options), await changes.readFormAsync("view-1", objectId, options) ?? {}];
+    const element: ResolvedElement = await changes.resolveElementAsync("view-1", 5, options);
+    const read: readonly JsonObject[] = [await changes.readElementAsync("view-1", element.objectId, options), await changes.readFormAsync("view-1", element.objectId, options) ?? {}];
 
-    expect([objectId, read]).toEqual(["element-5", [{ result: { type: "object", value: facts } }, form]]);
+    expect([element, read]).toEqual([new ResolvedElement("element-5", "L1"), [{ result: { type: "object", value: facts } }, form]]);
     expect(surface.calls.map(t => [t.method, t.params])).toEqual([
       ["Page.getFrameTree", {}],
       ["Page.createIsolatedWorld", { frameId: "F1", worldName: PageChangeScript.worldName, grantUniveralAccess: false }],
       ["DOM.resolveNode", { backendNodeId: 5, executionContextId: 1 }],
       ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", arguments: [{ value: false }], returnByValue: true, silent: true }],
       ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", arguments: [{ value: true }], returnByValue: false, silent: true }],
-      ["DOM.describeNode", { objectId: "form-4", depth: -1, pierce: true }]
+      ["DOM.describeNode", { objectId: "form-4", depth: -1, pierce: true }],
+      ["Runtime.releaseObject", { objectId: "form-4" }]
     ]);
+  });
+
+  it("releases the form's object when its description fails, and when the call that read it was stopped", async () => {
+    surface.answer("Runtime.callFunctionOn", { result: { type: "object", subtype: "node", objectId: "form-4" } });
+    surface.fail("DOM.describeNode", new WebViewFailure(WebViewFailureKind.TooLarge));
+    const failed: unknown = await changes.readFormAsync("view-1", "element-5", options).catch((error: unknown) => error);
+    surface.answerWith("DOM.describeNode", () => {
+      stop.abort();
+      return { node: { backendNodeId: 4, nodeName: "FORM" } };
+    });
+    await changes.readFormAsync("view-1", "element-5", options).catch(() => undefined);
+
+    expect(failed).toBeInstanceOf(CallFailureException);
+    expect(surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params)).toEqual([{ objectId: "form-4" }, { objectId: "form-4" }]);
+  });
+
+  it("logs a release that fails, but not for an object whose document went, or a view that closed, crashed or lost its profile", async () => {
+    surface.fail("Runtime.releaseObject", new WebViewFailure(WebViewFailureKind.NotAllowed));
+    await changes.releaseAsync("view-1", "element-5", options);
+    for (const failure of [new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Could not find object with given id"), new WebViewFailure(WebViewFailureKind.ViewClosed),
+      new WebViewFailure(WebViewFailureKind.Crashed), new WebViewFailure(WebViewFailureKind.ProfileCleared)]) {
+      surface.fail("Runtime.releaseObject", failure);
+      await changes.releaseAsync("view-1", "element-5", options);
+    }
+
+    expect(writtenTo(log)).toEqual([expect.stringMatching(/^The view view-1 may keep an element the risk check read: /)]);
+  });
+
+  it("passes on a failure releasing an object that isn't a call's, since only a bug makes one", async () => {
+    const bug: TypeError = new TypeError("Releasing broke.");
+    surface.answerWith("Runtime.releaseObject", () => {
+      throw bug;
+    });
+
+    await expect(changes.releaseAsync("view-1", "element-5", options)).rejects.toBe(bug);
+    expect(writtenTo(log)).toEqual([]);
   });
 
   it("reads no form for an element in none, and a form answer without an object as malformed", async () => {

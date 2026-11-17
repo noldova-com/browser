@@ -30,6 +30,7 @@
       "returnByValue": { "required": true, "values": [true, false] },
       "silent": { "required": true, "values": [true] }
     } },
+    { "name": "Runtime.releaseObject", "parameters": { "objectId": { "required": true, "maxLength": 128 } } },
     { "name": "Log.enable" },
     { "name": "Accessibility.getFullAXTree", "parameters": { "depth": { "minimum": 1, "maximum": 1 } } },
     { "name": "Accessibility.getPartialAXTree", "parameters": { "backendNodeId": { "minimum": 1 }, "nodeId": { "minimum": 1 }, "fetchRelatives": { "required": true, "values": [false, true] } } },
