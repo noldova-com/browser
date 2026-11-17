@@ -58,13 +58,16 @@ async function unrefusedAsync(app: TestApp, target: string, since: number): Prom
   return (await app.viewRequests.peekAsync()).slice(since).filter(t => hrefs.includes(t.url) && t.error !== REFUSED).map(t => `${t.url} ${t.error ?? "completed"}`);
 }
 
-async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = ""): Promise<string> {
+// A page that navigates as it loads, as a meta refresh does, may have its navigation refused before the load ends, so the pane may show that
+// refusal by the time the page is loaded.
+async function goAsync(app: TestApp, allowed: FixtureServer, path: string, body: string = "", isNavigatingAsItLoads: boolean = false): Promise<string> {
   const url = allowed.url(path);
   allowed.serve(CONTROL_FRAME, page(""));
   allowed.serve(path, page(`${body}<iframe src="${allowed.url(CONTROL_FRAME)}"></iframe>`));
   await app.viewPages.runAsync(`location.href = ${JSON.stringify(url)};`);
   await expectPageAsync(app, url, ALLOWED_TITLE, `The view never loaded ${url}.`);
-  await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept a refusal after loading ${url}.`).toHaveCount(0);
+  if (!isNavigatingAsItLoads)
+    await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept a refusal after loading ${url}.`).toHaveCount(0);
   expect(await app.viewPages.takeCommitsAsync(), `The view's commits don't show ${url} alone.`).toEqual([url]);
   return url;
 }
@@ -102,7 +105,7 @@ const LOCATION: INavigationStart = {
 const META_REFRESH: INavigationStart = {
   name: "a meta refresh",
   isTopLevel: true,
-  startAsync: async (app, allowed, target) => goAsync(app, allowed, "/meta", `<meta http-equiv="refresh" content="0;url=${target}">`)
+  startAsync: async (app, allowed, target) => goAsync(app, allowed, "/meta", `<meta http-equiv="refresh" content="0;url=${target}">`, true)
 };
 
 const REDIRECT: INavigationStart = {
@@ -254,8 +257,11 @@ test.describe("blocked origins", () => {
           const since = (await app.viewRequests.peekAsync()).length;
           const stays = await start.startAsync(app, allowed, target);
 
-          if (start.isTopLevel)
+          if (start.isTopLevel) {
             await expectNavigationStartedAsync(app, how);
+            await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't show the refusal of ${how}.`)
+              .toHaveText(`Browser doesn't open ${new URL(target).origin}`);
+          }
           const barrier = `After ${how}`;
           await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
 

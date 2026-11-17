@@ -289,7 +289,7 @@ A row of an IPv6 form of an IPv4 address, IPv4-mapped, IPv4-compatible or NAT64,
 A loopback row whose address isn't `127.0.0.1`, such as `127.0.0.2`, has the main process's record prove the refusal on every platform, and its fixture server listens on that address where the platform routes it.
 
 A navigation row's test starts the navigation in every way that applies to its case: the bridge's navigate, back or forward to a history entry, a link, a form, `window.location` set by the fixture page's own script when a fixture control starts it, a meta refresh, a server redirect and a subframe.
-It asserts that the navigation is refused, that the page stays at its last allowed URL, that the module receives the refused-navigation event with the URL, and that the refused origin's fixture server and the recording proxy received no request.
+It asserts that the navigation is refused, that the page stays at its last allowed URL, that the module receives the refused-navigation event with the URL, for a top-level navigation shown as the pane's refusal naming the refused origin, and that the refused origin's fixture server and the recording proxy received no request.
 
 A subresource row's test loads an allowed page that makes each kind of request to the row's address: `fetch`, an image, a script, an iframe, a beacon by `navigator.sendBeacon`, and a WebSocket by `ws:` and by `wss:`.
 It asserts the outcome the row gives each kind; a WebSocket, for one, reaches only an origin on the allow list.
