@@ -11,6 +11,7 @@ import type { IModuleLog } from "@noldova/desktop.runtime";
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { PageCrashedException } from "../exceptions/page-crashed.exception.ts";
 import { ProfileClearedException } from "../exceptions/profile-cleared.exception.ts";
+import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import type { AccessibilityNode } from "../models/accessibility-node.ts";
 import { AccessibilityTree } from "../models/accessibility-tree.ts";
@@ -53,8 +54,7 @@ export class AccessibilityWalk {
         return new AccessibilityTree(root, nodes, false);
       if (node.childIds.length === 0)
         continue;
-      const children: readonly AccessibilityNode[] = AccessibilitySnapshot.readChildren(
-        await this.calls.sendAsync(viewId, Resources.getChildAXNodesMethod, { id: node.id }, options));
+      const children: readonly AccessibilityNode[] = await this.readChildrenAsync(viewId, node, options);
       const byId: ReadonlyMap<string, AccessibilityNode> = new Map(children.map(t => [t.id, t]));
       const ordered: AccessibilityNode[] = [];
       for (const id of node.childIds) {
@@ -68,6 +68,19 @@ export class AccessibilityWalk {
       pending.push(...ordered.reverse());
     }
     return new AccessibilityTree(root, nodes);
+  }
+
+  // A node the page removed after its parent was read has no children to give, and the engine answers its id as invalid: the snapshot leaves
+  // them out, as a whole tree read a moment later would.
+  private async readChildrenAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<readonly AccessibilityNode[]> {
+    try {
+      return AccessibilitySnapshot.readChildren(await this.calls.sendAsync(viewId, Resources.getChildAXNodesMethod, { id: node.id }, options));
+    }
+    catch (error) {
+      if (!(error instanceof ProtocolFailedException))
+        throw error;
+      return [];
+    }
   }
 
   private async disableAsync(viewId: string, options: CallOptions): Promise<void> {

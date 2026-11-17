@@ -7,10 +7,12 @@
  */
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { WebViewFailureException } from "@noldova/desktop.runtime";
 import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
+import { ViewClosedException } from "../../src/exceptions/view-closed.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import type { AccessibilityTree } from "../../src/models/accessibility-tree.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
@@ -83,6 +85,21 @@ describe("AccessibilityWalk", () => {
     const tree: AccessibilityTree = await readAsync();
 
     expect(tree.nodes.map(t => t.id)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("leaves out the children of a node the page removed after its parent was read, and fails on any other failure reading them", async () => {
+    const failing = (failure: WebViewFailure): void => surface.answerWith("Accessibility.getChildAXNodes", t => {
+      if (t["id"] === "3")
+        throw new WebViewFailureException(failure);
+      return { nodes: [LINK, GROUP] };
+    });
+    failing(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Invalid ID"));
+
+    const tree: AccessibilityTree = await readAsync();
+
+    expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3"], true]);
+    failing(new WebViewFailure(WebViewFailureKind.ViewClosed));
+    await expect(readAsync()).rejects.toBeInstanceOf(ViewClosedException);
   });
 
   it("reads a root or children that aren't nodes as malformed, and still turns the tree off", async () => {
