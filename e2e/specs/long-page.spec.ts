@@ -21,14 +21,16 @@ const PAGE = "<!doctype html><title>Long page</title><form action=\"/sent\"><inp
   + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`
   + "<p>Order <b>placed</b></p>";
 
-const ROWS = 12_000;
+const ROWS = 400;
+const ROW_DATA_LENGTH = 12_000;
 
-// The document's whole tree passes Noldova Desktop's 4 MiB reply limit with rows of short text, while its accessibility tree stays small.
+// The document's whole tree passes Noldova Desktop's 4 MiB reply limit through its rows' long data attributes, which the accessibility tree
+// leaves out, so a snapshot still reads it.
 // The checkout form's PIN field sits in a closed shadow root, so only a read of the form that pierces closed shadow roots finds its secret.
 const LONG_DOCUMENT = "<!doctype html><title>Long document</title><h2 id=\"checkout-name\">Checkout</h2>"
   + "<form aria-labelledby=\"checkout-name\" action=\"/sent\"><div id=\"pin\"></div><button>Pay</button></form><a id=\"first\" href=\"#rows\">First link</a>"
   + "<script>document.getElementById('pin').attachShadow({ mode: 'closed' }).innerHTML = '<input type=\"password\" aria-label=\"PIN\">';</script>"
-  + `<div id="rows"><script>document.write(Array.from({ length: ${ROWS} }, (_, i) => '<div><span>Row ' + i + '</span></div>').join(''))</script></div>`;
+  + `<div id="rows"><script>document.write(Array.from({ length: ${ROWS} }, () => '<div data-row="' + 'x'.repeat(${ROW_DATA_LENGTH}) + '"></div>').join(''))</script></div>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -97,7 +99,9 @@ test.describe("keys and waits on a long page", () => {
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long document")]);
     for (const action of ["browser.click", "browser.click", "browser.pressKey"])
       await app.requestAsync("agent-double.planAnswer", { action, answer: "deny" });
-    const snapshot = textsOf(await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings })).join("\n");
+    const shown = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings });
+    expect(shown, `The snapshot failed: ${JSON.stringify(shown).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
+    const snapshot = textsOf(shown).join("\n");
 
     await app.requestAsync("agent-double.callTool", { name: "browser_click", input: { reference: referenceOf(snapshot, /link "First link" \[(e\d+)\]/) }, bindings });
     await app.requestAsync("agent-double.callTool", { name: "browser_click", input: { reference: referenceOf(snapshot, /button "Pay" \[(e\d+)\]/) }, bindings });
