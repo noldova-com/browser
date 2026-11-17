@@ -270,10 +270,6 @@ export class Resources {
     return `${name} ${phrase}`;
   }
 
-  public static formatUsingPage(agentName: string): string {
-    return Resources.formatAgentMessage(Resources.formatAgentName(agentName), Resources.agentActing);
-  }
-
   public static formatAgentPages(name: string, count: number): string {
     return `${name} · ${count} ${count === 1 ? "page" : "pages"} open`;
   }

@@ -136,7 +136,7 @@ describe("Pages", () => {
     expect(named.map(t => t.appName())).toEqual([null, null, null]);
   });
 
-  it("follows what agents do on each page by its instance, underlined on its tab, until each activity ends, and leaves an end of another activity alone", () => {
+  it("follows what agents do on each page by its instance until each activity ends, never underlines its tab, and leaves an end of another activity alone", () => {
     const acting: JsonObject = { instance: "page-1", activity: "call-1", agentName: "Scout", action: "Clicking", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
     context.emit(BrowserEvents.pageActivity, acting);
     context.emit(BrowserEvents.pageActivity, { ...acting, instance: "page-2", activity: "call-2" });
@@ -149,10 +149,10 @@ describe("Pages", () => {
     context.emit(BrowserEvents.pageActivity, { ...acting, instance: "page-3", activity: "call-3", state: "Ended" });
 
     expect([...pages.activities().keys()]).toEqual(["page-2"]);
-    expect(underlines()).toEqual([["page-1", "Scout is using this page"], ["page-2", "Scout is using this page"], ["page-1", null]]);
+    expect(underlines()).toEqual([]);
   });
 
-  it("opens a page's document underlined when a teammate's call on it already runs, and keeps the underline of one already open", async () => {
+  it("opens a page's document with no underline when a teammate's call on it already runs, and adds none to one already open", async () => {
     const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const opening = vi.spyOn(context, "openDocument");
     context.emit(BrowserEvents.pageActivity, { instance: picked, activity: "call-1", agentName: " ", action: "Clicking", state: "Acting", box: null, point: null, refusal: null,
@@ -162,8 +162,7 @@ describe("Pages", () => {
     await pages.showAsync(picked);
     pages.open("workspace-1", null, picked);
 
-    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", { underline: "A teammate is using this page" }], ["browser.page", picked, "New tab"]],
-      [[picked, "A teammate is using this page"]]]);
+    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", {}], ["browser.page", picked, "New tab"]], []]);
   });
 
   it("logs an activity event that isn't one, without its payload, and changes no page", () => {
@@ -216,7 +215,7 @@ describe("Pages", () => {
 
     expect(isRead).toBe(true);
     expect([...pages.activities().entries()].map(t => [t[0], t[1].activity, t[1].state])).toEqual([["page-4", "call-8", "Asking"], ["page-2", "call-5", "Acting"]]);
-    expect(underlines()).toEqual([["page-1", "Scout is using this page"], ["page-2", "Scout is using this page"], ["page-1", null], ["page-4", "Scout is using this page"]]);
+    expect(underlines()).toEqual([]);
     expect(context.requests.filter(t => t.method === BrowserMethods.readActivities)).toEqual([{ method: BrowserMethods.readActivities, parameters: null }]);
   });
 
