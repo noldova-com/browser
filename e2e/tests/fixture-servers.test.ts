@@ -7,11 +7,22 @@
  */
 
 import { once } from "node:events";
+import { get } from "node:http";
 import { connect } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { FixtureRequest, FixtureServers } from "../fixtures/fixture-servers.ts";
+
+// A plain request, with only the headers given, unlike fetch's.
+function getAsync(url: string, headers: Readonly<Record<string, string>> = {}): Promise<void> {
+  return new Promise((resolve, reject) => {
+    get(url, { headers }, response => {
+      response.resume();
+      response.on("end", resolve);
+    }).on("error", reject);
+  });
+}
 
 describe("FixtureServers", () => {
   const servers = new FixtureServers();
@@ -71,6 +82,18 @@ describe("FixtureServers", () => {
     const answered = await fetch(`http://${address}:${server.port}/`);
 
     expect([await answered.text(), server.hosts]).toEqual(["<p>Range</p>", [`127.0.0.2:${server.port}`, `${address}:${server.port}`]]);
+  });
+
+  it("logs every server's requests in time order, each with its server, path, client port and the headers that say what kind of request it is", async () => {
+    const first = await servers.startAsync("first.localhost", { "/": "<p>First</p>" });
+    const second = await servers.startAsync("second.localhost", { "/": "<p>Second</p>" });
+    await getAsync(`http://127.0.0.1:${first.port}/`, { "sec-fetch-mode": "navigate", "sec-fetch-dest": "document", "sec-purpose": "prefetch" });
+    await getAsync(`http://127.0.0.1:${second.port}/missing`);
+
+    expect(servers.log).toEqual([
+      expect.stringMatching(new RegExp(`^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z first\\.localhost:${first.port} / from port \\d+ sec-fetch-mode=navigate sec-fetch-dest=document sec-purpose=prefetch$`)),
+      expect.stringMatching(new RegExp(`^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z second\\.localhost:${second.port} /missing from port \\d+$`))
+    ]);
   });
 
   it("lists every server's requests, with the host each named", async () => {

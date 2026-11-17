@@ -31,7 +31,14 @@ interface IViewChooserSession {
   on(event: "select-usb-device" | "select-serial-port" | "select-hid-device", listener: () => void): void;
 }
 
+interface IViewNavigationStart {
+  readonly url: string;
+  readonly isMainFrame: boolean;
+  readonly isSameDocument: boolean;
+}
+
 interface IViewPageContents {
+  readonly id: number;
   getType(): string;
   readonly session: IViewSession;
   readonly debugger: IViewDebugger;
@@ -43,6 +50,8 @@ interface IViewPageContents {
   sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
+  on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
+  on(event: "destroyed", listener: () => void): void;
 }
 
 interface IViewPageRecord {
@@ -119,13 +128,21 @@ export class ViewPages {
       const commits: string[] = [];
       const frameCommits: string[] = [];
       const choosers: string[] = [];
+      const log: string[] = [];
       const watched = new WeakSet<object>();
       globalThis.noldovaViewCommits = commits;
       globalThis.noldovaViewFrameCommits = frameCommits;
       globalThis.noldovaViewChoosers = choosers;
+      globalThis.noldovaViewLog = log;
       app.on("web-contents-created", (_event: unknown, contents: IViewPageContents & { readonly session: IViewChooserSession }) => {
         if (contents.getType() !== "webview")
           return;
+        const note = (text: string): void => {
+          log.push(`${new Date().toISOString()} view ${contents.id} ${text}`);
+        };
+        note("created");
+        contents.on("did-start-navigation", (details: IViewNavigationStart) => note(`starts ${details.url}${details.isMainFrame ? "" : " in a frame"}${details.isSameDocument ? " in the same document" : ""}`));
+        contents.on("destroyed", () => note("destroyed"));
         if (!watched.has(contents.session)) {
           watched.add(contents.session);
           for (const name of ["select-usb-device", "select-serial-port", "select-hid-device"] as const)
@@ -143,6 +160,11 @@ export class ViewPages {
       });
     });
     return new ViewPages(application);
+  }
+
+  // The views' creations, navigation starts and ends, each with its time, for a failed test's attachment.
+  public async takeLogAsync(): Promise<readonly string[]> {
+    return this.application.evaluate(() => globalThis.noldovaViewLog?.splice(0) ?? []);
   }
 
   public async listAsync(): Promise<readonly ViewPage[]> {

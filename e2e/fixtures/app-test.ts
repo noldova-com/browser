@@ -20,13 +20,19 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
   dataFiles: [{}, { option: true }],
   waitsForStart: [true, { option: true }],
   expectedViolations: [[], { option: true }],
-  servers: async ({}, use) => {
+  servers: async ({}, use, testInfo) => {
     const servers = new FixtureServers();
     try {
       await use(servers);
     }
     finally {
-      await servers.closeAsync();
+      try {
+        if (testInfo.status !== testInfo.expectedStatus)
+          await testInfo.attach("requests.log", { body: servers.log.join("\n"), contentType: "text/plain" });
+      }
+      finally {
+        await servers.closeAsync();
+      }
     }
   },
   loopbackProxy: async ({}, use) => {
@@ -47,7 +53,13 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await use(app);
     }
     finally {
-      await app.quitAsync();
+      try {
+        if (testInfo.status !== testInfo.expectedStatus)
+          await app.attachViewLogAsync();
+      }
+      finally {
+        await app.quitAsync();
+      }
     }
   },
   guard: [async ({ servers, loopbackProxy, app, expectedViolations }, use) => {
