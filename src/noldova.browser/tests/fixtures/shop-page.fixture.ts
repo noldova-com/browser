@@ -6,8 +6,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonObject } from "../../src/types/json-value.ts";
+import { JsonShapes } from "../../src/services/json-shapes.ts";
+import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import type { ToolBench } from "./tool-bench.fixture.ts";
+
+// What the page shows the pinned element facts function: its document, and the one element whose attributes changed, if any.
+class ShownDocument {
+  public document: JsonObject;
+  public changed: number | null = null;
+  public attributes: readonly string[] = [];
+
+  public constructor(document: JsonObject) {
+    this.document = document;
+  }
+}
 
 export class ShopPage {
   public static readonly FORM_BUTTON: number = 5;
@@ -48,6 +60,8 @@ export class ShopPage {
     { backendNodeId: 21, nodeName: "TITLE", children: [{ backendNodeId: 22, nodeName: "#text", nodeValue: "Cart" }] }
   ] };
 
+  private static readonly SHOWN: WeakMap<ToolBench, ShownDocument> = new WeakMap<ToolBench, ShownDocument>();
+
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
   }
@@ -65,7 +79,15 @@ export class ShopPage {
 
   public static serve(bench: ToolBench, hit: number): void {
     bench.surface.answer("Page.getFrameTree", ShopPage.frame());
-    bench.surface.answer("DOM.getDocument", ShopPage.document());
+    ShopPage.showDocument(bench, ShopPage.document());
+    bench.surface.answerWith("DOM.resolveNode", (params: JsonObject) => ({ object: { type: "object", objectId: `node-${String(params["backendNodeId"])}` } }));
+    bench.surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      const objectId: JsonValue | undefined = params["objectId"];
+      const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+      return typeof objectId === "string" && shown !== undefined
+        ? { result: { type: "object", value: ShopPage.facts(shown, Number(objectId.slice("node-".length))) } }
+        : { result: { type: "boolean", value: true } };
+    });
     bench.surface.answerWith("Accessibility.getPartialAXTree", (params: JsonObject) => {
       const id: number = Number(params["backendNodeId"]);
       const [role, name]: readonly [string, string] = ShopPage.LABELS.get(id) ?? ["generic", ""];
@@ -78,7 +100,21 @@ export class ShopPage {
     bench.surface.answer("DOM.getNodeForLocation", { backendNodeId: hit, frameId: "F1" });
   }
 
+  // The document the element facts function reads from now on, as when the page changes after the person was asked.
+  public static showDocument(bench: ToolBench, document: JsonObject): void {
+    const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+    if (shown === undefined)
+      ShopPage.SHOWN.set(bench, new ShownDocument(document));
+    else
+      shown.document = document;
+  }
+
   public static describe(bench: ToolBench, changed: number | null, attributes: readonly string[] = ["type", "password"]): void {
+    const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+    if (shown !== undefined) {
+      shown.changed = changed;
+      shown.attributes = attributes;
+    }
     bench.surface.answerWith("DOM.describeNode", (params: JsonObject) => {
       const id: number = Number(params["backendNodeId"]);
       const whole: JsonObject = ShopPage.NODES.get(id) ?? { nodeName: "DIV" };
@@ -86,5 +122,50 @@ export class ShopPage {
       const described: JsonObject = params["depth"] === -1 ? whole : node;
       return { node: id === changed ? { ...described, attributes: [...attributes] } : described };
     });
+  }
+
+  // The facts the pinned function gives for the element on this document, as it reads them: the path from the document, the elements of
+  // the nearest form above the element, the form's label or title, and the page's title and base URL.
+  private static facts(shown: ShownDocument, backendNodeId: number): JsonObject {
+    const root: JsonObject = ShopPage.objectOf(shown.document["root"]);
+    const page: JsonObject = { title: "Cart", baseUrl: String(root["baseURL"]) };
+    const path: readonly JsonObject[] | null = ShopPage.pathTo(root, backendNodeId);
+    if (path === null)
+      return { path: null, form: [], formName: "", ...page };
+    const read = (node: JsonObject): JsonValue => [String(node["nodeName"]), node["backendNodeId"] === shown.changed ? [...shown.attributes] : ShopPage.listOf(node["attributes"])];
+    const form: JsonObject | undefined = path.slice(0, -1).findLast(t => t["nodeName"] === "FORM");
+    const attributes: readonly JsonValue[] = form === undefined ? [] : ShopPage.listOf(form["attributes"]);
+    const label: number = attributes.indexOf("aria-label");
+    return {
+      path: path.map(read),
+      form: form === undefined ? [] : ShopPage.elementsOf(form).map(read),
+      formName: label === -1 ? "" : String(attributes[label + 1]),
+      ...page
+    };
+  }
+
+  private static pathTo(node: JsonObject, backendNodeId: number): readonly JsonObject[] | null {
+    if (node["backendNodeId"] === backendNodeId)
+      return [node];
+    for (const child of ShopPage.listOf(node["children"])) {
+      const below: readonly JsonObject[] | null = ShopPage.pathTo(ShopPage.objectOf(child), backendNodeId);
+      if (below !== null)
+        return [node, ...below];
+    }
+    return null;
+  }
+
+  private static elementsOf(node: JsonObject): readonly JsonObject[] {
+    return [node, ...ShopPage.listOf(node["children"]).flatMap(t => ShopPage.elementsOf(ShopPage.objectOf(t)))];
+  }
+
+  private static listOf(value: JsonValue | undefined): readonly JsonValue[] {
+    return JsonShapes.isArray(value) ? value : [];
+  }
+
+  private static objectOf(value: JsonValue | undefined): JsonObject {
+    if (!JsonShapes.isObject(value))
+      throw new Error("The shop page's document holds a node that isn't an object.");
+    return value;
   }
 }

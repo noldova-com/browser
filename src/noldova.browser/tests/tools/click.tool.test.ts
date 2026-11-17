@@ -77,10 +77,10 @@ describe("ClickTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods).toEqual(["Page.getFrameTree", "DOM.getDocument", "DOM.describeNode", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
+    expect(bench.methods).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
       "Page.getLayoutMetrics",
       "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Input.dispatchMouseEvent", "DOM.getContentQuads",
-      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "DOM.getDocument", "DOM.describeNode", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
+      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
       "Page.getFrameTree"]);
     expect(bench.surface.calls.find(t => t.method === "Accessibility.getPartialAXTree")?.params).toEqual({ backendNodeId: ShopPage.LINK, fetchRelatives: false });
     expect(mouseEvents()).toEqual([
@@ -239,7 +239,7 @@ describe("ClickTool", () => {
     bench.permissions.answerNext(PermissionDecision.Denied);
     await CallFailures.expectAsync(clicking, PermissionDeniedException, { reason: "Denied" });
 
-    expect(asking).toEqual(["Page.getFrameTree", "DOM.getDocument", "DOM.describeNode", "Accessibility.getPartialAXTree", "DOM.getContentQuads",
+    expect(asking).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Accessibility.getPartialAXTree", "DOM.getContentQuads",
       "Page.getFrameTree", "Page.enable", "Runtime.disable", "Runtime.enable", "Log.enable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Page.createIsolatedWorld",
       "Runtime.callFunctionOn", "Page.getFrameTree", "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation"]);
     expect(bench.surface.calls.slice(asking.length).map(t => [t.method, t.params["arguments"]])).toEqual([["Runtime.callFunctionOn", [{ value: false }]]]);
@@ -364,8 +364,8 @@ describe("ClickTool", () => {
     bench.failHearing();
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK), clickCount: 2 }));
 
-    const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "DOM.getDocument", "DOM.describeNode"];
-    expect(bench.methods.slice(11, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
+    const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn"];
+    expect(bench.methods.slice(13, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
       ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent"]);
   });
 
@@ -581,7 +581,7 @@ describe("ClickTool", () => {
     bench.permissions.automaticDecision = null;
     const running: Promise<unknown> = bench.runAsync(tool, bench.call({ reference: reference(ShopPage.FORM_BUTTON) }));
     await bench.permissions.raised;
-    bench.surface.answer("DOM.getDocument", ShopPage.document(true));
+    ShopPage.showDocument(bench, ShopPage.document(true));
     bench.permissions.answerNext(PermissionDecision.AllowedOnce);
 
     await CallFailures.expectAsync(running, RiskRoseException, { reason: ToolFailureCode.Stale, message: "The page made this element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; call it again to ask at high risk.", moduleCode: "browser.riskRose" });
@@ -596,7 +596,7 @@ describe("ClickTool", () => {
     ShopPage.serve(bench, ShopPage.FORM_BUTTON);
     bench.surface.answerWith(method, (params: JsonObject) => {
       if (isChanging(params))
-        bench.surface.answer("DOM.getDocument", ShopPage.document(true));
+        ShopPage.showDocument(bench, ShopPage.document(true));
       return {};
     });
 
@@ -608,7 +608,7 @@ describe("ClickTool", () => {
     ShopPage.serve(bench, ShopPage.FORM_BUTTON);
     bench.surface.answerWith("Input.dispatchMouseEvent", (params: JsonObject) => {
       if (params["type"] === "mouseReleased")
-        bench.surface.answer("DOM.getDocument", ShopPage.document(true));
+        ShopPage.showDocument(bench, ShopPage.document(true));
       return {};
     });
 

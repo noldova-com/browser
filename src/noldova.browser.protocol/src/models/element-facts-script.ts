@@ -6,11 +6,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// The one function the risk check runs on an element, in the page changes' isolated world of the main frame, so the page's own script can't
-// change what it reads: the names and attributes of the element and of each node above it to the document, through shadow roots, closed
-// ones too; the elements of the form the element belongs to; the form's name; the document's title and its base URL. It reads only what the
-// page's markup holds, never a field's value, changes nothing and returns only those facts, by value, so no reply grows with the whole
-// document. `webViews.json` pins it word for word.
 export class ElementFactsScript {
   public static readonly functionDeclaration: string = `function () {
   const read = node => [node.nodeName, node.nodeType === 1 ? node.getAttributeNames().flatMap(name => [name, node.getAttribute(name) ?? ""]) : []];

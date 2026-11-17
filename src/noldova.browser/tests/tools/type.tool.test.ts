@@ -67,7 +67,7 @@ describe("TypeTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods.slice(3, 10)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "DOM.getDocument", "DOM.describeNode",
+    expect(bench.methods.slice(5, 14)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn",
       "Input.insertText"]);
     expect([sent("DOM.focus"), sent("Input.insertText"), sent("Input.dispatchKeyEvent")]).toEqual([[{ backendNodeId: ShopPage.SEARCH }], [{ text: "red shoes" }], []]);
     expect(result.content[0]?.value).toBe("Typed.");
@@ -272,7 +272,7 @@ describe("TypeTool", () => {
 
   it.each<[string, number, boolean, () => void]>([
     ["the field turned into a password field", ShopPage.SEARCH, false, () => ShopPage.describe(bench, ShopPage.SEARCH)],
-    ["the form it submits gained a password field", ShopPage.COUPON, true, () => bench.surface.answer("DOM.getDocument", ShopPage.document(true))]
+    ["the form it submits gained a password field", ShopPage.COUPON, true, () => ShopPage.showDocument(bench, ShopPage.document(true))]
   ])("types nothing and fails as stale when, while the medium-risk card waited, %s", async (_case: string, field: number, submit: boolean, change: () => void) => {
     bench.permissions.automaticDecision = null;
     const running: Promise<unknown> = bench.runAsync(tool, bench.call({ reference: reference(field), text: "SAVE10", submit }));
@@ -300,7 +300,7 @@ describe("TypeTool", () => {
 
   it("types the text but sends no Enter, and says it wasn't submitted, when the typing gives the form a secret field", async () => {
     bench.surface.answerWith("Input.insertText", () => {
-      bench.surface.answer("DOM.getDocument", ShopPage.document(true));
+      ShopPage.showDocument(bench, ShopPage.document(true));
       return {};
     });
 
@@ -323,7 +323,7 @@ describe("TypeTool", () => {
     bench.permissions.automaticDecision = null;
     const running: Promise<unknown> = bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" }));
     await bench.permissions.raised;
-    bench.surface.answer("DOM.getDocument", { root: { backendNodeId: 1, nodeName: "#document", baseURL: "https://shop.test/cart/", children: [] } });
+    ShopPage.showDocument(bench, { root: { backendNodeId: 1, nodeName: "#document", baseURL: "https://shop.test/cart/", children: [] } });
     bench.permissions.answerNext(PermissionDecision.AllowedOnce);
 
     await CallFailures.expectAsync(running, PageChangedAfterGrantException, { reason: "Stale", message: "The page changed after the action was allowed, so nothing ran; take a new snapshot." });

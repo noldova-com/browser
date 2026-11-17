@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PageChangeScript } from "@noldova/browser.protocol";
+import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol";
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import { ToolAbortReason, ToolFailureCode, WebViewFailureException } from "@noldova/desktop.runtime";
 import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
@@ -106,6 +106,32 @@ describe("PageChanges", () => {
     surface.answer("Page.createIsolatedWorld", {});
 
     await expect(changes.hasTextAsync("view-1", "Order placed", options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
+  });
+
+  it("reads an element's facts with the pinned function on the element resolved in the main frame's world, its reply bound by the tree's limit", async () => {
+    const facts: JsonObject = { path: null, form: [], formName: "", title: "x".repeat(200_000), baseUrl: "https://shop.test/" };
+    surface.answer("DOM.resolveNode", { object: { type: "object", objectId: "element-5" } });
+    surface.answer("Runtime.callFunctionOn", { result: { type: "object", value: facts } });
+
+    const reply: JsonObject = await changes.readElementAsync("view-1", 5, options);
+
+    expect(reply).toEqual({ result: { type: "object", value: facts } });
+    expect(surface.calls.map(t => [t.method, t.params])).toEqual([
+      ["Page.getFrameTree", {}],
+      ["Page.createIsolatedWorld", { frameId: "F1", worldName: PageChangeScript.worldName, grantUniveralAccess: false }],
+      ["DOM.resolveNode", { backendNodeId: 5, executionContextId: 1 }],
+      ["Runtime.callFunctionOn", { functionDeclaration: ElementFactsScript.functionDeclaration, objectId: "element-5", returnByValue: true, silent: true }]
+    ]);
+  });
+
+  it("fails an element's read as the hearing does when the main frame's world has no context, and reads a resolved element without an object as malformed", async () => {
+    for (const resolved of [{}, { object: "element-5" }, { object: { type: "object" } }]) {
+      surface.answer("DOM.resolveNode", resolved);
+      await expect(changes.readElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(MalformedReplyException);
+    }
+    surface.answer("Page.createIsolatedWorld", {});
+
+    await expect(changes.readElementAsync("view-1", 5, options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
   });
 
   it("starts the view's tracker, adds the binding after it, and starts the function in the world of each frame with an id, the main frame's first", async () => {

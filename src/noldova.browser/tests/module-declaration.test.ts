@@ -8,10 +8,9 @@
 
 import { readFile } from "node:fs/promises";
 
-import { PageChangeScript } from "@noldova/browser.protocol";
+import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol";
 import { describe, expect, it } from "vitest";
 
-import { ElementFactsScript } from "../src/models/element-facts-script.ts";
 import { PageTextScript } from "../src/models/page-text-script.ts";
 
 async function readDeclarationAsync(file: string): Promise<unknown> {

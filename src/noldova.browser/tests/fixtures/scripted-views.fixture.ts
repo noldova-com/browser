@@ -133,18 +133,28 @@ export class ScriptedViews {
     return promise;
   }
 
+  // Each view's isolated worlds, made once per frame and name, reported as the engine reports them: when made, and each again when the
+  // runtime is enabled.
   public serveWorlds(): void {
     const worlds: Map<string, number> = new Map();
+    const contexts: Map<string, JsonObject[]> = new Map();
     this.answerWith("Page.createIsolatedWorld", (params: JsonObject) => {
       const viewId: string = this.calls.at(-1)?.viewId ?? "";
       const key: string = `${viewId} ${String(params["frameId"])} ${String(params["worldName"])}`;
       const id: number = worlds.get(key) ?? worlds.size + 1;
-      if (!worlds.has(key))
-        this.emitProtocolEvent(viewId, "Runtime.executionContextCreated", {
-          context: { id, uniqueId: `${viewId}.${id}`, name: params["worldName"] ?? null, origin: "https://shop.test", auxData: { frameId: params["frameId"] ?? null } }
-        });
+      if (!worlds.has(key)) {
+        const context: JsonObject = { id, uniqueId: `${viewId}.${id}`, name: params["worldName"] ?? null, origin: "https://shop.test", auxData: { frameId: params["frameId"] ?? null } };
+        contexts.set(viewId, [...contexts.get(viewId) ?? [], context]);
+        this.emitProtocolEvent(viewId, "Runtime.executionContextCreated", { context });
+      }
       worlds.set(key, id);
       return { executionContextId: id };
+    });
+    this.answerWith("Runtime.enable", () => {
+      const viewId: string = this.calls.at(-1)?.viewId ?? "";
+      for (const context of contexts.get(viewId) ?? [])
+        this.emitProtocolEvent(viewId, "Runtime.executionContextCreated", { context });
+      return {};
     });
     this.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: true } });
   }

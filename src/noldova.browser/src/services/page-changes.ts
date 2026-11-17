@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PageChangeScript } from "@noldova/browser.protocol";
+import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol";
 import type { IModuleLog, IWebViewRelay, WebViewProtocolEvent } from "@noldova/desktop.runtime";
 
 import { BrowserRuntimeException } from "../exceptions/browser-runtime.exception.ts";
@@ -16,7 +16,6 @@ import { PageChangesContextMissingException } from "../exceptions/page-changes-c
 import { PageChangesNotSwitchedException } from "../exceptions/page-changes-not-switched.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
-import { ElementFactsScript } from "../models/element-facts-script.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageTextScript } from "../models/page-text-script.ts";
 import { Resources } from "../resources.ts";
