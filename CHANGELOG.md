@@ -4,6 +4,20 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.3
+
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.3 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` depends on its protocol and window packages at 0.0.3 (#20, #58).
+  A page's own refused top-level navigation, which Noldova Desktop reports since 0.0.3, now shows the pane's refused state naming the refused origin, and a refused page with no origin of its own, such as `about:srcdoc`, is named by its address (#58).
+- An agent's call marks the page's view as controlled with Noldova Desktop's `setControlledAsync` for as long as the agent controls the page, so a page in a hidden tab keeps drawing and an agent's press reaches a document it loaded while hidden.
+  A call whose view can't be marked does nothing and fails as `Unavailable` with the new code `browser.notControlled`; a view marked by an earlier start of the runtime part, which no control holds, stops being marked (#42).
+- A page whose accessibility tree is too large for one reply is still snapshotted, read a part at a time with `Accessibility.getRootAXNode` and `Accessibility.getChildAXNodes`, which `webViews.json` now declares with `Accessibility.enable` and `Accessibility.disable` (#52).
+  On such a page, a key press reads the focused element, `browser_wait_for` checks the page's shown text with the pinned `PageTextScript`, and the snapshot reads from where the page is scrolled to, through the read-only calls `webViews.json` adds for them (#55).
+- The teammate's bar shows for as long as an agent controls a page, from its first call until the page closes, the person takes over or stops the agent, or the session ends, rather than once per call (#54); the page's tab shows no accent underline while an agent uses it (#51).
+- Each approval card names the element and the site, such as `Click "Choose Team" on docs.example.com` (#31).
+- The tab row of a group that holds a Browser page has a New page button, from the page document's tab-row menu place `browser.pageTabRow` in `menus.json` (#32).
+- Find on page opens a find bar under the toolbar, from More or `Mod+F` (#35).
+- A refused request's notice that comes while a page loads stays through that load, its commit and its failure (#24).
+
 ## 0.0.2
 
 - The packages are published through npm's trusted publishing, with provenance, so the release stores no token.
