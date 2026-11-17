@@ -37,7 +37,8 @@ const CALL_LIMIT = 5000;
 const FREE_PAGE_LIMIT = 1000;
 const RELAY_REPLY_LIMIT = 4 * 1024 * 1024;
 const CONTROL_METHOD = "Page.getLayoutMetrics";
-const WHOLE_DOCUMENT: JsonObject = { depth: -1, pierce: true };
+const DOCUMENT_ROOT: JsonObject = { depth: 0, pierce: true };
+const WHOLE_SUBTREE: JsonObject = { depth: -1, pierce: true };
 const PAGE_STATE = "JSON.stringify([location.href, document.documentElement.outerHTML, window.relayMarker])";
 const EVERY_OTHER_METHOD = "every other method";
 const SECURITY_MODEL = new URL("../../documents/SECURITY-MODEL.md", import.meta.url);
@@ -53,7 +54,7 @@ const REFUSED_CALLS: readonly IRefusedCall[] = [
   { title: "Runtime.callFunctionOn", method: "Runtime.callFunctionOn", params: { functionDeclaration: "function () { document.title = \"Changed\"; }", uniqueContextId: "main", returnByValue: true, silent: true } },
   { title: "Runtime.addBinding", method: "Runtime.addBinding", params: { name: "anotherBinding", executionContextName: "noldova-browser-changes" } },
   ...["getBoxModel", "querySelector", "querySelectorAll", "setFileInputFiles", "getFileInfo", "setOuterHTML", "setAttributeValue", "setAttributesAsText", "setNodeValue", "setNodeName",
-    "removeNode", "moveTo", "copyTo", "undo", "redo", "markUndoableState", "resolveNode", "getOuterHTML", "setNodeStackTracesEnabled"]
+    "removeNode", "moveTo", "copyTo", "undo", "redo", "markUndoableState", "getOuterHTML", "setNodeStackTracesEnabled"]
     .map(t => ({ title: `DOM.${t}`, method: `DOM.${t}` })),
   { title: "Emulation.setFocusEmulationEnabled", method: "Emulation.setFocusEmulationEnabled", params: { enabled: true } },
   { title: `Emulation, ${EVERY_OTHER_METHOD}`, method: "Emulation.setUserAgentOverride", params: { userAgent: "Another agent" } },
@@ -99,6 +100,11 @@ async function sendAsync(app: TestApp, method: string, params: JsonObject = {}, 
   return String(await app.requestAsync("relay-double.send", { method, params, timeout, ...(view === undefined ? {} : { view }) }));
 }
 
+// Sends the call with the backend id of the double's document node added to its parameters.
+async function sendOnRootAsync(app: TestApp, method: string, params: JsonObject): Promise<string> {
+  return String(await app.requestAsync("relay-double.send", { method, params, timeout: CALL_LIMIT, onRoot: true }));
+}
+
 async function openDoubleViewAsync(app: TestApp): Promise<number> {
   await app.requestAsync("relay-double.open", null);
   await expect.poll(async () => app.requestAsync("relay-double.views", null), { message: "The relay double's web view never opened." }).toHaveLength(1);
@@ -142,7 +148,7 @@ test.describe("relay refusals", () => {
     expect(target.url, "The attached session isn't the child frame's.").toBe(child.url("/"));
     const before = await app.viewPages.runAsync(PAGE_STATE);
 
-    expect(await sendAsync(app, "DOM.getDocument", { ...WHOLE_DOCUMENT, sessionId: target.sessionId }), "The relay didn't refuse a call that names the child target's session.")
+    expect(await sendAsync(app, "DOM.getDocument", { ...DOCUMENT_ROOT, sessionId: target.sessionId }), "The relay didn't refuse a call that names the child target's session.")
       .toBe(NOT_ALLOWED);
 
     expect(await app.viewPages.runAsync(PAGE_STATE), "The page changed after the refused call.").toBe(before);
@@ -175,11 +181,11 @@ test.describe("relay refusals", () => {
       t.serve("/worker.js", worker, { ...isolated, "content-type": "text/javascript" });
     });
     expect(await app.viewPages.runAsync("String(crossOriginIsolated)"), "The held page didn't load cross-origin isolated.").toBe("true");
-    expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT, FREE_PAGE_LIMIT), `The free page didn't answer within ${FREE_PAGE_LIMIT} ms.`).toBe(ANSWERED);
+    expect(await sendAsync(app, "DOM.getDocument", DOCUMENT_ROOT, FREE_PAGE_LIMIT), `The free page didn't answer within ${FREE_PAGE_LIMIT} ms.`).toBe(ANSWERED);
 
     try {
       expect(await app.viewPages.runAsync("window.holdPage()"), "The page didn't start holding its main thread.").toBe("holding");
-      expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT, FREE_PAGE_LIMIT), "A call the held page couldn't answer didn't end at its time limit.").toBe(TIMED_OUT);
+      expect(await sendAsync(app, "DOM.getDocument", DOCUMENT_ROOT, FREE_PAGE_LIMIT), "A call the held page couldn't answer didn't end at its time limit.").toBe(TIMED_OUT);
     }
     finally {
       server.serve("/release", "released");
@@ -201,6 +207,6 @@ test.describe("relay refusals", () => {
   test("size limit", async ({ app, servers }) => {
     await openDoubleAsync(app, servers, page(`document.documentElement.setAttribute("data-filler", "x".repeat(${RELAY_REPLY_LIMIT + 1}));`));
 
-    expect(await sendAsync(app, "DOM.getDocument", WHOLE_DOCUMENT), `A reply over ${RELAY_REPLY_LIMIT} bytes didn't end with the size failure.`).toBe(TOO_LARGE);
+    expect(await sendOnRootAsync(app, "DOM.describeNode", WHOLE_SUBTREE), `A reply over ${RELAY_REPLY_LIMIT} bytes didn't end with the size failure.`).toBe(TOO_LARGE);
   });
 });

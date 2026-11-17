@@ -6,8 +6,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonObject } from "../../src/types/json-value.ts";
+import { JsonShapes } from "../../src/services/json-shapes.ts";
+import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import type { ToolBench } from "./tool-bench.fixture.ts";
+
+// What the page shows the pinned element facts function: its document, and the one element whose attributes changed, if any.
+class ShownDocument {
+  public document: JsonObject;
+  public changed: number | null = null;
+  public attributes: readonly string[] = [];
+
+  public constructor(document: JsonObject) {
+    this.document = document;
+  }
+}
 
 export class ShopPage {
   public static readonly FORM_BUTTON: number = 5;
@@ -48,15 +60,20 @@ export class ShopPage {
     { backendNodeId: 21, nodeName: "TITLE", children: [{ backendNodeId: 22, nodeName: "#text", nodeValue: "Cart" }] }
   ] };
 
+  private static readonly SHOWN: WeakMap<ToolBench, ShownDocument> = new WeakMap<ToolBench, ShownDocument>();
+
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
   }
 
-  public static document(hasCartPin: boolean = false): JsonObject {
+  // The cart, whose first form may hold the cart PIN field, in the open or inside a closed shadow root.
+  public static document(hasCartPin: boolean = false, hidesCartPin: boolean = false): JsonObject {
     const node: (id: number) => JsonObject = (id: number): JsonObject => ShopPage.NODES.get(id) ?? {};
+    const hidden: JsonObject = { backendNodeId: 16, nodeName: "DIV", shadowRoots: [{ backendNodeId: 17, nodeName: "#document-fragment", shadowRootType: "closed", children: [node(15)] }] };
+    const pin: readonly JsonObject[] = hidesCartPin ? [hidden] : [];
     return { root: { backendNodeId: 1, nodeName: "#document", baseURL: "https://shop.test/cart/", children: [
       { backendNodeId: 2, nodeName: "HTML", children: [ShopPage.HEAD, { backendNodeId: 3, nodeName: "BODY", children: [
-        { backendNodeId: 4, nodeName: "FORM", children: hasCartPin ? [node(14), node(15), node(5)] : [node(14), node(5)] },
+        { backendNodeId: 4, nodeName: "FORM", children: hasCartPin ? [node(14), node(15), node(5)] : [node(14), ...pin, node(5)] },
         { backendNodeId: 11, nodeName: "FORM", attributes: ["id", "sign-in", "aria-label", "Sign in to the shop"], children: [node(13), node(9), node(12)] },
         node(7), node(8), node(10)
       ] }] }
@@ -65,7 +82,19 @@ export class ShopPage {
 
   public static serve(bench: ToolBench, hit: number): void {
     bench.surface.answer("Page.getFrameTree", ShopPage.frame());
-    bench.surface.answer("DOM.getDocument", ShopPage.document());
+    ShopPage.showDocument(bench, ShopPage.document());
+    bench.surface.answerWith("DOM.resolveNode", (params: JsonObject) => ({ object: { type: "object", objectId: `node-${String(params["backendNodeId"])}` } }));
+    bench.surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      const objectId: JsonValue | undefined = params["objectId"];
+      const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+      if (typeof objectId !== "string" || shown === undefined)
+        return { result: { type: "boolean", value: true } };
+      const backendNodeId: number = Number(objectId.slice("node-".length));
+      if (params["returnByValue"] === true)
+        return { result: { type: "object", value: ShopPage.facts(shown, backendNodeId) } };
+      const form: JsonObject | undefined = ShopPage.formOf(shown, backendNodeId);
+      return { result: form === undefined ? { type: "object", subtype: "null", value: null } : { type: "object", subtype: "node", objectId: `form-${String(form["backendNodeId"])}` } };
+    });
     bench.surface.answerWith("Accessibility.getPartialAXTree", (params: JsonObject) => {
       const id: number = Number(params["backendNodeId"]);
       const [role, name]: readonly [string, string] = ShopPage.LABELS.get(id) ?? ["generic", ""];
@@ -78,13 +107,69 @@ export class ShopPage {
     bench.surface.answer("DOM.getNodeForLocation", { backendNodeId: hit, frameId: "F1" });
   }
 
+  // The document the element facts function reads from now on, as when the page changes after the person was asked.
+  public static showDocument(bench: ToolBench, document: JsonObject): void {
+    const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+    if (shown === undefined)
+      ShopPage.SHOWN.set(bench, new ShownDocument(document));
+    else
+      shown.document = document;
+  }
+
   public static describe(bench: ToolBench, changed: number | null, attributes: readonly string[] = ["type", "password"]): void {
+    const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
+    if (shown !== undefined) {
+      shown.changed = changed;
+      shown.attributes = attributes;
+    }
     bench.surface.answerWith("DOM.describeNode", (params: JsonObject) => {
+      const objectId: JsonValue | undefined = params["objectId"];
+      const document: JsonObject | undefined = ShopPage.SHOWN.get(bench)?.document;
+      if (typeof objectId === "string" && document !== undefined)
+        return { node: ShopPage.pathTo(ShopPage.objectOf(document["root"]), Number(objectId.slice("form-".length)))?.at(-1) ?? {} };
       const id: number = Number(params["backendNodeId"]);
       const whole: JsonObject = ShopPage.NODES.get(id) ?? { nodeName: "DIV" };
       const { children: _children, ...node }: JsonObject = whole;
       const described: JsonObject = params["depth"] === -1 ? whole : node;
       return { node: id === changed ? { ...described, attributes: [...attributes] } : described };
     });
+  }
+
+  // The facts the pinned function gives by value for the element on this document, as it reads them: the path from the document, the
+  // elements that name its form, none here, the form's label, and the page's title and base URL.
+  private static facts(shown: ShownDocument, backendNodeId: number): JsonObject {
+    const root: JsonObject = ShopPage.objectOf(shown.document["root"]);
+    const path: readonly JsonObject[] | null = ShopPage.pathTo(root, backendNodeId);
+    const read = (node: JsonObject): JsonValue => [String(node["nodeName"]), node["backendNodeId"] === shown.changed ? [...shown.attributes] : ShopPage.listOf(node["attributes"])];
+    const form: JsonObject | undefined = ShopPage.formOf(shown, backendNodeId);
+    const attributes: readonly JsonValue[] = form === undefined ? [] : ShopPage.listOf(form["attributes"]);
+    const label: number = attributes.indexOf("aria-label");
+    return { path: path === null ? null : path.map(read), linked: [], formName: label === -1 ? "" : String(attributes[label + 1]), title: "Cart", baseUrl: String(root["baseURL"]) };
+  }
+
+  // The nearest form above the element, which the function gives as an object for the form's subtree to be described.
+  private static formOf(shown: ShownDocument, backendNodeId: number): JsonObject | undefined {
+    return ShopPage.pathTo(ShopPage.objectOf(shown.document["root"]), backendNodeId)?.slice(0, -1).findLast(t => t["nodeName"] === "FORM");
+  }
+
+  private static pathTo(node: JsonObject, backendNodeId: number): readonly JsonObject[] | null {
+    if (node["backendNodeId"] === backendNodeId)
+      return [node];
+    for (const child of ShopPage.listOf(node["children"])) {
+      const below: readonly JsonObject[] | null = ShopPage.pathTo(ShopPage.objectOf(child), backendNodeId);
+      if (below !== null)
+        return [node, ...below];
+    }
+    return null;
+  }
+
+  private static listOf(value: JsonValue | undefined): readonly JsonValue[] {
+    return JsonShapes.isArray(value) ? value : [];
+  }
+
+  private static objectOf(value: JsonValue | undefined): JsonObject {
+    if (!JsonShapes.isObject(value))
+      throw new Error("The shop page's document holds a node that isn't an object.");
+    return value;
   }
 }

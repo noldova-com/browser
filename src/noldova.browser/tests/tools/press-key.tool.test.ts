@@ -201,7 +201,7 @@ describe("PressKeyTool", () => {
         throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
       return { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Long" } }] };
     });
-    bench.surface.answerWith("DOM.getDocument", (params: JsonObject) => params["depth"] === 0 ? { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } } : ShopPage.document());
+    bench.surface.answer("DOM.getDocument", { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } });
     bench.surface.answer("DOM.querySelector", { nodeId: 70 });
     bench.surface.answerWith("Accessibility.getPartialAXTree", (params: JsonObject) => params["nodeId"] === 70
       ? focusedTree(ShopPage.SEARCH)
@@ -272,8 +272,8 @@ describe("PressKeyTool", () => {
 
   it.each<[string, number, string, () => void]>([
     ["the focused field turned into a password field", ShopPage.SEARCH, "a", () => ShopPage.describe(bench, ShopPage.SEARCH)],
-    ["the form Enter submits gained a password field", ShopPage.COUPON, "Enter", () => bench.surface.answer("DOM.getDocument", ShopPage.document(true))],
-    ["the form Space's button submits gained a password field", ShopPage.FORM_BUTTON, " ", () => bench.surface.answer("DOM.getDocument", ShopPage.document(true))]
+    ["the form Enter submits gained a password field", ShopPage.COUPON, "Enter", () => ShopPage.showDocument(bench, ShopPage.document(true))],
+    ["the form Space's button submits gained a password field", ShopPage.FORM_BUTTON, " ", () => ShopPage.showDocument(bench, ShopPage.document(true))]
   ])("presses nothing and fails as stale when, while the medium-risk card waited, %s", async (_case: string, focused: number, key: string, change: () => void) => {
     bench.surface.answer("Accessibility.getFullAXTree", focusedTree(focused));
     bench.permissions.automaticDecision = null;

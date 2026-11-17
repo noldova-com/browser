@@ -22,6 +22,7 @@ export { OpenPagesRequest } from "../models/open-pages-request.ts";
 export { PageActivity } from "../models/page-activity.ts";
 export { PageAgent } from "../models/page-agent.ts";
 export { PageBox } from "../models/page-box.ts";
+export { ElementFactsScript } from "../models/element-facts-script.ts";
 export { PageChangeScript } from "../models/page-change-script.ts";
 export { PageClaim } from "../models/page-claim.ts";
 export { PagePoint } from "../models/page-point.ts";
