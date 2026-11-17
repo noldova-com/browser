@@ -6,7 +6,7 @@ This source code is licensed under the license found in the
 LICENSE file in the root directory of this source tree.
 -->
 
-<nol-text-field-box class="nol-browser-find-field" [icon]="resources.findGlyph">
+<nol-text-field-box class="nol-browser-find-field" [icon]="resources.findFieldGlyph">
   <input #field nol-text-field type="text" spellcheck="false" autocomplete="off" [attr.aria-label]="resources.findField"
     [attr.aria-describedby]="countText() === null ? null : countId" (input)="edit()">
 </nol-text-field-box>

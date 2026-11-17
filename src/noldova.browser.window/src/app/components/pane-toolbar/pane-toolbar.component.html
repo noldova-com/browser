@@ -50,9 +50,9 @@ LICENSE file in the root directory of this source tree.
     }
     <button nol-menu-item [label]="resources.copyAddress" [icon]="resources.copyGlyph" [disabled]="!hasPage()" (triggered)="copyAddress()"></button>
     <button nol-menu-item [label]="resources.openExternal" [icon]="resources.externalGlyph" [disabled]="!canOpenExternal()" (triggered)="openExternal()"></button>
-    <button nol-menu-item [label]="resources.findOnPage" [icon]="resources.findGlyph" [shortcut]="findKey" [disabled]="!hasPage()" (triggered)="requestFind()"></button>
     <button nol-menu-item [label]="resources.zoom" [icon]="resources.zoomGlyph" [value]="zoomPercent()" [isShowingChevron]="false" [disabled]="!isAvailable()"
       [nolMenuTriggerFor]="zoomMenu"></button>
+    <button nol-menu-item [label]="resources.findOnPage" [icon]="resources.findGlyph" [shortcut]="findKey" [disabled]="!hasPage()" (triggered)="requestFind()"></button>
     <button nol-menu-item [label]="resources.clearBrowsingData" [icon]="resources.clearGlyph" [disabled]="!isAvailable()" (triggered)="clearBrowsingData.emit()"></button>
   </nol-menu>
 </ng-template>

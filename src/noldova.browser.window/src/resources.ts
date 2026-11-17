@@ -116,7 +116,8 @@ export class Resources {
   public static readonly greatestZoom: number = 5;
   public static readonly zoomGroup: string = "-zoom";
   public static readonly findOnPage: string = "Find on page";
-  public static readonly findGlyph: string = "search";
+  public static readonly findGlyph: string = "find_in_page";
+  public static readonly findFieldGlyph: string = "search";
   public static readonly findKeys: { readonly other: string; readonly mac: string } = { other: "Ctrl+F", mac: "⌘F" };
   public static readonly findBarLabel: string = "Find on page";
   public static readonly findField: string = "Find";

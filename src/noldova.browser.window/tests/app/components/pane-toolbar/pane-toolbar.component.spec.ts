@@ -137,7 +137,7 @@ describe("PaneToolbarComponent", () => {
   }
 
   async function openZoomAsync(): Promise<HTMLButtonElement[]> {
-    (await openMenuAsync())[3]?.click();
+    (await openMenuAsync())[2]?.click();
     await fixture.whenStable();
     await vi.waitFor(() => expect(zoomItems().length).toBe(3));
     return zoomItems();
@@ -152,7 +152,7 @@ describe("PaneToolbarComponent", () => {
   }
 
   async function shownZoomAsync(): Promise<string | undefined> {
-    const shown: string | undefined = percent((await openMenuAsync())[3]);
+    const shown: string | undefined = percent((await openMenuAsync())[2]);
     await closeMenusAsync();
     return shown;
   }
@@ -450,7 +450,7 @@ describe("PaneToolbarComponent", () => {
     expect([tip.textContent?.trim(), tip.getBoundingClientRect().top >= button("More").getBoundingClientRect().bottom - 0.5, button("More").textContent?.trim()]).toEqual(["More", true, "more_horiz"]);
   });
 
-  it("opens Copy address, Open in external browser, Find on page, Zoom and Clear browsing data under More, each with its glyph", async () => {
+  it("opens Copy address, Open in external browser, Zoom, Find on page and Clear browsing data under More, each with its glyph", async () => {
     fixture.componentInstance.openLink.set(() => Promise.resolve());
     await loadAsync("https://one.example/");
 
@@ -459,8 +459,8 @@ describe("PaneToolbarComponent", () => {
     expect(labels(opened)).toEqual([
       ["content_copy", "Copy address", null],
       ["open_in_new", "Open in external browser", null],
-      ["search", "Find on page", null],
       ["zoom_in", "Zoom", null],
+      ["find_in_page", "Find on page", null],
       ["delete_sweep", "Clear browsing data…", null]
     ]);
     const panel = find(".nol-browser-toolbar-menu").getBoundingClientRect();
@@ -495,7 +495,7 @@ describe("PaneToolbarComponent", () => {
 
     await userEvent.keyboard("{ArrowDown}");
 
-    expect([document.activeElement === items()[1], items().map(t => t.getAttribute("aria-disabled"))]).toEqual([true, ["true", "true", "true", null, null]]);
+    expect([document.activeElement === items()[1], items().map(t => t.getAttribute("aria-disabled"))]).toEqual([true, ["true", "true", null, "true", null]]);
     await userEvent.keyboard("{Enter}");
     await userEvent.keyboard("{ArrowUp}{Enter}");
     await fixture.whenStable();
@@ -559,11 +559,11 @@ describe("PaneToolbarComponent", () => {
   });
 
   it("asks the page to find on it from Find on page, which shows Noldova Desktop's find key, and does nothing for it without a page", async () => {
-    (await openMenuAsync())[2]?.click();
+    (await openMenuAsync())[3]?.click();
     await closeMenusAsync();
     const shown: number = fixture.componentInstance.findings;
     await loadAsync("https://one.example/");
-    const find = (await openMenuAsync())[2];
+    const find = (await openMenuAsync())[3];
 
     expect(trail(find)).toBe(navigator.platform.startsWith("Mac") ? "⌘F" : "Ctrl+F");
     find?.click();
@@ -597,7 +597,7 @@ describe("PaneToolbarComponent", () => {
 
   it("shows the page's zoom at More's Zoom, which opens Zoom in, Zoom out and Reset to 100%, each with its glyph and Noldova Desktop's key", async () => {
     await loadAsync("https://one.example/");
-    const zoom = (await openMenuAsync())[3];
+    const zoom = (await openMenuAsync())[2];
 
     expect([percent(zoom), trail(zoom), zoom?.querySelector(".nol-menu-item-chevron") !== null, zoom?.getAttribute("aria-haspopup")]).toEqual(["100%", undefined, false, "menu"]);
     zoom?.click();
@@ -651,7 +651,7 @@ describe("PaneToolbarComponent", () => {
     await loadAsync("https://one.example/");
     await showAsync(new ViewZoomEvent(1.5));
     const first = await shownZoomAsync();
-    const zoom = (await openMenuAsync())[3];
+    const zoom = (await openMenuAsync())[2];
     await showAsync(new ViewZoomEvent(0.67));
     const open = percent(zoom);
     await closeMenusAsync();
@@ -699,7 +699,7 @@ describe("PaneToolbarComponent", () => {
       if (isForced)
         await ForcedColorsFixture.activateAsync();
       await loadAsync("https://one.example/");
-      const [copy, , , zoom] = await openMenuAsync();
+      const [copy, , zoom] = await openMenuAsync();
       await measuredAsync();
       const part = (row: Element | undefined, selector: string): HTMLElement => {
         const found: HTMLElement | null | undefined = row?.querySelector<HTMLElement>(selector);
