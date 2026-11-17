@@ -162,7 +162,7 @@ export class ViewPages {
     return new ViewPages(application);
   }
 
-  // The views' creations, navigation starts and ends, each with its time, for a failed test's attachment.
+  // The views' creations, navigation starts and destructions, each with its time, for a failed test's attachment.
   public async takeLogAsync(): Promise<readonly string[]> {
     return this.application.evaluate(() => globalThis.noldovaViewLog?.splice(0) ?? []);
   }

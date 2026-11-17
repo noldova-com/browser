@@ -224,7 +224,9 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 ### Fixture servers
 
 - Every fixture server listens on `127.0.0.1` on a port the system picks, and belongs to one test; the "Loopback range" row's server listens on `127.0.0.2` instead, on a platform that routes it.
-- A test that fails attaches two logs to its report, each line with its time: `requests.log`, each fixture server's requests with the client's port and the `Sec-Fetch-*` and purpose headers that say what kind of request each is, and `views.log`, each view's creation, navigation starts and destruction, read from the main process before the app quits ([#37](https://github.com/noldova-com/browser/issues/37)).
+- A test that fails, or whose app doesn't start, attaches two logs to its report, each line with its time: `requests.log`, each fixture server's requests with the client's port and the `Sec-Fetch-*` and purpose headers that say what kind of request each is, and `views.log`, each view's creation, navigation starts and destruction, read from the main process before the app quits ([#37](https://github.com/noldova-com/browser/issues/37)).
+  A check that fails after the app has quit, such as the loopback proxy's, attaches no `views.log`.
+  `failure-logs.spec.ts` attaches `views.log` from a passing test across a restart and checks its lines.
 - A fixture origin a test allows is a `.localhost` name on its own server, such as `allowed.localhost`, so origins are matched by host as well as by port and scheme.
 - Fixture servers listen on loopback, so each fixture origin a test allows has an exact entry in the fixture host app's Sites on this computer or network setting, which takes a `.localhost` name as a local entry and refuses any other name, as the [security model](SECURITY-MODEL.md) says.
 - A `.test` name, such as `blocked.test`, which the host resolver rules map to `127.0.0.1`, is a name that isn't local and resolves to this computer, which the base refuses whatever the allowed origins hold.

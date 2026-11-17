@@ -96,6 +96,16 @@ describe("FixtureServers", () => {
     ]);
   });
 
+  it("logs requests to several servers in the order they arrived, not by server", async () => {
+    const first = await servers.startAsync("first.localhost", { "/": "<p>First</p>" });
+    const second = await servers.startAsync("second.localhost", { "/": "<p>Second</p>" });
+    await getAsync(`http://127.0.0.1:${second.port}/one`);
+    await getAsync(`http://127.0.0.1:${first.port}/two`);
+    await getAsync(`http://127.0.0.1:${second.port}/three`);
+
+    expect(servers.log.map(t => t.split(" ")[2])).toEqual(["/one", "/two", "/three"]);
+  });
+
   it("lists every server's requests, with the host each named", async () => {
     const first = await servers.startAsync("first.localhost", { "/": "<p>First</p>" });
     const second = await servers.startAsync("second.localhost", { "/": "<p>Second</p>" });

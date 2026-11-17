@@ -47,14 +47,17 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
   },
   app: async ({ dataFiles, waitsForStart, loopbackProxy }, use, testInfo) => {
     const app = await TestApp.launchAsync(testInfo, dataFiles, LaunchSettings.forRun(loopbackProxy.address));
+    // The test's status is still "passed" when the start throws, as Playwright records the error after this teardown.
+    let isStarted = false;
     try {
       if (waitsForStart)
         await app.waitForStartAsync();
+      isStarted = true;
       await use(app);
     }
     finally {
       try {
-        if (testInfo.status !== testInfo.expectedStatus)
+        if (!isStarted || testInfo.status !== testInfo.expectedStatus)
           await app.attachViewLogAsync();
       }
       finally {
