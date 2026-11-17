@@ -41,6 +41,7 @@ interface IViewPageContents {
   readonly navigationHistory: { canGoBack(): boolean };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
   sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
+  sendInputEvent(event: { type: "mouseDown" | "mouseUp"; x: number; y: number; button: "left"; clickCount: number }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
 }
@@ -270,6 +271,17 @@ export class ViewPages {
       for (const type of ["keyDown", "keyUp"] as const)
         view.sendInputEvent({ type, keyCode: request.keyCode, modifiers: [...request.modifiers] });
     }, { url, keyCode, modifiers });
+  }
+
+  public async clickAtAsync(url: string, x: number, y: number): Promise<void> {
+    await this.application.evaluate(({ webContents }, request: { url: string; x: number; y: number }): void => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === request.url);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
+      for (const type of ["mouseDown", "mouseUp"] as const)
+        view.sendInputEvent({ type, x: request.x, y: request.y, button: "left", clickCount: 1 });
+    }, { url, x, y });
   }
 
   public async runAsync(script: string): Promise<string> {

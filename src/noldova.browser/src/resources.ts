@@ -266,8 +266,6 @@ export class Resources {
   public static readonly setDeviceMetricsOverrideMethod: "Emulation.setDeviceMetricsOverride" = "Emulation.setDeviceMetricsOverride";
   public static readonly hiddenPageMetrics: CommandParams<"Emulation.setDeviceMetricsOverride"> & JsonObject =
     { width: BrowserLimits.hiddenPageWidth, height: BrowserLimits.hiddenPageHeight, deviceScaleFactor: 0, mobile: false };
-  public static readonly wakeScreenshot: CommandParams<"Page.captureScreenshot"> & JsonObject =
-    { format: "png", clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 } };
   public static readonly clearDeviceMetricsOverrideMethod: "Emulation.clearDeviceMetricsOverride" = "Emulation.clearDeviceMetricsOverride";
   public static readonly consoleAPICalledEvent: "Runtime.consoleAPICalled" = "Runtime.consoleAPICalled";
   public static readonly exceptionThrownEvent: "Runtime.exceptionThrown" = "Runtime.exceptionThrown";
