@@ -8,12 +8,14 @@
 
 import { Buffer } from "node:buffer";
 
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import type { ToolResult } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ChangedDuringReadException } from "../../src/exceptions/changed-during-read.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageNotOpenException } from "../../src/exceptions/page-not-open.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import { ElementReference } from "../../src/models/element-reference.ts";
 import { SnapshotTool } from "../../src/tools/snapshot.tool.ts";
@@ -178,6 +180,31 @@ describe("SnapshotTool", () => {
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({})), ChangedDuringReadException, { reason: "Stale", message: "The page went to another document while it was read, twice; take a new snapshot." });
     expect(bench.methods.filter(t => t === "Accessibility.getFullAXTree").length).toBe(2);
     expect(() => bench.sessions.resolveReference(ToolBench.SESSION, "e1", "view-1", "L3")).toThrow(StaleReferenceException);
+  });
+
+  it("reads a page whose whole tree is too large for one reply a node's children at a time, gives its first lines up to the limit with the cut note, and turns the tree off", async () => {
+    const children: string[] = Array.from({ length: 5_000 }, (_value: unknown, index: number) => `c${index}`);
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getRootAXNode", { node: node("1", "RootWebArea", "Long", { childIds: children, backendDOMNodeId: 1 }) });
+    bench.surface.answer("Accessibility.getChildAXNodes", { nodes: children.map((t, index) => node(t, "link", `Section ${index} ${"x".repeat(40)}`, { backendDOMNodeId: index + 2 })) });
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({}));
+
+    const text: string = String(result.content[1]?.value);
+    expect(text.split("\n").slice(3, 5)).toEqual(["- RootWebArea \"Long\"", `  - link "Section 0 ${"x".repeat(40)}" [e1]`]);
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(128 * 1024 + 200);
+    expect(Buffer.byteLength(text, "utf8")).toBeGreaterThan(128 * 1024 - 100);
+    expect(result.content[2]?.value).toBe("The snapshot was cut at its limit; act on what it shows, or scroll and take another.");
+    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree", "Accessibility.enable", "Accessibility.getRootAXNode", "Accessibility.getChildAXNodes",
+      "Accessibility.disable", "Page.getFrameTree"]);
+  });
+
+  it("passes on any other failure reading the whole tree, and reads it no other way", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({})), ProtocolFailedException, { reason: "Unavailable" });
+    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree"]);
   });
 
   it("fails as closed when the session's page isn't open, and sends nothing", async () => {

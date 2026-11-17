@@ -347,6 +347,12 @@ The runtime part registers eight tools by default, which `module.json` declares 
 
 - The snapshot tool reads the page's accessibility tree and gives each element the agent may act on a short, opaque reference.
   It reads the frame before the tree and again after the tree and its fields' checks; when the two name different documents, it reads once more, and when they differ again it fails as `Stale`, so its content never carries another document's origin.
+  It reads the whole tree in one `Accessibility.getFullAXTree` reply.
+  When that reply passes the 4 MiB bound, `TooLarge`, as on a long article, it reads the tree in pieces instead (`AccessibilityWalk`).
+  It turns the page's tree on with `Accessibility.enable`, then reads the root with `Accessibility.getRootAXNode` and each node's children with `Accessibility.getChildAXNodes`, in the snapshot's own order.
+  It stops once the lines it has read are sure to pass the snapshot's 128 KiB, counting each line at its fewest bytes, then turns the tree off with `Accessibility.disable` however the read ends.
+  So the snapshot gives the page's first 128 KiB with their references and the cut note.
+  A node whose children alone pass the 4 MiB bound still fails as `TooLarge`.
 - A reference belongs to one session and one document, and stays valid until that pane's next snapshot or navigation.
   A stale reference, or one from another session, fails as `Refused` with the module code `browser.staleReference` and a message that says to take a new snapshot.
 - A click by reference checks that the element is the topmost one at its point before it presses, so a cover over it is reported rather than clicked.
@@ -360,7 +366,7 @@ Each tool's risk level, and whether its request asks the person, are in [SECURIT
 | Tool | Inputs | Output | Calls on the view | Non-resumable |
 |---|---|---|---|---|
 | `browser_navigate` | A URL, or the action back, forward or reload | The final URL and title once the page loaded, or a note that it is still loading; or the refusal | `Page.enable`, `Page.getFrameTree`, `Page.getNavigationHistory` for back and forward, the bridge's navigate, back, forward and reload, the event `Page.loadEventFired`, and `Accessibility.getFullAXTree` at depth 1 for the title | Yes |
-| `browser_snapshot` | None | The accessibility tree as text with element references, the URL and the title, bounded with the cut marked | `Page.getFrameTree`, `Accessibility.getFullAXTree`, `DOM.describeNode` | No |
+| `browser_snapshot` | None | The accessibility tree as text with element references, the URL and the title, bounded with the cut marked | `Page.getFrameTree`, `Accessibility.getFullAXTree`, `DOM.describeNode`, and for a tree too large for one reply `Accessibility.enable`, `Accessibility.getRootAXNode`, `Accessibility.getChildAXNodes` and `Accessibility.disable` | No |
 | `browser_click` | A reference, and optionally the button and the click count | Done, and the URL after the click | `Page.getFrameTree`, `DOM.getDocument`, `DOM.describeNode`, `Accessibility.getPartialAXTree` for the element's role and name, `Page.getLayoutMetrics`, `Emulation.setDeviceMetricsOverride` and `Emulation.clearDeviceMetricsOverride` for a [hidden page](#a-press-on-a-hidden-page), `DOM.scrollIntoViewIfNeeded`, `DOM.getContentQuads`, `DOM.getNodeForLocation`, `Input.dispatchMouseEvent`, and `Accessibility.getFullAXTree` at depth 1 for the title | Yes |
 | `browser_type` | A reference, the text, and optionally whether to submit | Done, and the URL after it | `Page.getFrameTree`, `DOM.getDocument`, `DOM.describeNode`, `Accessibility.getPartialAXTree` for the field's role and name, `DOM.focus`, `Input.insertText`, `Input.dispatchKeyEvent`, and `Accessibility.getFullAXTree` at depth 1 for the title | Yes |
 | `browser_press_key` | A key, and optionally its modifiers | Done, and the URL after it | `Page.getFrameTree`, `Accessibility.getFullAXTree`, `DOM.getDocument`, `DOM.describeNode`, `Input.dispatchKeyEvent` | Yes |

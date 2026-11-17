@@ -18,6 +18,7 @@ export class Resources {
   public static readonly sessionScope: string = "agent-double.conversation";
   public static readonly nameField: string = "name";
   public static readonly inputField: string = "input";
+  public static readonly bindingsField: string = "bindings";
   public static readonly actionField: string = "action";
   public static readonly answerField: string = "answer";
   public static readonly allowAlwaysAnswer: string = "allowAlways";
