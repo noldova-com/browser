@@ -106,7 +106,7 @@ describe("NodeFactsReader", () => {
       expectMalformed(() => NodeFactsReader.readElement(reply, []));
   });
 
-  it("reads every node of a described subtree, the node first, through shadow roots, closed ones too, in document order", () => {
+  it("reads every node of a described subtree, the node first, through shadow roots, closed ones too, in document order, and fails a list of children that is no list", () => {
     const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [
       { backendNodeId: 5, nodeName: "DIV", shadowRoots: [{ backendNodeId: 6, nodeName: "#document-fragment", shadowRootType: "closed", children: [
         { backendNodeId: 7, nodeName: "INPUT", attributes: ["type", "password"] }] }] },
@@ -115,6 +115,7 @@ describe("NodeFactsReader", () => {
 
     expect(NodeFactsReader.readSubtree(form).map(t => t.nodeName)).toEqual(["FORM", "DIV", "#DOCUMENT-FRAGMENT", "INPUT", "BUTTON"]);
     expectMalformed(() => NodeFactsReader.readSubtree({}));
+    expectMalformed(() => NodeFactsReader.readSubtree({ node: { backendNodeId: 4, nodeName: "FORM", children: {} } }));
   });
 
   it("says whether a node is the described node or inside its subtree, through shadow roots, and not when it is outside or missing", () => {
