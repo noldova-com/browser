@@ -8,11 +8,12 @@
 
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
 import type { AccessibilityNode } from "./accessibility-node.ts";
+import type { UnreadChild } from "./unread-child.ts";
 
 // The position of a walk through the accessibility tree: the nodes read, those still to visit, and the bytes their lines take.
 export class TreeWalk {
   public readonly nodes: AccessibilityNode[] = [];
-  public readonly pending: AccessibilityNode[] = [];
+  public readonly pending: (AccessibilityNode | UnreadChild)[] = [];
   private readonly seen: Set<string>;
   private bytes: number = 0;
 
@@ -39,5 +40,10 @@ export class TreeWalk {
     }
     this.nodes.push(...ordered);
     return ordered;
+  }
+
+  // Takes one child read on its own, and says whether it was taken: only when its parent names it and it wasn't read already.
+  public adopt(parent: AccessibilityNode, child: AccessibilityNode): boolean {
+    return this.take(parent.childIds, [child]).length === 1;
   }
 }

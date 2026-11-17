@@ -387,6 +387,7 @@ export class Resources {
   public static readonly stateChanging: readonly AllowedMethod[] = ["DOM.focus", "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText"];
   public static readonly maximumTimeoutMilliseconds: number = 10_000;
   public static readonly releaseMilliseconds: number = 2_000;
+  public static readonly treeReadsAhead: number = 8;
   public static readonly bindingCalledEvent: "Runtime.bindingCalled" = "Runtime.bindingCalled";
   public static readonly addBindingMethod: "Runtime.addBinding" = "Runtime.addBinding";
   public static readonly createIsolatedWorldMethod: "Page.createIsolatedWorld" = "Page.createIsolatedWorld";
@@ -519,6 +520,10 @@ export class Resources {
 
   public static formatChangesNotStopped(viewId: string, error: string): string {
     return `The page changes of view ${viewId} weren't stopped: ${error}`;
+  }
+
+  public static formatChildrenTooMany(role: string, count: number): string {
+    return `A ${role} element on the page has ${count} children, more than one answer can carry, so the snapshot can't read past it.`;
   }
 
   public static formatAccessibilityNotDisabled(viewId: string, error: string): string {

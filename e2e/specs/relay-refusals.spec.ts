@@ -189,6 +189,15 @@ test.describe("relay refusals", () => {
     expect(await sendAsync(app, CONTROL_METHOD), "The relay didn't answer once the page was released.").toBe(ANSWERED);
   });
 
+  test("DOM.describeNode at a depth not declared", async ({ app, servers }) => {
+    await openDoubleAsync(app, servers, page());
+
+    for (const depth of [0, 2])
+      expect(await sendAsync(app, "DOM.describeNode", { backendNodeId: 1, depth, pierce: true }), `The relay didn't refuse DOM.describeNode at depth ${depth}.`).toBe(NOT_ALLOWED);
+    for (const depth of [-1, 1])
+      expect(await sendAsync(app, "DOM.describeNode", { backendNodeId: 1, depth, pierce: true }), `The relay refused DOM.describeNode at the declared depth ${depth}.`).not.toBe(NOT_ALLOWED);
+  });
+
   test("size limit", async ({ app, servers }) => {
     await openDoubleAsync(app, servers, page(`document.documentElement.setAttribute("data-filler", "x".repeat(${RELAY_REPLY_LIMIT + 1}));`));
 

@@ -102,7 +102,7 @@ describe("webViews.json", () => {
       { name: "Accessibility.getPartialAXTree", parameters: { backendNodeId: { minimum: 1 }, nodeId: { minimum: 1 }, fetchRelatives: { required: true, values: [false, true] } } },
       { name: "Accessibility.getRootAXNode" },
       { name: "Accessibility.getChildAXNodes", parameters: { id: { required: true, maxLength: 64 } } },
-      { name: "DOM.describeNode", parameters: { backendNodeId: { required: true, minimum: 1 }, depth: { values: [-1] }, pierce: { values: [true] } } },
+      { name: "DOM.describeNode", parameters: { backendNodeId: { required: true, minimum: 1 }, depth: { values: [-1, 1] }, pierce: { values: [true] } } },
       expect.objectContaining({ name: "Input.dispatchMouseEvent", parameters: expect.objectContaining({ clickCount: expect.objectContaining({ minimum: 1, maximum: 3 }),
         button: expect.objectContaining({ values: ["left", "middle", "right"] }) }) }),
       expect.objectContaining({ name: "Input.dispatchKeyEvent", parameters: expect.objectContaining({ text: expect.objectContaining({ maxLength: 2 }),

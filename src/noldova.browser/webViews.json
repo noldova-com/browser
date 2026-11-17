@@ -38,7 +38,7 @@
     { "name": "Accessibility.getChildAXNodes", "parameters": { "id": { "required": true, "maxLength": 64 } } },
     { "name": "DOM.getDocument", "parameters": { "depth": { "required": true, "values": [-1, 0] }, "pierce": { "required": true, "values": [true] } } },
     { "name": "DOM.querySelector", "parameters": { "nodeId": { "required": true, "minimum": 1 }, "selector": { "required": true, "values": [":focus"] } } },
-    { "name": "DOM.describeNode", "parameters": { "backendNodeId": { "required": true, "minimum": 1 }, "depth": { "values": [-1] }, "pierce": { "values": [true] } } },
+    { "name": "DOM.describeNode", "parameters": { "backendNodeId": { "required": true, "minimum": 1 }, "depth": { "values": [-1, 1] }, "pierce": { "values": [true] } } },
     { "name": "DOM.scrollIntoViewIfNeeded", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
     { "name": "DOM.getContentQuads", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
     { "name": "DOM.getNodeForLocation", "parameters": { "x": { "required": true }, "y": { "required": true }, "includeUserAgentShadowDOM": { "values": [false] } } },
