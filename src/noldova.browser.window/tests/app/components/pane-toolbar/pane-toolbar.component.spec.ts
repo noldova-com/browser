@@ -591,7 +591,7 @@ describe("PaneToolbarComponent", () => {
     await fixture.whenStable();
     await readAsync();
 
-    expect(states).toEqual([["true", "true", "true", null, null], [null, "true", null, null, null], [null, "true", null, null, null], [null, null, null, null, null],
+    expect(states).toEqual([["true", "true", null, "true", null], [null, "true", null, null, null], [null, "true", null, null, null], [null, null, null, null, null],
       ["true", "true", "true", "true", "true"]]);
   });
 
@@ -638,7 +638,7 @@ describe("PaneToolbarComponent", () => {
     await userEvent.keyboard("{ArrowDown}");
     await vi.waitFor(() => expect(document.activeElement).toBe(items()[0]));
 
-    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowRight}");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowRight}");
     await vi.waitFor(() => expect(document.activeElement).toBe(zoomItems()[0]));
     await userEvent.keyboard("{Enter}");
     await fixture.whenStable();
