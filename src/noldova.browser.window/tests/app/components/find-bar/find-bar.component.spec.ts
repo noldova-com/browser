@@ -306,7 +306,7 @@ describe("FindBarComponent", () => {
   });
 
   for (const [mode, isForced] of [[ThemeMode.Light, false], [ThemeMode.Dark, false], [ThemeMode.Dark, true]] as const) {
-    it(`sets the field a field's height from the row's inset, 20rem wide, the count at its end in the muted text and the buttons after it, in the ${isForced ? "forced colours" : mode} look`, async () => {
+    it(`sets the field a field's height from the row's inset, 20rem wide, then the count in the muted text and the buttons, each 0.25rem after the last, in the ${isForced ? "forced colours" : mode} look`, async () => {
       AppearanceFixture.apply(DefaultTheme.theme, mode);
       if (isForced)
         await ForcedColorsFixture.activateAsync();
@@ -322,10 +322,8 @@ describe("FindBarComponent", () => {
 
       expect([rem(bar.height), rem(input.left - bar.left), rem(input.width), rem(input.height), rem(input.top + input.height / 2 - (bar.top + bar.height / 2))])
         .toEqual([2.5, rem(inset), 20, rem(probe.getBoundingClientRect().height), 0]);
-      expect([end.left > input.left + input.width / 2, end.right < input.right, rem(end.top + end.height / 2 - (input.top + input.height / 2)) === 0])
-        .toEqual([true, true, true]);
-      expect([rem(previous.left - box.right), rem(next.left - previous.right) >= 0.125, next.left < close.left, rem(close.top + close.height / 2 - (bar.top + bar.height / 2))])
-        .toEqual([rem(gap), true, true, 0]);
+      expect([rem(end.left - box.right), rem(end.top + end.height / 2 - (input.top + input.height / 2)), rem(previous.left - end.right)]).toEqual([rem(gap), 0, rem(gap)]);
+      expect([rem(next.left - previous.right), rem(close.left - next.right), rem(close.top + close.height / 2 - (bar.top + bar.height / 2))]).toEqual([0.125, 0.125, 0]);
       expect(getComputedStyle(find(".nol-browser-find-count")).color).toBe(isForced ? ForcedColorsFixture.resolve("CanvasText") : getComputedStyle(probe).color);
       const focused = getComputedStyle(input);
       expect([document.activeElement === field(), isForced ? [focused.outlineStyle, focused.outlineColor] : [focused.borderTopColor]])

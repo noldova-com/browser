@@ -1339,7 +1339,7 @@ describe("PageComponent colors", () => {
       await actAsync("Ended");
       button("More").click();
       await fixture?.whenStable();
-      await vi.waitFor(() => expect(document.querySelectorAll(".nol-browser-toolbar-menu button[nol-menu-item]")).toHaveLength(4));
+      await vi.waitFor(() => expect(document.querySelectorAll(".nol-browser-toolbar-menu button[nol-menu-item]")).toHaveLength(5));
       pairs.push(["Copy address in the menu", ContrastFixture.ofText(find(".nol-browser-toolbar-menu button[nol-menu-item] .nol-menu-item-label")), 4.5]);
       pairs.push(["Zoom's percent in the menu", ContrastFixture.ofText(within(menuItem("Zoom"), ".nol-menu-item-value")), 4.5]);
       await userEvent.keyboard("{Escape}");

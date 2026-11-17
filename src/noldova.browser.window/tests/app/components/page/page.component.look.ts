@@ -14,7 +14,7 @@ import { WindowPartTokens } from "@noldova/desktop.window";
 import { DefaultTheme, ThemeMode } from "@noldova/ui.components.angular";
 import { AppearanceFixture } from "@noldova/ui.components.angular/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { PageComponent } from "../../../../src/app/components/page/page.component.ts";
 import { RefusedRequest } from "../../../../src/app/enums/refused-request.ts";
@@ -25,7 +25,7 @@ import { ViewRequestRefusalEvent } from "../../../../src/app/models/view-request
 import { ViewStateEvent } from "../../../../src/app/models/view-state-event.ts";
 import { ViewZoomEvent } from "../../../../src/app/models/view-zoom-event.ts";
 import { Pages } from "../../../../src/app/services/pages.ts";
-import type { FakeWebView } from "../../../fixtures/fake-web-views.fixture.ts";
+import { FakeWebView } from "../../../fixtures/fake-web-views.fixture.ts";
 import { WindowContext } from "../../../fixtures/window-context.fixture.ts";
 
 @Component({
@@ -122,8 +122,17 @@ describe("PageComponent in the design's look", () => {
       loaded(view, "https://docs.example.com/pricing", true);
       await fixture?.whenStable();
       await chooseAsync("More");
-      await vi.waitFor(() => expect(document.querySelectorAll(".nol-browser-toolbar-menu button[nol-menu-item]")).toHaveLength(4));
+      await vi.waitFor(() => expect(document.querySelectorAll(".nol-browser-toolbar-menu button[nol-menu-item]")).toHaveLength(5));
     }, true],
+    ["find", async view => {
+      loaded(view, "https://docs.example.com/pricing", true);
+      view.findAnswer = () => Promise.resolve(FakeWebView.found(2, 5));
+      await fixture?.whenStable();
+      await chooseAsync("More", "Find on page");
+      await vi.waitFor(() => expect(document.activeElement?.closest("nol-browser-find-bar")).not.toBeNull());
+      await userEvent.keyboard("pricing");
+      await vi.waitFor(() => expect(document.querySelector(".nol-browser-find-count")?.textContent?.trim()).toBe("2 of 5"));
+    }, false],
     ["zoom", async view => {
       loaded(view, "https://docs.example.com/pricing", true);
       view.emit(new ViewZoomEvent(1.25));

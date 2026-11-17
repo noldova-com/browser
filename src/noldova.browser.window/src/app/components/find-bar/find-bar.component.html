@@ -9,10 +9,10 @@ LICENSE file in the root directory of this source tree.
 <nol-text-field-box class="nol-browser-find-field" [icon]="resources.findGlyph">
   <input #field nol-text-field type="text" spellcheck="false" autocomplete="off" [attr.aria-label]="resources.findField"
     [attr.aria-describedby]="countText() === null ? null : countId" (input)="edit()">
-  @if (countText(); as count) {
-    <span nolTextFieldEnd class="nol-browser-find-count" [id]="countId">{{ count }}</span>
-  }
 </nol-text-field-box>
+@if (countText(); as count) {
+  <span class="nol-browser-find-count" [id]="countId">{{ count }}</span>
+}
 <div class="nol-browser-find-buttons">
   <button nol-toolbar-button type="button" [label]="resources.previousMatch" [icon]="resources.previousMatchGlyph" [isUnavailable]="!hasMatches()"
     [nolTooltip]="resources.previousMatch" [nolTooltipSide]="below" (click)="goPrevious()"></button>

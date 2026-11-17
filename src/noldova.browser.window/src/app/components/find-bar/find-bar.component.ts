@@ -11,7 +11,7 @@ import {
 } from "@angular/core";
 import type { IWebViewFound } from "@noldova/desktop.window";
 import {
-  AnnouncementPoliteness, Announcer, OverlaySide, TextFieldBoxComponent, TextFieldComponent, TextFieldEndDirective, ToolbarButtonComponent, TooltipDirective
+  AnnouncementPoliteness, Announcer, OverlaySide, TextFieldBoxComponent, TextFieldComponent, ToolbarButtonComponent, TooltipDirective
 } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../../resources.ts";
@@ -21,7 +21,7 @@ import type { PaneController } from "../../services/pane-controller.ts";
 
 @Component({
   selector: "nol-browser-find-bar",
-  imports: [TextFieldBoxComponent, TextFieldComponent, TextFieldEndDirective, ToolbarButtonComponent, TooltipDirective],
+  imports: [TextFieldBoxComponent, TextFieldComponent, ToolbarButtonComponent, TooltipDirective],
   templateUrl: "./find-bar.component.html",
   styleUrl: "./find-bar.component.css",
   host: {

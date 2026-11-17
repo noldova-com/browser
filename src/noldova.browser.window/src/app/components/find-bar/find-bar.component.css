@@ -26,6 +26,15 @@
   flex: 0 1 auto;
 }
 
+.nol-browser-find-count {
+  flex: none;
+  color: var(--nol-text-muted);
+  font-size: var(--nol-text-panel);
+  line-height: var(--nol-line-panel);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .nol-browser-find-buttons {
   display: flex;
   flex: none;
