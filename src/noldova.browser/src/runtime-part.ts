@@ -86,6 +86,7 @@ export class RuntimePart implements IRuntimePart {
           if (!holders.isHeldElsewhere(instance, t)) {
             pages.delete(instance);
             holders.letGo(instance);
+            kit.stops.close(instance);
           }
           return null;
         })

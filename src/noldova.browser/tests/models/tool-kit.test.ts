@@ -10,6 +10,7 @@ import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailure
 import { PageAction, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { describe, expect, it, vi } from "vitest";
 
+import { CallCancelledException } from "../../src/exceptions/call-cancelled.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
@@ -64,6 +65,37 @@ describe("ToolKit", () => {
 
     expect(seen).toEqual([[], false]);
     await expect(bench.kit.origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toBeInstanceOf(TypedRedirectAfterAgentException);
+  });
+
+  it("stops a call when the person stops the page, or the call is cancelled, while the page's typed redirects stop passing, and starts no control", async () => {
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+    const controller: AbortController = new AbortController();
+    const interrupts: readonly ((bench: ToolBench) => void)[] = [t => t.kit.stops.stop("page-1", false), () => controller.abort("Cancelled")];
+    const failures: unknown[] = [];
+    const controls: unknown[] = [];
+    let isRun: boolean = false;
+    for (const interrupt of interrupts) {
+      using bench: ToolBench = new ToolBench();
+      await bench.kit.origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"));
+      let release: () => void = () => undefined;
+      let started: () => void = () => undefined;
+      const allowing: Promise<void> = new Promise<void>(resolve => started = resolve);
+      bench.surface.allowing = () => new Promise<void>(resolve => {
+        release = resolve;
+        started();
+      });
+      const running: Promise<null> = bench.kit.actAsync(bench.call({}, controller), page, PageAction.Reading, async () => { isRun = true; return null; });
+
+      await allowing;
+      interrupt(bench);
+      release();
+      failures.push(await running.catch((error: unknown) => error));
+      controls.push(...bench.kit.stops.activities());
+    }
+
+    expect(failures[0]).toBeInstanceOf(CallStoppedException);
+    expect(failures[1]).toBeInstanceOf(CallCancelledException);
+    expect([isRun, controls]).toEqual([false, []]);
   });
 
   it("writes a request with the origin as its subject and the details as given, asking for any risk above low", () => {
