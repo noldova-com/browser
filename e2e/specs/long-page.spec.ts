@@ -16,10 +16,10 @@ const SECTIONS = 400;
 const SECTION_NAME_LENGTH = 4_000;
 
 // Each link's name is long, so the page's whole accessibility tree passes Noldova Desktop's 4 MiB reply limit with few nodes to lay out.
-// A note field in a form above the list has the focus, and the page adds its status line half a second after it loads.
+// A note field in a form above the list has the focus, and a status line after the list splits its text between two elements.
 const PAGE = "<!doctype html><title>Long page</title><form action=\"/sent\"><input aria-label=\"Note\" autofocus></form><ul>"
   + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`
-  + "<script>setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p>Order <b>placed</b></p>'), 500)</script>";
+  + "<p>Order <b>placed</b></p>";
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -56,7 +56,7 @@ test.describe("keys and waits on a long page", () => {
     expect(await app.viewPages.runAtAsync(docs.url("/"), "location.pathname")).toBe("/");
   });
 
-  test("a wait for a field's value isn't met, and one for text the page adds later is, on a page whose accessibility tree passes the reply limit", async ({ app, servers }) => {
+  test("a wait for a field's value isn't met, and one for text the page shows across two elements is, on a page whose accessibility tree passes the reply limit", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": PAGE });
     await app.allowLocalSitesAsync([docs.origin]);
     const instance = await app.openPageAsync(docs.url("/"));

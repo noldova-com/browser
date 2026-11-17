@@ -58,7 +58,7 @@ export class WaitForTool implements IBrowserTool {
         const isMet: boolean = choice === Resources.loadField
           ? await loads.waitAsync(until, activity.signal)
           : await this.whenAsync(page.viewId, options, until, choice === Resources.textField
-            ? async () => this.hasTextAsync(page.viewId, text, options)
+            ? this.checkText(page.viewId, text, options)
             : async () => this.isShownAsync(page.viewId, this.kit.sessions.resolveReference(call.session, reference, page.viewId, frame.documentId), options));
         const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
         return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(timeout), new ShownPage(now.url, await this.kit.readTitleOfAsync(page.viewId, now.documentId, options)));
@@ -110,17 +110,24 @@ export class WaitForTool implements IBrowserTool {
     return stopHearing === null && await isMetAsync();
   }
 
-  private async hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
-    let nodes: JsonObject;
-    try {
-      nodes = await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
-    }
-    catch (error) {
-      if (!(error instanceof ReplyTooLargeException))
-        throw error;
-      return this.kit.changes.hasTextAsync(viewId, text, options);
-    }
-    return AccessibilitySnapshot.readNodes(nodes).nodes.some(t => !t.isIgnored && t.name.includes(text));
+  // Reads the whole tree for the text until it is too large for one reply, then only the page's shown text, for the rest of the wait.
+  private checkText(viewId: string, text: string, options: CallOptions): () => Promise<boolean> {
+    let isTooLarge: boolean = false;
+    return async () => {
+      if (isTooLarge)
+        return this.kit.changes.hasTextAsync(viewId, text, options);
+      let nodes: JsonObject;
+      try {
+        nodes = await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+      }
+      catch (error) {
+        if (!(error instanceof ReplyTooLargeException))
+          throw error;
+        isTooLarge = true;
+        return this.kit.changes.hasTextAsync(viewId, text, options);
+      }
+      return AccessibilitySnapshot.readNodes(nodes).nodes.some(t => !t.isIgnored && t.name.includes(text));
+    };
   }
 
   private async isShownAsync(viewId: string, element: ElementReference, options: CallOptions): Promise<boolean> {

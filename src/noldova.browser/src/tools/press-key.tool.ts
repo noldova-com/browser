@@ -20,6 +20,7 @@ import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import type { ElementFacts } from "../models/element-facts.ts";
+import { FocusRead } from "../models/focus-read.ts";
 import type { FrameFacts } from "../models/frame-facts.ts";
 import type { KeyDefinition } from "../models/key-definition.ts";
 import type { KeyPress } from "../models/key-press.ts";
@@ -59,10 +60,12 @@ export class PressKeyTool implements IBrowserTool {
     return this.kit.actAsync(call, page, PageAction.PressingKey, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      const node: AccessibilityNode | null = await this.readFocusedAsync(page.viewId, options);
+      const keys: KeyPress = KeyEvents.press(definition, KeyEvents.readBits(modifiers));
+      const read: FocusRead = await this.readFocusedAsync(page.viewId, options);
+      const node: AccessibilityNode | null = read.node;
       const focused: number | null = node?.backendNodeId ?? null;
       const facts: ElementFacts | null = focused === null ? null : await this.kit.readElementAsync(page.viewId, focused, options);
-      const risk: ToolRisk = facts === null ? ToolRisk.Medium : RiskClassifier.classifyKey(key, facts.path, facts.form);
+      const risk: ToolRisk = facts === null ? PressKeyTool.classifyUnseen(read, key, keys) : RiskClassifier.classifyKey(key, facts.path, facts.form);
       const chord: string = [...modifiers, key].join(Resources.keyChordSeparator);
       const details: IPermissionDetail[] = [
         PermissionCards.page(frame.url, facts?.page.title ?? ""),
@@ -80,12 +83,11 @@ export class PressKeyTool implements IBrowserTool {
         await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: focused }, handing);
       });
       await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
-      if (((await this.readFocusedAsync(page.viewId, options))?.backendNodeId ?? null) !== focused)
+      if (((await this.readFocusedAsync(page.viewId, options)).node?.backendNodeId ?? null) !== focused)
         throw new PageChangedAfterGrantException();
       if (focused !== null && facts !== null)
         await this.kit.confirmRiskAsync(page.viewId, focused, facts, risk, now => RiskClassifier.classifyKey(key, now.path, now.form), options);
 
-      const keys: KeyPress = KeyEvents.press(definition, KeyEvents.readBits(modifiers));
       await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, keys.down, keys.up, ViewCalls.holding(options));
       return this.kit.doneAsync(page.viewId, Resources.pressed, null, options);
     });
@@ -103,15 +105,20 @@ export class PressKeyTool implements IBrowserTool {
     return modifiers;
   }
 
-  private async readFocusedAsync(viewId: string, options: CallOptions): Promise<AccessibilityNode | null> {
+  // With no focused element found through the document, a key that types or submits could reach a password field or submit a form unseen.
+  private static classifyUnseen(read: FocusRead, key: string, keys: KeyPress): ToolRisk {
+    return read.isFromDocument && (keys.down.type === Resources.keyDownType || Resources.activatingKeys.includes(key)) ? ToolRisk.High : ToolRisk.Medium;
+  }
+
+  private async readFocusedAsync(viewId: string, options: CallOptions): Promise<FocusRead> {
     try {
-      return AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes(
-        await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))).nodes);
+      return new FocusRead(AccessibilitySnapshot.findFocused(AccessibilitySnapshot.readNodes(
+        await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))).nodes), false);
     }
     catch (error) {
       if (!(error instanceof ReplyTooLargeException))
         throw error;
-      return this.lookup.findFocusedAsync(viewId, options);
+      return new FocusRead(await this.lookup.findFocusedAsync(viewId, options), true);
     }
   }
 }

@@ -79,7 +79,7 @@ describe("WaitForTool", () => {
     expect((await bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 1 }))).content[0]?.value).toBe("The wait wasn't met in 1 ms.");
   });
 
-  it("checks the page's shown text with the pinned function when the page's whole tree is too large for one reply, again when the page reports a change", async () => {
+  it("checks the page's shown text with the pinned function once the page's whole tree is too large for one reply, and only so when the page reports a change", async () => {
     vi.useFakeTimers(FAKED);
     const shown: boolean[] = [false, true];
     bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
@@ -98,6 +98,7 @@ describe("WaitForTool", () => {
     expect(result.content[0]?.value).toBe("The wait was met.");
     expect(bench.surface.calls.filter(t => t.params["functionDeclaration"] === PageTextScript.functionDeclaration).map(t => t.params["arguments"]))
       .toEqual(Array(2).fill([{ value: "placed" }]));
+    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getFullAXTree" && t.params["depth"] === undefined).length).toBe(1);
   });
 
   it("fails on any other failure reading the whole tree, and checks the page's text no other way", async () => {

@@ -215,6 +215,23 @@ describe("PressKeyTool", () => {
     expect(bench.surface.calls.filter(t => t.method === "DOM.querySelector").map(t => t.params)).toContainEqual({ nodeId: 1, selector: ":focus" });
   });
 
+  it("asks a key that types or submits as high risk, with no Allow always, when the document shows no focused element on a page too large for one reply", async () => {
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+      if (params["depth"] === undefined)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
+      return { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Long" } }] };
+    });
+    bench.surface.answer("DOM.getDocument", { root: { nodeId: 1, backendNodeId: 1, nodeName: "#document" } });
+    bench.surface.answer("DOM.querySelector", { nodeId: 0 });
+    for (const input of [{ key: "Enter" }, { key: "a" }, { key: "Enter", modifiers: ["Control"] }, { key: "Escape" }])
+      await bench.runAsync(tool, bench.call(input));
+
+    expect(bench.permissions.requests.map(t => [t.risk, t.options])).toEqual([
+      ...Array(3).fill([ToolRisk.High, [PermissionOption.AllowOnce, PermissionOption.Deny]]),
+      [ToolRisk.Medium, [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny]]
+    ]);
+  });
+
   it("fails on any other failure reading the whole tree, and looks for the focus no other way", async () => {
     bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
 
