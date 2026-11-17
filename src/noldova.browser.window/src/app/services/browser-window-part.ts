@@ -23,12 +23,16 @@ export class BrowserWindowPart implements IWindowPart {
   public activateAsync(context: IWindowPartContext): Promise<void> {
     const pages: Pages = new Pages(context);
     context.registerDocument(new DocumentContribution(Resources.pageDocument,
-      () => import("../components/page/page.component.ts").then(t => t.PageComponent), ContentPadding.None));
+      () => import("../components/page/page.component.ts").then(t => t.PageComponent), ContentPadding.None, { tabRowPlace: Resources.pageTabRowPlace }));
     context.registerCommand(new CommandContribution(Resources.openPageCommand, Resources.openPageTitle, null, null, async (commandArguments: JsonValue) => {
       const { profileKey, url, instance } = OpenPageArguments.read(commandArguments);
       await pages.openAsync(profileKey, url, instance);
       return null;
     }, () => true, null, t => OpenPageArguments.isValid(t)));
+    context.registerCommand(new CommandContribution(Resources.newPageCommand, Resources.newPageTitle, Resources.newPageGlyph, Resources.newPageChord, (commandArguments: JsonValue) => {
+      pages.openBeside(commandArguments);
+      return Promise.resolve(null);
+    }, t => pages.canOpenBeside(t)));
     const places: LinkPlaces = new LinkPlaces(context);
     context.registerInAppBrowser({ placeFor: (url, gesture) => places.placeFor(url, gesture), openAsync: url => pages.openLinkAsync(url) });
     context.provideSettingCheck(Resources.systemSitesSetting, t => LinkPlaces.checkSites(t));

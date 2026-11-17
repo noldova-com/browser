@@ -54,8 +54,16 @@ describe("settings.json", () => {
 });
 
 describe("module.json's window contributions", () => {
-  it("declares the page document and the command that opens one, which the window part registers", async () => {
-    expect(await readDeclarationAsync("../module.json")).toMatchObject({ contributes: { documents: ["browser.page"], commands: ["browser.openPage"] } });
+  it("declares the page document and the commands that open one, which the window part registers", async () => {
+    expect(await readDeclarationAsync("../module.json")).toMatchObject({ contributes: { documents: ["browser.page"], commands: ["browser.openPage", "browser.newPage"] } });
+  });
+
+  it("declares the page document's tab row place, a plain one that shows only the new page command, and no other place", async () => {
+    expect(await readDeclarationAsync("../module.json")).toMatchObject({ contributes: { menus: ["browser.pageTabRow"] } });
+    expect(await readDeclarationAsync("../menus.json")).toEqual({
+      places: [{ name: "browser.pageTabRow", title: "Page tab row" }],
+      groups: [{ name: "browser.pageTabRowNew", place: "browser.pageTabRow", items: [{ command: "browser.newPage" }] }]
+    });
   });
 
   it("declares the status bar item of each agent's open pages, which the window part registers", async () => {

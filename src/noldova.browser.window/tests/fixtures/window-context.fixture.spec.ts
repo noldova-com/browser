@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import { WindowContext } from "./window-context.fixture.ts";
 
 describe("WindowContext", () => {
-  it("registers each document, command and status-bar item module.json declares once, and refuses an undeclared or repeated one", () => {
+  it("registers each document, command and status-bar item module.json declares once, and refuses an undeclared or repeated one, or a tab row place menus.json doesn't declare", () => {
     const context: WindowContext = new WindowContext();
     const document = (name: string): DocumentContribution => new DocumentContribution(name, () => Promise.resolve(Object));
     const command = (name: string): CommandContribution => new CommandContribution(name, "Open page", null, null, () => Promise.resolve(null));
@@ -24,6 +24,8 @@ describe("WindowContext", () => {
     context.registerStatusBarItem(item("browser.agentPages"));
 
     expect(() => context.registerDocument(document("browser.other"))).toThrow(UnansweredCallException);
+    expect(() => new WindowContext().registerDocument(new DocumentContribution("browser.page", () => Promise.resolve(Object), undefined, { tabRowPlace: "browser.otherRow" })))
+      .toThrow(UnansweredCallException);
     expect(() => context.registerDocument(document("browser.page"))).toThrow(UnansweredCallException);
     expect(() => context.registerCommand(command("browser.other"))).toThrow(UnansweredCallException);
     expect(() => context.registerCommand(command("browser.openPage"))).toThrow(UnansweredCallException);

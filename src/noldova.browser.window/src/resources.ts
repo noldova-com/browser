@@ -21,10 +21,16 @@ export class Resources {
   public static readonly moduleId: string = "browser";
   public static readonly pageDocument: string = "browser.page";
   public static readonly openPageCommand: string = "browser.openPage";
+  public static readonly newPageCommand: string = "browser.newPage";
+  public static readonly pageTabRowPlace: string = "browser.pageTabRow";
   public static readonly agentPagesItem: string = "browser.agentPages";
   public static readonly agentPagesSeparator: string = ", ";
   public static readonly pagesInactive: string = "A page document shows only while Browser's window part is active.";
   public static readonly openPageTitle: string = "Open a page";
+  public static readonly newPageTitle: string = "New page";
+  public static readonly newPageGlyph: string = "add";
+  public static readonly documentArgument: string = "document";
+  public static readonly instanceArgument: string = "instance";
   public static readonly linkClickSetting: string = "browser.linkClick";
   public static readonly linkMiddleClickSetting: string = "browser.linkMiddleClick";
   public static readonly systemSitesSetting: string = "browser.systemSites";
@@ -194,6 +200,8 @@ export class Resources {
   public static readonly noticeId: string = "-notice";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
   public static readonly agentBarSelector: string = "nol-browser-agent-bar";
+  public static readonly pageSelector: string = ".nol-browser-page";
+  public static readonly pageInstanceAttribute: string = "data-instance";
   public static readonly schemePattern: RegExp = /^[a-z][a-z\d+.-]*$/iu;
   public static readonly portPattern: RegExp = /^\d/u;
   public static readonly spacePattern: RegExp = /\s/u;

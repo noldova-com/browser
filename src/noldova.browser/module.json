@@ -7,12 +7,13 @@
   "dependencies": {},
   "noldovaDesktop": ">=0.0.1 <0.1.0",
   "contributes": {
-    "commands": ["browser.openPage"],
+    "commands": ["browser.openPage", "browser.newPage"],
     "documents": ["browser.page"],
     "events": ["browser.pageActivity"],
     "statusBarItems": ["browser.agentPages"],
     "settings": ["browser.linkClick", "browser.linkMiddleClick", "browser.systemSites", "browser.agentTools", "browser.localSites"],
     "methods": ["browser.allowTypedAddress", "browser.passTypedRedirect", "browser.endTypedRedirects", "browser.readyPage", "browser.rememberPage", "browser.readPage", "browser.forgetPage", "browser.clearBrowsingData", "browser.readAppName", "browser.stopPage", "browser.readActivities", "browser.claimPage", "browser.holdPages", "browser.letGoPage"],
+    "menus": ["browser.pageTabRow"],
     "tools": [
       "browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_press_key", "browser_screenshot", "browser_console", "browser_wait_for"
     ]

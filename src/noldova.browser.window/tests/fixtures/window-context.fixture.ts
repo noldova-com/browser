@@ -32,7 +32,8 @@ export class WindowContext extends FakeWindowPartContext {
     "browser.claimPage", "browser.holdPages", "browser.letGoPage"
   ]);
   private static readonly declaredDocuments: ReadonlySet<string> = new Set<string>(["browser.page"]);
-  private static readonly declaredCommands: ReadonlySet<string> = new Set<string>(["browser.openPage"]);
+  private static readonly declaredCommands: ReadonlySet<string> = new Set<string>(["browser.openPage", "browser.newPage"]);
+  private static readonly declaredMenuPlaces: ReadonlySet<string> = new Set<string>(["browser.pageTabRow"]);
   private static readonly declaredStatusBarItems: ReadonlySet<string> = new Set<string>(["browser.agentPages"]);
   private static readonly requestAnswers: ReadonlyMap<string, JsonValue> = new Map<string, JsonValue>([
     ["browser.readAppName", WindowContext.appName],
@@ -78,6 +79,8 @@ export class WindowContext extends FakeWindowPartContext {
     this.webViews = this.views.webViews;
     this.answer("registerDocument", t => {
       WindowContext.requireDeclared(t.name, WindowContext.declaredDocuments, this.documents);
+      if (t.tabRowPlace !== null && !WindowContext.declaredMenuPlaces.has(t.tabRowPlace))
+        throw new UnansweredCallException(t.tabRowPlace);
       this.documents.push(t);
     });
     this.answer("registerCommand", t => {

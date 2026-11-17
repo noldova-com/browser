@@ -289,6 +289,7 @@ An agent's key events reach the same path, so the base's main process refuses an
 `Input.insertText` commits text without a key event, so it never reaches the shortcuts.
 Only the person's own keys are forwarded.
 The same holds for the pane's keys that `webViews.json` declares, reload, a new page and the address field: the base judges only the person's presses, so an agent's `Input.dispatchKeyEvent` reaches the page as sent and never reloads it, opens a page or moves the focus to the field.
+Ctrl+T, or Cmd+T on macOS, is also the default key of the module's own command `browser.newPage`, and so one of the app's shortcuts: an agent's press of it is refused as any shortcut is, and never opens a page.
 Turning the forwarding off while an agent's call runs is no substitute, since it races with the person's typing.
 
 ### Cross-origin frames
