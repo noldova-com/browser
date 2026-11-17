@@ -1028,7 +1028,8 @@ export declare class PaneStatus {
   public readonly failureReason: string | null;
 
   /**
-   * The origin of the address the check refused, as the URL standard writes it, while the state is `Refused`; `null` otherwise.
+   * The origin of the address the check refused, as the URL standard writes it, or that address itself when its origin is opaque, which the
+   * standard writes as `"null"`, such as `about:srcdoc`'s, while the state is `Refused`; `null` otherwise.
    */
   public readonly refusedOrigin: string | null;
 
@@ -1126,6 +1127,7 @@ export declare class PaneStatus {
    * @param origin The refused address's origin, as the URL standard writes it.
    * @param holdsRefusedLoad Whether the refusal holds the page's load that the view may still report after it, at the page's address, so that load
    * shows the refusal until the view's next state; `false`, the default, for a refusal that answers a navigation, which has no load to hold.
+   * @param address The refused address, which the status names in place of an opaque origin, `"null"`; `null`, the default, names the origin as given.
    * @returns The new status, with no refused address; this same status when it was already refused for that origin, had no refused address
    * and held the same load.
    * @example
@@ -1134,9 +1136,10 @@ export declare class PaneStatus {
    *
    * const refused: PaneStatus = PaneStatus.empty.refuse("https://example.com");
    * const holding: PaneStatus = PaneStatus.empty.refuse("https://example.com", true);
+   * const srcdoc: PaneStatus = PaneStatus.empty.refuse("null", true, "about:srcdoc");
    * ```
    */
-  public refuse(origin: string, holdsRefusedLoad?: boolean): PaneStatus;
+  public refuse(origin: string, holdsRefusedLoad?: boolean, address?: string | null): PaneStatus;
 
   /**
    * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads and a refused request's notice goes.
@@ -1411,6 +1414,8 @@ export declare class PaneController {
    * It does nothing once the controller closed or the tab is unavailable.
    *
    * @param origin The refused origin, as the URL standard writes it.
+   * @param address The refused address, which the page names in place of an opaque origin, `"null"`; `null`, the default, names the origin, and an
+   * opaque one as "this page".
    * @example
    * ```ts
    * import type { PaneController } from "@noldova/browser.window";
@@ -1420,7 +1425,7 @@ export declare class PaneController {
    * }
    * ```
    */
-  public refuseNavigation(origin: string): void;
+  public refuseNavigation(origin: string, address?: string | null): void;
 
   /**
    * Offers a new window the page asked for, which didn't open by itself, in the tab's notice; listeners hear of the change.

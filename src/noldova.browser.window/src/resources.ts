@@ -19,6 +19,7 @@ import type { RefusedPage } from "./app/models/refused-page.ts";
 
 export class Resources {
   public static readonly moduleId: string = "browser";
+  public static readonly opaqueOrigin: string = "null";
   public static readonly pageDocument: string = "browser.page";
   public static readonly openPageCommand: string = "browser.openPage";
   public static readonly newPageCommand: string = "browser.newPage";
@@ -250,7 +251,8 @@ export class Resources {
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
           ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
-          : new PageStateText("block", `Browser doesn't open ${status.refusedOrigin}`, "Its address isn't one Browser opens.");
+          : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
+            "Its address isn't one Browser opens.");
       case PaneState.Crashed:
         return new PageStateText("sentiment_dissatisfied", "This page stopped working", "Its content process ended. Reload to open it again; anything typed into it is lost.");
       default:

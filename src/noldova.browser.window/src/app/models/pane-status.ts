@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { Resources } from "../../resources.ts";
 import type { AddressRefusal } from "../enums/address-refusal.ts";
 import { PaneState } from "../enums/pane-state.ts";
 import type { RefusedRequest } from "../enums/refused-request.ts";
@@ -85,10 +86,12 @@ export class PaneStatus {
     return new PaneStatus(PaneState.Crashed, this.url, this.title, this.canGoBack, this.canGoForward, null, null, this.refusedRequest, this.refusedTarget, this.refusedAddress, this.popup);
   }
 
-  public refuse(origin: string, holdsRefusedLoad: boolean = false): PaneStatus {
-    return this.state === PaneState.Refused && this.refusedOrigin === origin && this.refusedAddress === null && this.holdsRefusedLoad === holdsRefusedLoad
+  // An opaque origin, such as about:srcdoc's, names nothing a person could recognize, so the refusal names the address instead.
+  public refuse(origin: string, holdsRefusedLoad: boolean = false, address: string | null = null): PaneStatus {
+    const named: string = origin === Resources.opaqueOrigin && address !== null ? address : origin;
+    return this.state === PaneState.Refused && this.refusedOrigin === named && this.refusedAddress === null && this.holdsRefusedLoad === holdsRefusedLoad
       ? this
-      : new PaneStatus(PaneState.Refused, this.url, this.title, this.canGoBack, this.canGoForward, null, origin, this.refusedRequest, this.refusedTarget, null, this.popup,
+      : new PaneStatus(PaneState.Refused, this.url, this.title, this.canGoBack, this.canGoForward, null, named, this.refusedRequest, this.refusedTarget, null, this.popup,
         null, holdsRefusedLoad);
   }
 
