@@ -124,18 +124,20 @@ describe("RuntimePart", () => {
   });
 
   it("ends an agent's control of a page when the window forgets the page, and when the agent's session ends", async () => {
-    const context: BrowserContext = new BrowserContext(pageViews("page-1", "page-2"));
+    const first: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const second: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const context: BrowserContext = new BrowserContext(pageViews(first, second));
     await new RuntimePart().activateAsync(context);
-    const first: ToolSession = context.tools.openSession("conversation-1", { page: "page-1", profileKey: "workspace-1", agentName: "Scout" });
-    const second: ToolSession = context.tools.openSession("conversation-2", { page: "page-2", profileKey: "workspace-1", agentName: "Scout" });
-    await first.callAsync("browser_snapshot", {});
-    await second.callAsync("browser_snapshot", {});
+    const firstSession: ToolSession = context.tools.openSession("conversation-1", { page: first, profileKey: "workspace-1", agentName: "Scout" });
+    const secondSession: ToolSession = context.tools.openSession("conversation-2", { page: second, profileKey: "workspace-1", agentName: "Scout" });
+    await firstSession.callAsync("browser_snapshot", {});
+    await secondSession.callAsync("browser_snapshot", {});
 
-    expect(await requestAsync(context, BrowserMethods.forgetPage, { instance: "page-1" })).toBeNull();
-    second.end();
+    expect(await requestAsync(context, BrowserMethods.forgetPage, { instance: first })).toBeNull();
+    secondSession.end();
 
     expect((context.events.get(BrowserEvents.pageActivity) ?? []).map(t => JsonShapes.isObject(t) ? [t["instance"], t["state"]] : null).slice(-2))
-      .toEqual([["page-1", "Ended"], ["page-2", "Ended"]]);
+      .toEqual([[first, "Ended"], [second, "Ended"]]);
     expect(await requestAsync(context, BrowserMethods.readActivities, null)).toEqual([]);
   });
 
