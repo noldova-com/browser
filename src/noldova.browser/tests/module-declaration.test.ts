@@ -72,9 +72,9 @@ describe("module.json's window contributions", () => {
 });
 
 describe("webViews.json", () => {
-  it("declares the pane's keys the window part takes from its views: reload on Ctrl+R and F5, and Cmd+R on macOS, a new page on Ctrl+T, and the address field on Ctrl+L", async () => {
+  it("declares the pane's keys the window part takes from its views: reload on Ctrl+R and F5, and Cmd+R on macOS, a new page on Ctrl+T, the address field on Ctrl+L, and find on Ctrl+F", async () => {
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ keys: [{ name: "reload", keys: ["Mod+R", "F5"], macKeys: ["Mod+R"] }, { name: "newPage", keys: ["Mod+T"] },
-      { name: "focusAddress", keys: ["Mod+L"] }] });
+      { name: "focusAddress", keys: ["Mod+L"] }, { name: "find", keys: ["Mod+F"] }] });
   });
 
   it("declares the debugging calls and the events the built tools send and take, and takes its views' new windows", async () => {

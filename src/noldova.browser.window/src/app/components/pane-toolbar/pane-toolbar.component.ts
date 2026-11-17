@@ -65,6 +65,7 @@ export class PaneToolbarComponent {
   protected readonly zoom: WritableSignal<number> = signal(1);
   protected readonly zoomPercent: Signal<string> = computed(() => Resources.formatZoom(this.zoom()));
   protected readonly zoomKeys: Readonly<Record<ZoomStep, string>> = PageKeys.zoomKeysOf(PageKeys.platformOf(navigator.platform));
+  protected readonly findKey: string = PageKeys.findKeyOf(PageKeys.platformOf(navigator.platform));
   protected readonly status: Signal<PaneStatus> = this.current.asReadonly();
   protected readonly isLoading: Signal<boolean> = computed(() => this.status().state === PaneState.Loading);
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
@@ -102,6 +103,7 @@ export class PaneToolbarComponent {
   public readonly shownAddress = input<string | null>(null);
   public readonly addressEntered = output<string>();
   public readonly clearBrowsingData = output<void>();
+  public readonly findRequested = output<void>();
 
   public constructor() {
     const resizes: ResizeObserver = new ResizeObserver(() => this.measure());
@@ -222,6 +224,10 @@ export class PaneToolbarComponent {
   protected reloadOrStop(): void {
     if (!this.stopPage())
       this.reloadPage();
+  }
+
+  protected requestFind(): void {
+    afterNextRender(() => this.findRequested.emit(), { injector: this.injector });
   }
 
   protected copyAddress(): void {

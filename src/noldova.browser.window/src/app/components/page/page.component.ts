@@ -24,13 +24,14 @@ import { Pages } from "../../services/pages.ts";
 import { PlaceholderTracker } from "../../services/placeholder-tracker.ts";
 import { AgentBarComponent } from "../agent-bar/agent-bar.component.ts";
 import { ClearDataDialogComponent } from "../clear-data-dialog/clear-data-dialog.component.ts";
+import { FindBarComponent } from "../find-bar/find-bar.component.ts";
 import { PageStateComponent } from "../page-state/page-state.component.ts";
 import { PaneToolbarComponent } from "../pane-toolbar/pane-toolbar.component.ts";
 import { RequestNoticeComponent } from "../request-notice/request-notice.component.ts";
 
 @Component({
   selector: "nol-browser-page",
-  imports: [AgentBarComponent, PageStateComponent, PaneToolbarComponent, RequestNoticeComponent],
+  imports: [AgentBarComponent, FindBarComponent, PageStateComponent, PaneToolbarComponent, RequestNoticeComponent],
   templateUrl: "./page.component.html",
   styleUrl: "./page.component.css",
   host: {
@@ -51,6 +52,7 @@ export class PageComponent {
   private readonly version: WritableSignal<number> = signal(0);
   private readonly view: Signal<ElementRef<HTMLElement>> = viewChild.required<ElementRef<HTMLElement>>("view");
   private readonly toolbar: Signal<PaneToolbarComponent | undefined> = viewChild(PaneToolbarComponent);
+  private readonly findBar: Signal<FindBarComponent | undefined> = viewChild(FindBarComponent);
   private readonly platform: string = PageKeys.platformOf(navigator.platform);
   private tracker: PlaceholderTracker | null = null;
   private trackedView: IWebViewHandle | null = null;
@@ -64,6 +66,7 @@ export class PageComponent {
   protected readonly noticeId: string = `${this.pageId}${Resources.noticeId}`;
   protected readonly tab: WritableSignal<PaneTab | null> = signal(null);
   protected readonly isForgotten: WritableSignal<boolean> = signal(false);
+  protected readonly isFinding: WritableSignal<boolean> = signal(false);
   protected readonly isElsewhere: Signal<boolean> = computed(() => this.pages.elsewhere().has(this.instance()));
   protected readonly placedTab: Signal<PaneTab | null> = computed(() => {
     const tab = this.tab();
@@ -186,7 +189,7 @@ export class PageComponent {
     const tab = this.tab();
     if (tab === null || event.defaultPrevented || event.isComposing || event.repeat)
       return;
-    const name: string | null = PageKeys.find(event, this.platform);
+    const name: string | null = PageKeys.nameOf(event, this.platform);
     if (name !== null) {
       event.preventDefault();
       this.runKey(tab, name);
@@ -197,6 +200,22 @@ export class PageComponent {
 
   protected focusToolbar(): void {
     this.toolbar()?.focusReload();
+  }
+
+  protected openFind(tab: PaneTab): void {
+    const state: PaneState = tab.controller.status.state;
+    if (state === PaneState.Empty || state === PaneState.Unavailable)
+      return;
+    const bar: FindBarComponent | undefined = this.findBar();
+    if (bar === undefined)
+      this.isFinding.set(true);
+    else
+      bar.focus();
+  }
+
+  protected closeFind(): void {
+    this.isFinding.set(false);
+    this.focusToolbar();
   }
 
   protected goTo(tab: PaneTab, text: string): void {
@@ -261,6 +280,8 @@ export class PageComponent {
       this.pages.openNew(tab);
     else if (name === Resources.focusAddressKey)
       this.toolbar()?.focusAddress();
+    else if (name === Resources.findKey)
+      this.openFind(tab);
   }
 
   private release(): void {

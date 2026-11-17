@@ -8,6 +8,7 @@
 
 import { WebViewEventKind } from "@noldova/desktop.protocol";
 import { TypedAddressRefusal } from "@noldova/browser.protocol";
+import type { IWebViewFound } from "@noldova/desktop.window";
 import { describe, expect, it } from "vitest";
 
 import { PaneState } from "../../../src/app/enums/pane-state.ts";
@@ -343,6 +344,24 @@ describe("PaneController", () => {
       .toEqual([1, [1.1, 1.25, 1.1, 1, 1], [1.1, 1.25, 1.1, 1], 0.9, ["zoomIn", "zoomIn", "zoomOut", "setZoom 1", "setZoom 1", "zoomOut"], []]);
   });
 
+  it("searches the view's page, moves through its matches and ends the search, answering what the view found, without a change of status", async () => {
+    const { controller, view } = open();
+    const statuses: PaneStatus[] = [];
+    controller.onChange(t => statuses.push(t));
+    let next: IWebViewFound = FakeWebView.found(1, 3);
+    view.findAnswer = () => Promise.resolve(next);
+
+    const first: IWebViewFound = await controller.findAsync("plan");
+    next = FakeWebView.found(2, 3);
+    const second: IWebViewFound = await controller.findNextAsync();
+    next = FakeWebView.found(1, 3);
+    const third: IWebViewFound = await controller.findPreviousAsync();
+    controller.endFind();
+
+    expect([first, second, third, view.calls, statuses])
+      .toEqual([FakeWebView.found(1, 3), FakeWebView.found(2, 3), FakeWebView.found(1, 3), ["find plan", "findNext", "findPrevious", "endFind"], []]);
+  });
+
   it("follows the zoom the person sets by Noldova Desktop's keys or wheel through the view's Zoom event, until it closes", () => {
     const { controller, view } = open();
     const heard: number[] = [];
@@ -357,7 +376,7 @@ describe("PaneController", () => {
     expect([heard, controller.zoom, controller.status.state]).toEqual([[1.5, 0.25], 0.25, PaneState.Empty]);
   });
 
-  it("is unavailable without a view, and refuses to navigate, move, reload, stop or zoom", async () => {
+  it("is unavailable without a view, and refuses to navigate, move, reload, stop, zoom or find, ending no search", async () => {
     const controller: PaneController = new PaneController(null);
 
     expect(controller.status).toBe(PaneStatus.unavailable);
@@ -369,10 +388,14 @@ describe("PaneController", () => {
     await expect(controller.zoomInAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
     await expect(controller.zoomOutAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
     await expect(controller.resetZoomAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findAsync("plan")).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findNextAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findPreviousAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    controller.endFind();
     expect([controller.status, controller.zoom]).toEqual([PaneStatus.unavailable, 1]);
   });
 
-  it("refuses to navigate, move, reload, stop or zoom once closed, without calling the closed view", async () => {
+  it("refuses to navigate, move, reload, stop, zoom or find once closed, without calling the closed view", async () => {
     const { view, controller } = open();
 
     controller.close();
@@ -385,6 +408,10 @@ describe("PaneController", () => {
     await expect(controller.zoomInAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
     await expect(controller.zoomOutAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
     await expect(controller.resetZoomAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findAsync("plan")).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findNextAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    await expect(controller.findPreviousAsync()).rejects.toBeInstanceOf(PaneUnavailableException);
+    controller.endFind();
     expect(view.calls).toEqual(["close"]);
   });
 
