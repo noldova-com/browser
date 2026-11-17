@@ -32,7 +32,7 @@ describe("ScriptedViews", () => {
 
   it("refuses, as Noldova Desktop does, a declared method sent with a parameter it doesn't declare, a value its rule refuses or without a required one, and a method webViews.json doesn't declare", async () => {
     const views: ScriptedViews = new ScriptedViews(["view"]);
-    views.acknowledge("Page.enable", "Input.dispatchKeyEvent", "Page.setLifecycleEventsEnabled", "Page.handleJavaScriptDialog", "Accessibility.enable", "Accessibility.queryAXTree");
+    views.acknowledge("Page.enable", "Input.dispatchKeyEvent", "Page.setLifecycleEventsEnabled", "Page.handleJavaScriptDialog", "Accessibility.getAXNodeAndAncestors", "Accessibility.queryAXTree");
     views.answer("Page.captureScreenshot", { data: "" });
     const refusedCalls: readonly (readonly [string, JsonObject])[] = [
       ["Page.enable", { extra: true }],
@@ -42,7 +42,7 @@ describe("ScriptedViews", () => {
       ["Page.captureScreenshot", { format: "png", clip: { x: 0, y: 0, width: 4097, height: 1, scale: 1 } }],
       ["Page.setLifecycleEventsEnabled", { enabled: true }],
       ["Page.handleJavaScriptDialog", { accept: false }],
-      ["Accessibility.enable", {}],
+      ["Accessibility.getAXNodeAndAncestors", {}],
       ["Accessibility.queryAXTree", { backendNodeId: 1 }]
     ];
 

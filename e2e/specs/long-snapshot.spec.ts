@@ -44,8 +44,11 @@ test.describe("a snapshot of a long page", () => {
     const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
 
     expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
-    const [snapshot = "", ...notes] = textsOf(result);
-    const tree = snapshot.slice(snapshot.indexOf("- RootWebArea"));
+    // The result may carry other texts, such as where its content comes from, beside the snapshot and its notes.
+    const notes = textsOf(result);
+    const snapshot = notes.find(t => t.includes("\n- RootWebArea")) ?? "";
+    expect(snapshot, `No text holds the tree: ${notes.map(t => t.slice(0, 200)).join(" | ")}`).not.toBe("");
+    const tree = snapshot.slice(snapshot.indexOf("\n- RootWebArea") + 1);
     expect(tree.split("\n").slice(0, 3).map(t => t.replace(/ "Section 0 .*"/u, " \"Section 0 …\""))).toEqual([
       "- RootWebArea \"Long page\"",
       "  - list",
