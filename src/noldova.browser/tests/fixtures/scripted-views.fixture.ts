@@ -83,6 +83,7 @@ export class ScriptedViews {
     this.webViews.answer("actAsync", (viewId, action) => this.actAsync(viewId, action));
     this.webViews.answer("setAllowedOriginsAsync", (viewId, origins) => this.setAllowedOriginsAsync(viewId, origins));
     this.webViews.answer("clearProfileAsync", profileKey => this.clearProfileAsync(profileKey));
+    this.webViews.answer("setControlledAsync", () => Promise.resolve());
     this.webViews.relay.answer("sendAsync", (viewId, method, params, timeoutMilliseconds) => {
       this.calls.push({ viewId, method, params, timeoutMilliseconds });
       return this.sendAsync(viewId, method, params);

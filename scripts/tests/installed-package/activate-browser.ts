@@ -78,6 +78,7 @@ context.webViews.answer("setAllowedOriginsAsync", (viewId, origins) => {
     giveOrigins(origins);
   return Promise.resolve();
 });
+context.webViews.answer("setControlledAsync", () => Promise.resolve());
 const following: () => readonly number[] = (): readonly number[] => [context.webViews.activeCallsOf("onViewEvent").length, context.tools.activeCallsOf("onSessionEnded").length];
 
 await part.activateAsync(context);

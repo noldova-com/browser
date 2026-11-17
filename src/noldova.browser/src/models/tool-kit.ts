@@ -7,12 +7,14 @@
  */
 
 import type { PageAction, PageBox } from "@noldova/browser.protocol";
+import { WebViewFailureKind } from "@noldova/desktop.protocol";
 import { type IModuleLog, type IPermissionDetail, type IPermissionRequest, type IRuntimeWebViews, PermissionOption, ToolAbortReason,
-  type ToolCall, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
+  type ToolCall, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { HandedOverException } from "../exceptions/handed-over.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
+import { PageNotControlledException } from "../exceptions/page-not-controlled.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import { RiskRoseException } from "../exceptions/risk-rose.exception.ts";
 import { TakenOverException } from "../exceptions/taken-over.exception.ts";
@@ -80,7 +82,7 @@ export class ToolKit {
     this.webViews = webViews;
     this.sessions = sessions;
     this.origins = origins;
-    this.stops = new PageStops(publish);
+    this.stops = new PageStops(publish, t => this.letGo(t));
     this.recordAgent = recordAgent;
     this.log = log;
     this.pages = new SessionPages(webViews);
@@ -142,12 +144,19 @@ export class ToolKit {
       }
       const activity: PageActivity = this.stops.begin(page, call.session, action, call.signal);
       try {
+        await this.controlAsync(activity, page.viewId);
         return await work(activity);
       }
       finally {
         this.stops.finish(activity);
       }
     });
+  }
+
+  // A view marked from an earlier start of the runtime part, which no control holds now, stops being marked.
+  public letGoUnheld(viewId: string): void {
+    if (!this.stops.controlsView(viewId))
+      this.letGo(viewId);
   }
 
   public async askAsync(activity: PageActivity, call: ToolCall, request: IPermissionRequest, progress: ActionProgress,
@@ -228,6 +237,31 @@ export class ToolKit {
   public async doneAsync(viewId: string, message: string, element: ShownElement | null, options: CallOptions): Promise<ToolResult> {
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
     return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element);
+  }
+
+  // The view keeps drawing while hidden only while it is marked, and a document it loads hidden takes no press until it draws, so a call
+  // that can't mark it does nothing rather than report an input that never arrived. An earlier view of the page that the control marked
+  // stops being marked first, and the control holds the new mark from its request, so a control that ends meanwhile still ends it.
+  private async controlAsync(activity: PageActivity, viewId: string): Promise<void> {
+    const marked: string | null = activity.markedViewId;
+    if (marked !== null && marked !== viewId)
+      this.letGo(marked);
+    activity.mark(viewId);
+    try {
+      await this.webViews.setControlledAsync(viewId, true);
+    }
+    catch (error) {
+      activity.mark(null);
+      throw new PageNotControlledException(viewId, error);
+    }
+  }
+
+  // A view already closed has no mark left to end, so its answer isn't logged.
+  private letGo(viewId: string): void {
+    this.webViews.setControlledAsync(viewId, false).catch((error: unknown) => {
+      if (!(error instanceof WebViewFailureException && error.failure.kind === WebViewFailureKind.ViewClosed))
+        this.log.write(Resources.formatControlNotCleared(viewId, String(error)));
+    });
   }
 
   private ensureFree(call: ToolCall, page: SessionPage, generation: number): void {

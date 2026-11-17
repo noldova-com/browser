@@ -6,7 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, ToolRisk } from "@noldova/desktop.runtime";
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 import { PageAction, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ import { CallCancelledException } from "../../src/exceptions/call-cancelled.exce
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
+import { PageNotControlledException } from "../../src/exceptions/page-not-controlled.exception.ts";
 import { TypedRedirectAfterAgentException } from "../../src/exceptions/typed-redirect-after-agent.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
@@ -22,6 +24,7 @@ import { SessionPage } from "../../src/models/session-page.ts";
 import { ToolDescriptors } from "../../src/models/tool-descriptors.ts";
 import { ToolKit } from "../../src/models/tool-kit.ts";
 import { Resources } from "../../src/resources.ts";
+import { writtenTo } from "../fixtures/desktop-fakes.fixture.ts";
 import { ShopPage } from "../fixtures/shop-page.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
@@ -53,6 +56,80 @@ describe("ToolKit", () => {
     expect(isRun).toBe(false);
     await bench.kit.actAsync(bench.call({}), new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Scout"), PageAction.Reading, async () => null);
     expect(bench.agents).toEqual([["page-1", "Builder"], ["page-1", "Scout"]]);
+  });
+
+  it("marks the page's view as controlled before each call's work, and as no longer controlled once the person stops the page", async () => {
+    using bench: ToolBench = new ToolBench();
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+    const steps: unknown[][] = [];
+    bench.surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
+      steps.push([viewId, isControlled]);
+      return Promise.resolve();
+    });
+
+    for (const action of [PageAction.Reading, PageAction.Clicking])
+      await bench.kit.actAsync(bench.call({}), page, action, async () => steps.push(["work"]));
+    bench.kit.stops.stop("page-1", false);
+
+    expect(steps).toEqual([[ToolBench.VIEW, true], ["work"], [ToolBench.VIEW, true], ["work"], [ToolBench.VIEW, false]]);
+  });
+
+  it("lets go of the view a call marked once a later call finds the page in another view, before marking that one, and of that one at the end", async () => {
+    using bench: ToolBench = new ToolBench();
+    bench.surface.instances.set("view-2", "page-1");
+    const steps: unknown[][] = [];
+    bench.surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
+      steps.push([viewId, isControlled]);
+      return Promise.resolve();
+    });
+
+    for (const view of [ToolBench.VIEW, "view-2"])
+      await bench.kit.actAsync(bench.call({}), new SessionPage(view, "page-1", "workspace-1", "Builder"), PageAction.Reading, async () => steps.push(["work"]));
+    const held: boolean = bench.kit.stops.controlsView(ToolBench.VIEW);
+    bench.kit.stops.stop("page-1", false);
+
+    expect(held).toBe(false);
+    expect(steps).toEqual([[ToolBench.VIEW, true], ["work"], [ToolBench.VIEW, false], ["view-2", true], ["work"], ["view-2", false]]);
+  });
+
+  it("does none of a call's work and fails it as unavailable, naming the view and the cause, when the view can't be marked as controlled", async () => {
+    using bench: ToolBench = new ToolBench();
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+    const cause: Error = new Error("The web view call failed: Unavailable.");
+    bench.surface.webViews.answer("setControlledAsync", () => Promise.reject(cause));
+    let isRun: boolean = false;
+
+    const called: Promise<null> = bench.kit.actAsync(bench.call({}), page, PageAction.Clicking, async () => {
+      isRun = true;
+      return null;
+    });
+
+    await expect(called).rejects.toBeInstanceOf(PageNotControlledException);
+    await expect(called).rejects.toMatchObject({ reason: "Unavailable", moduleCode: "browser.notControlled", cause,
+      message: `The page's view ${ToolBench.VIEW} couldn't be kept drawing for the agent, so nothing was done: The web view call failed: Unavailable.` });
+    expect([isRun, bench.kit.stops.controlsView(ToolBench.VIEW)]).toEqual([false, true]);
+  });
+
+  it("logs a view it couldn't mark as no longer controlled, unless the view had closed, and a view no control holds is marked so, while a held one keeps its mark", async () => {
+    using bench: ToolBench = new ToolBench();
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+    const cleared: string[] = [];
+    bench.surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
+      if (isControlled)
+        return Promise.resolve();
+      cleared.push(viewId);
+      return Promise.reject(viewId === "view-3" ? new WebViewFailureException(new WebViewFailure(WebViewFailureKind.ViewClosed)) : new Error("gone"));
+    });
+    await bench.kit.actAsync(bench.call({}), page, PageAction.Reading, async () => null);
+
+    bench.kit.letGoUnheld(ToolBench.VIEW);
+    bench.kit.letGoUnheld("view-2");
+    bench.kit.letGoUnheld("view-3");
+    bench.kit.stops.stop("page-1", false);
+    await ToolBench.settleAsync();
+
+    expect(cleared).toEqual(["view-2", "view-3", ToolBench.VIEW]);
+    expect(writtenTo(bench.log)).toEqual(["view-2", ToolBench.VIEW].map(t => `The page's view ${t} wasn't marked as no longer controlled, so it may keep drawing while hidden: Error: gone`));
   });
 
   it("gives a page whose view follows the person's typed redirects back its workspace's origins before an agent acts on it, and follows no more", async () => {
