@@ -23,6 +23,16 @@ export class FixtureRequest {
   }
 }
 
+class FixtureLogLine {
+  public readonly order: number;
+  public readonly text: string;
+
+  public constructor(order: number, text: string) {
+    this.order = order;
+    this.text = text;
+  }
+}
+
 class FixturePage {
   public readonly body: string;
   public readonly headers: Readonly<Record<string, string>>;
@@ -37,6 +47,9 @@ class FixturePage {
 
 export class FixtureServer {
   private static readonly LOOPBACK: string = "127.0.0.1";
+  private static readonly FETCH_HEADERS: readonly string[] = ["sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-purpose", "purpose"];
+  // Shared by every server, so lines from several servers merge in the order their requests arrived, even within one millisecond.
+  private static logged: number = 0;
   private static readonly HTML: string = "text/html; charset=utf-8";
   private static readonly OK: number = 200;
 
@@ -47,6 +60,7 @@ export class FixtureServer {
   private readonly pages: Map<string, FixturePage>;
   private readonly redirects: Map<string, string> = new Map();
   private readonly received: FixtureRequest[] = [];
+  private readonly logLines: FixtureLogLine[] = [];
 
   private constructor(name: string, address: string, pages: Readonly<Record<string, string>>, certificate: TestCertificate | null) {
     this.name = name;
@@ -56,7 +70,7 @@ export class FixtureServer {
     this.scheme = certificate === null ? "http" : "https";
     this.server = certificate === null ? createServer(listener) : createSecureServer({ key: certificate.key, cert: certificate.certificate }, listener);
     this.server.on("upgrade", (request, socket) => {
-      this.received.push(new FixtureRequest(request.headers.host ?? "", request.url ?? ""));
+      this.note(request, request.url ?? "");
       socket.destroy();
     });
   }
@@ -88,6 +102,11 @@ export class FixtureServer {
     return [...this.received];
   }
 
+  // Each request with its time, the client's port and the headers that say what kind of request it is, for a failed test's attachment.
+  public get log(): readonly FixtureLogLine[] {
+    return [...this.logLines];
+  }
+
   public serve(path: string, body: string, headers: Readonly<Record<string, string>> = {}, status: number = FixtureServer.OK): void {
     this.pages.set(path, new FixturePage(body, headers, status));
   }
@@ -107,9 +126,16 @@ export class FixtureServer {
     await closed;
   }
 
+  private note(request: IncomingMessage, path: string): void {
+    this.received.push(new FixtureRequest(request.headers.host ?? "", path));
+    const kinds = FixtureServer.FETCH_HEADERS.filter(t => request.headers[t] !== undefined).map(t => `${t}=${String(request.headers[t])}`);
+    FixtureServer.logged += 1;
+    this.logLines.push(new FixtureLogLine(FixtureServer.logged, [new Date().toISOString(), `${this.name}:${this.port}`, path, `from port ${String(request.socket.remotePort)}`, ...kinds].join(" ")));
+  }
+
   private answer(request: IncomingMessage, response: ServerResponse): void {
     const path = request.url ?? "";
-    this.received.push(new FixtureRequest(request.headers.host ?? "", path));
+    this.note(request, path);
     const location = this.redirects.get(path);
     if (location !== undefined) {
       response.writeHead(302, { location, "cache-control": "no-store" }).end();
@@ -133,6 +159,11 @@ export class FixtureServers {
 
   public get requests(): readonly FixtureRequest[] {
     return this.started.flatMap(t => t.requests);
+  }
+
+  // Every server's log in the order the requests arrived.
+  public get log(): readonly string[] {
+    return this.started.flatMap(t => t.log).sort((a, b) => a.order - b.order).map(t => t.text);
   }
 
   public async startAsync(name: string, pages: Readonly<Record<string, string>>, address?: string, certificate?: TestCertificate): Promise<FixtureServer> {
