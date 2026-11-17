@@ -54,7 +54,7 @@ test.describe("a snapshot of a long page", () => {
       "  - list",
       "    - listitem"
     ]);
-    expect(tree).toMatch(/^ {6}- link "Section 0 (?:word ){800}" \[e1\]$/mu);
+    expect(tree).toMatch(/^ {6}- link "Section 0(?: word){800}" \[e1\]$/mu);
     expect(Buffer.byteLength(tree, "utf8")).toBeLessThanOrEqual(SNAPSHOT_LIMIT_BYTES);
     expect(Buffer.byteLength(tree, "utf8")).toBeGreaterThan(SNAPSHOT_LIMIT_BYTES - LONGEST_LINE_BYTES);
     expect(notes).toContain(CUT_NOTE);
