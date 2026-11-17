@@ -12,6 +12,7 @@ import { LinkGesture } from "@noldova/ui.components.angular";
 import { describe, expect, it } from "vitest";
 
 import { PageComponent } from "../../../src/app/components/page/page.component.ts";
+import { PaneState } from "../../../src/app/enums/pane-state.ts";
 import { OpenPageArgumentsInvalidException } from "../../../src/app/exceptions/open-page-arguments-invalid.exception.ts";
 import { PagesInactiveException } from "../../../src/app/exceptions/pages-inactive.exception.ts";
 import { BrowserWindowPart } from "../../../src/app/services/browser-window-part.ts";
@@ -26,13 +27,13 @@ describe("BrowserWindowPart", () => {
     expect(await part.reconnectAsync()).toBe(false);
   });
 
-  it("registers the page document, edge to edge, and the pages of its context, and continues when the runtime starts again", async () => {
+  it("registers the page document, edge to edge with its tab row's place, and the pages of its context, and continues when the runtime starts again", async () => {
     const part: BrowserWindowPart = new BrowserWindowPart();
     const context: WindowContext = new WindowContext();
 
     await part.activateAsync(context);
 
-    expect(context.documents.map(t => [t.name, t.padding])).toEqual([["browser.page", ContentPadding.None]]);
+    expect(context.documents.map(t => [t.name, t.padding, t.tabRowPlace])).toEqual([["browser.page", ContentPadding.None, "browser.pageTabRow"]]);
     expect(await context.documents[0]?.loadComponent()).toBe(PageComponent);
     expect(Pages.of(context)).toBeInstanceOf(Pages);
     expect(await part.reconnectAsync()).toBe(true);
@@ -95,7 +96,7 @@ describe("BrowserWindowPart", () => {
     await new BrowserWindowPart().activateAsync(context);
     const command = context.commands[0];
 
-    expect([context.commands.length, command?.name, command?.title]).toEqual([1, "browser.openPage", "Open a page"]);
+    expect([context.commands.length, command?.name, command?.title]).toEqual([2, "browser.openPage", "Open a page"]);
     expect(await command?.runAsync({ profileKey: "workspace-1", url: "https://docs.example.com/" })).toBeNull();
     expect(await command?.runAsync({ profileKey: "workspace-2" })).toBeNull();
     expect(await command?.runAsync({ profileKey: "workspace-1", instance: "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d" })).toBeNull();
@@ -111,6 +112,27 @@ describe("BrowserWindowPart", () => {
     expect([command?.isApplicable({ profileKey: "workspace-1" }), command?.isApplicable(null), command?.isEnabled(null)]).toEqual([true, false, true]);
     await expect(command?.runAsync(null)).rejects.toThrow(OpenPageArgumentsInvalidException);
     expect(context.opened).toEqual([]);
+  });
+
+  it("registers browser.newPage, New page with the add glyph on Ctrl+T, or Cmd+T on macOS, which opens an empty page on the workspace of the page the tab row names, and is unavailable for any other", async () => {
+    const context: WindowContext = new WindowContext();
+    await new BrowserWindowPart().activateAsync(context);
+    const pages: Pages = Pages.of(context);
+    const instance: string = pages.open("workspace-2", "https://docs.example.com/");
+    await pages.showAsync(instance);
+    const command = context.commands[1];
+    const row: JsonObject = { tabGroup: "2", document: "browser.page", instance };
+
+    expect([command?.name, command?.title, command?.icon, command?.defaultKey?.text]).toEqual(["browser.newPage", "New page", "add", "Mod+T"]);
+    expect([command?.isEnabled(row), command?.isEnabled({ tabGroup: "2" }), command?.isEnabled({ ...row, document: "notes.note" }),
+      command?.isEnabled({ ...row, instance: "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d" }), command?.isEnabled({ ...row, instance: 2 }), command?.isEnabled([row])])
+      .toEqual([true, false, false, false, false, false]);
+    expect(await command?.runAsync({ tabGroup: "2" })).toBeNull();
+    expect(await command?.runAsync(row)).toBeNull();
+    const shown = await pages.showAsync(context.opened.at(-1)?.instance ?? "");
+
+    expect([context.opened.map(t => t.title), shown?.controller.status.state, context.views.views.at(-1)?.profileKey])
+      .toEqual([["https://docs.example.com/", "New tab"], PaneState.Empty, "workspace-2"]);
   });
 
   it("registers as the in-app browser, which places a link as the settings say and opens one in a new tab on the links workspace", async () => {

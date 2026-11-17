@@ -310,7 +310,7 @@ export class Resources {
   }, null, 2)}\n`;
   public static readonly installedRuntimePackage: string = `${Resources.modulePackageName}/runtime`;
   public static readonly installedWindowPackage: string = `${Resources.modulePackageName}/window`;
-  public static readonly installedDeclarations: readonly string[] = [Resources.moduleFile, Resources.settingsFile, "webViews.json"];
+  public static readonly installedDeclarations: readonly string[] = [Resources.moduleFile, Resources.settingsFile, "menus.json", "webViews.json"];
   public static readonly installedModuleId: string = "browser";
   public static readonly installedView: string = "view-1";
   public static readonly installedProfileKey: string = "workspace-1";

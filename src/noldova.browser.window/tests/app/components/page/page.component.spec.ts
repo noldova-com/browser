@@ -1039,6 +1039,26 @@ describe("PageComponent", () => {
     expect(view.calls.filter(t => t === "reload")).toEqual([]);
   });
 
+  it("opens an empty page on its workspace beside the page that holds the focus, in its toolbar or its view, when Noldova Desktop runs the new page command from its key, and none while the focus is outside every page", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.element.tabIndex = -1;
+
+    find(".before").focus();
+    const outside: boolean = pages.canOpenBeside(null);
+    pages.openBeside(null);
+    button("Back").focus();
+    const inToolbar: boolean = pages.canOpenBeside(null);
+    pages.openBeside(null);
+    view.element.focus();
+    const inView: boolean = pages.canOpenBeside(null);
+    pages.openBeside(null);
+    const shown = await pages.showAsync(context.opened.at(-1)?.instance ?? "");
+
+    expect([outside, inToolbar, inView, find("nol-browser-page").getAttribute("data-instance") === context.opened[0]?.instance]).toEqual([false, true, true, true]);
+    expect([context.opened.map(t => [t.title, t.after]), shown === null ? null : shown.controller.status.state, surface().views.at(-1)?.profileKey])
+      .toEqual([[["https://one.example/", null], ["New tab", null], ["New tab", null]], PaneState.Empty, "workspace-1"]);
+  });
+
   it("stops a loading page from Escape in the toolbar, and not from Escape in the address field, which puts back the page's address, or once it loaded", async () => {
     const view: FakeWebView = await placeAsync();
     view.emit(new ViewStateEvent("https://two.example/", "Two", true, true, false));

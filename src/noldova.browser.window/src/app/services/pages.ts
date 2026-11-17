@@ -243,6 +243,16 @@ export class Pages {
     }
   }
 
+  public canOpenBeside(commandArguments: JsonValue): boolean {
+    return this.besideOf(commandArguments) !== undefined;
+  }
+
+  public openBeside(commandArguments: JsonValue): void {
+    const tab: PaneTab | undefined = this.besideOf(commandArguments);
+    if (tab !== undefined)
+      this.openNew(tab);
+  }
+
   public async clearBrowsingDataAsync(tab: PaneTab): Promise<void> {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place !== undefined)
@@ -346,6 +356,22 @@ export class Pages {
       if (underline !== Pages.underlineOf(before.get(instance)))
         this.context.updateDocument(Resources.pageDocument, instance, { underline });
     }
+  }
+
+  private besideOf(commandArguments: JsonValue): PaneTab | undefined {
+    const instance: string | null = commandArguments === null ? Pages.focusedInstance() : Pages.instanceOf(commandArguments);
+    return [...this.shown.keys()].find(t => t.id === instance);
+  }
+
+  private static instanceOf(commandArguments: JsonValue): string | null {
+    if (!PageAnswers.isObject(commandArguments))
+      return null;
+    const instance: JsonValue | undefined = commandArguments[Resources.instanceArgument];
+    return commandArguments[Resources.documentArgument] === Resources.pageDocument && typeof instance === "string" ? instance : null;
+  }
+
+  private static focusedInstance(): string | null {
+    return document.querySelector(Resources.focusedPageSelector)?.getAttribute(Resources.pageInstanceAttribute) ?? null;
   }
 
   private documentOptions(instance: string, opener: PaneTab | null): IDocumentOptions {
