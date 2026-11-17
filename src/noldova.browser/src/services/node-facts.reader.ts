@@ -34,20 +34,34 @@ export class NodeFactsReader {
 
   public static readFormNodes(reply: JsonObject, backendNodeId: number): readonly NodeFacts[] {
     const root: JsonObject = NodeFactsReader.readObject(reply[Resources.rootField]);
-    const found: NodePath | null = NodeFactsReader.findPath(root, backendNodeId);
-    if (found === null)
-      return [];
-    const { node, ancestors }: NodePath = found;
-    const named: string | undefined = NodeFactsReader.readFacts(node).attributes.get(Resources.formAttribute);
-    const form: JsonObject | undefined = named === undefined
-      ? ancestors.findLast(t => NodeFactsReader.isForm(t, null))
-      : NodeFactsReader.readAll(root).find(t => NodeFactsReader.isForm(t, named));
-    if (form === undefined)
+    const form: JsonObject | null = NodeFactsReader.findForm(root, backendNodeId);
+    if (form === null)
       return [];
     const id: string | undefined = NodeFactsReader.readFacts(form).attributes.get(Resources.idAttribute);
     const linked: readonly JsonObject[] = id === undefined ? [] : NodeFactsReader.readAll(root)
       .filter(t => NodeFactsReader.readFacts(t).attributes.get(Resources.formAttribute) === id);
     return [...NodeFactsReader.readAll(form), ...linked].map(t => NodeFactsReader.readFacts(t));
+  }
+
+  public static readFormName(reply: JsonObject, backendNodeId: number): string {
+    const root: JsonObject = NodeFactsReader.readObject(reply[Resources.rootField]);
+    const form: JsonObject | null = NodeFactsReader.findForm(root, backendNodeId);
+    if (form === null)
+      return "";
+    const attributes: ReadonlyMap<string, string> = NodeFactsReader.readFacts(form).attributes;
+    const labels: string = (attributes.get(Resources.ariaLabelledByAttribute) ?? "").split(/\s+/).filter(t => t !== "")
+      .map(id => NodeFactsReader.readAll(root).find(t => NodeFactsReader.readFacts(t).attributes.get(Resources.idAttribute) === id))
+      .map(t => t === undefined ? "" : NodeFactsReader.readText(t))
+      .join(" ");
+    const names: readonly string[] = [labels, attributes.get(Resources.ariaLabelAttribute) ?? "", attributes.get(Resources.titleAttribute) ?? ""]
+      .map(t => NodeFactsReader.collapse(t));
+    return names.find(t => t !== "") ?? "";
+  }
+
+  public static readTitle(reply: JsonObject): string {
+    const title: JsonObject | undefined = NodeFactsReader.readInOrder(NodeFactsReader.readObject(reply[Resources.rootField]))
+      .find(t => t[Resources.nodeNameField] === Resources.titleElement);
+    return title === undefined ? "" : NodeFactsReader.collapse(NodeFactsReader.readText(title));
   }
 
   public static holds(reply: JsonObject, backendNodeId: number): boolean {
@@ -76,6 +90,38 @@ export class NodeFactsReader {
       attributes.set(name.toLowerCase(), value);
     }
     return new NodeFacts(nodeName.toUpperCase(), attributes);
+  }
+
+  private static findForm(root: JsonObject, backendNodeId: number): JsonObject | null {
+    const found: NodePath | null = NodeFactsReader.findPath(root, backendNodeId);
+    if (found === null)
+      return null;
+    const { node, ancestors }: NodePath = found;
+    const named: string | undefined = NodeFactsReader.readFacts(node).attributes.get(Resources.formAttribute);
+    return (named === undefined
+      ? ancestors.findLast(t => NodeFactsReader.isForm(t, null))
+      : NodeFactsReader.readAll(root).find(t => NodeFactsReader.isForm(t, named))) ?? null;
+  }
+
+  private static readText(node: JsonObject): string {
+    return NodeFactsReader.readInOrder(node).flatMap(t => {
+      const value: JsonValue | undefined = t[Resources.nodeValueField];
+      return t[Resources.nodeNameField] === Resources.textNodeName && typeof value === "string" ? [value] : [];
+    }).join("");
+  }
+
+  private static readInOrder(root: JsonObject): readonly JsonObject[] {
+    const all: JsonObject[] = [];
+    const pending: JsonObject[] = [root];
+    for (let node: JsonObject | undefined = pending.pop(); node !== undefined; node = pending.pop()) {
+      all.push(node);
+      pending.push(...[...NodeFactsReader.readNodes(node[Resources.childrenField])].reverse());
+    }
+    return all;
+  }
+
+  private static collapse(text: string): string {
+    return text.replace(/\s+/g, " ").trim();
   }
 
   private static findPath(root: JsonObject, backendNodeId: number): NodePath | null {

@@ -24,9 +24,9 @@ import type { ShownElement } from "../models/shown-element.ts";
 import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
-import { ElementDetails } from "../services/element-details.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { KeyEvents } from "../services/key-events.ts";
+import { PermissionCards } from "../services/permission-cards.ts";
 import { RiskClassifier } from "../services/risk-classifier.ts";
 import { ViewCalls } from "../services/view-calls.ts";
 import type { JsonObject } from "../types/json-value.ts";
@@ -52,17 +52,17 @@ export class TypeTool implements IBrowserTool {
       const facts: ElementFacts = await this.kit.readElementAsync(page.viewId, element.backendNodeId, options);
       const shown: ShownElement = await this.kit.readShownElementAsync(page.viewId, element.backendNodeId, facts, options);
       const risk: ToolRisk = RiskClassifier.classifyTyping(facts.path, isSubmitting, facts.form);
-      const details: IPermissionDetail[] = [...ElementDetails.describe(facts), {
-        label: Resources.textLabel,
-        kind: risk === ToolRisk.High ? PermissionDetailKind.Secret : PermissionDetailKind.AgentText,
-        value: text
-      }];
+      const details: IPermissionDetail[] = [PermissionCards.page(frame.url, facts.page.title), ...PermissionCards.element(facts, shown),
+        PermissionCards.typed(text, risk === ToolRisk.High)];
       if (isSubmitting)
         details.push({ label: Resources.submitLabel, kind: PermissionDetailKind.Text, value: Resources.submitValue });
+      if (isSubmitting && RiskClassifier.submitsEnter(facts.path))
+        details.push(...PermissionCards.sends(facts));
       const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options);
       if (box !== null)
         activity.aim(box, null);
-      const request: IPermissionRequest = ToolKit.request(Resources.typeAction, Resources.typeTitle, frame.origin, details, risk, ToolKit.actingOptions(risk, !isSubmitting));
+      const request: IPermissionRequest = ToolKit.request(Resources.typeAction, PermissionCards.typeTitle(facts, shown, isSubmitting, frame.origin), frame.origin, details, risk,
+        ToolKit.actingOptions(risk, !isSubmitting));
       await this.kit.followAsync(activity, element, request, options, () => this.kit.askAsync(activity, call, request, progress, async () => {
           const handing: CallOptions = ToolKit.handingOver(options);
           await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, handing);

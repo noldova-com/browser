@@ -7,7 +7,7 @@
  */
 
 import type { PageAction, PageBox } from "@noldova/browser.protocol";
-import { type IModuleLog, type IPermissionDetail, type IPermissionRequest, type IRuntimeWebViews, PermissionDetailKind, PermissionOption, ToolAbortReason,
+import { type IModuleLog, type IPermissionDetail, type IPermissionRequest, type IRuntimeWebViews, PermissionOption, ToolAbortReason,
   type ToolCall, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
 
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
@@ -110,7 +110,7 @@ export class ToolKit {
       action: risk === ToolRisk.High ? `${action}${Resources.highRiskActionSuffix}` : action,
       subject: origin,
       title: title.length > Resources.maximumTitleLength ? `${title.slice(0, Resources.maximumTitleLength - 1)}${Resources.shownCut}` : title,
-      details: [...details, { label: Resources.originLabel, kind: PermissionDetailKind.Text, value: origin }],
+      details,
       risk,
       isAsking: PermissionGate.isAsking(risk),
       options,
@@ -207,7 +207,7 @@ export class ToolKit {
     const node: NodeFacts = NodeFactsReader.readNode(await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId }, options));
     const ancestors: readonly NodeFacts[] | null = NodeFactsReader.readAncestors(document, backendNodeId);
     return new ElementFacts(ancestors === null ? null : [...ancestors, node], NodeFactsReader.readFormNodes(document, backendNodeId),
-      new PageFacts(NodeFactsReader.readBaseUrl(document)));
+      NodeFactsReader.readFormName(document, backendNodeId), new PageFacts(NodeFactsReader.readBaseUrl(document), NodeFactsReader.readTitle(document)));
   }
 
   public async readTitleOfAsync(viewId: string, documentId: string, options: CallOptions): Promise<string> {

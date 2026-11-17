@@ -13,23 +13,25 @@ import { Resources } from "../resources.ts";
 
 export class RiskClassifier {
   public static classifyClick(path: readonly NodeFacts[] | null, form: readonly NodeFacts[]): ToolRisk {
+    return RiskClassifier.submitsClick(path) ? RiskClassifier.submitRisk(form) : ToolRisk.Medium;
+  }
+
+  public static submitsClick(path: readonly NodeFacts[] | null): boolean {
     if (path === null)
-      return ToolRisk.Medium;
+      return false;
     const found: [number, NodeFacts] | undefined = [...path.entries()].findLast(t => RiskClassifier.isActivating(t[1]));
-    if (found !== undefined && RiskClassifier.isSubmitControl(found[1], path.slice(0, found[0])))
-      return RiskClassifier.submitRisk(form);
-    return ToolRisk.Medium;
+    return found !== undefined && RiskClassifier.isSubmitControl(found[1], path.slice(0, found[0]));
   }
 
   public static classifyTyping(path: readonly NodeFacts[] | null, isSubmitting: boolean, form: readonly NodeFacts[]): ToolRisk {
-    const field: NodeFacts | undefined = path?.at(-1);
-    if (path === null || field === undefined)
-      return ToolRisk.Medium;
-    if (RiskClassifier.isSecret(field))
+    if (RiskClassifier.isSecretField(path))
       return ToolRisk.High;
-    if (isSubmitting && RiskClassifier.isTextInput(field) && RiskClassifier.isInForm(field, path.slice(0, -1)))
-      return RiskClassifier.submitRisk(form);
-    return ToolRisk.Medium;
+    return isSubmitting && RiskClassifier.submitsEnter(path) ? RiskClassifier.submitRisk(form) : ToolRisk.Medium;
+  }
+
+  public static submitsEnter(path: readonly NodeFacts[] | null): boolean {
+    const field: NodeFacts | undefined = path?.at(-1);
+    return path !== null && field !== undefined && RiskClassifier.isTextInput(field) && RiskClassifier.isInForm(field, path.slice(0, -1));
   }
 
   public static isSubmittingKey(key: string): boolean {
@@ -37,16 +39,15 @@ export class RiskClassifier {
   }
 
   public static classifyKey(key: string, path: readonly NodeFacts[] | null, form: readonly NodeFacts[]): ToolRisk {
-    const target: NodeFacts | undefined = path?.at(-1);
-    if (path === null || target === undefined)
-      return ToolRisk.Medium;
-    if (RiskClassifier.isSecret(target))
+    if (RiskClassifier.isSecretField(path))
       return ToolRisk.High;
-    if (key === Resources.submittingKey && RiskClassifier.isTextInput(target) && RiskClassifier.isInForm(target, path.slice(0, -1)))
-      return RiskClassifier.submitRisk(form);
-    if (Resources.activatingKeys.includes(key))
-      return RiskClassifier.classifyClick(path, form);
-    return ToolRisk.Medium;
+    return RiskClassifier.submitsKey(key, path) ? RiskClassifier.submitRisk(form) : ToolRisk.Medium;
+  }
+
+  public static submitsKey(key: string, path: readonly NodeFacts[] | null): boolean {
+    if (key === Resources.submittingKey && RiskClassifier.submitsEnter(path))
+      return true;
+    return Resources.activatingKeys.includes(key) && RiskClassifier.submitsClick(path);
   }
 
   public static isSecretField(path: readonly NodeFacts[] | null): boolean {

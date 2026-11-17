@@ -12,11 +12,13 @@ import type { PageFacts } from "./page-facts.ts";
 export class ElementFacts {
   public readonly path: readonly NodeFacts[] | null;
   public readonly form: readonly NodeFacts[];
+  public readonly formName: string;
   public readonly page: PageFacts;
 
-  public constructor(path: readonly NodeFacts[] | null, form: readonly NodeFacts[], page: PageFacts) {
+  public constructor(path: readonly NodeFacts[] | null, form: readonly NodeFacts[], formName: string, page: PageFacts) {
     this.path = path;
     this.form = form;
+    this.formName = formName;
     this.page = page;
   }
 }

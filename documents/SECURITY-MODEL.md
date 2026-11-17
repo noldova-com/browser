@@ -304,6 +304,23 @@ The module raises its own permission request through Noldova Desktop's permissio
 An app that serves the module's tools lets them through without a prompt of its own, so the person is asked once, by the module.
 Each request names the action, `browser.<name>`, its subject, its exact details and its risk level.
 
+A request's subject is the page's origin, which Noldova Desktop keeps an answer by, and its card says what the agent is about to touch and where, with no Origin row, since the title and Page already name the site:
+
+- **Title:** the element by its accessible name and the site by its host, such as `Click "Choose Team" on docs.example.com`, `Type into the Password field on docs.example.com` or `Press Escape on docs.example.com`; an element with no name is named by its role, `Click the checkbox on docs.example.com`, and one with no role of its own as an element.
+  A click, an Enter or a key that submits a form names the form instead, `Submit the form "Create your Team account" on docs.example.com`, by its `aria-labelledby` elements' text, its `aria-label` or its `title`, or `Submit a form on docs.example.com` when it has none.
+  A navigation names the host: `Open a page on docs.example.com` within the workspace's sites, and `Open status.example.net` for a new one.
+  Every title is one line of at most 200 characters, and the host always fits: the name is cut to what the title leaves beside it, at most 80 characters, and a host over 100 characters is cut from its start, so its end, the domain the site's owner registered, still shows: a site may name its subdomains anything, such as `bank.example.com.` followed by many labels.
+- **Page:** the page's URL, then its title, cut at 300 characters, for a click, typing or a key.
+- **Button, Link, Field or Element:** the element's name and its role, such as `"Password", textbox`, with Goes to and the address a link leads to; an element the browser can't read, such as one in another site's frame, is an Element that says so.
+- **Key:** the key and its modifiers, for a key.
+- **Text:** the text the agent types, shown as the agent's words; on a high-risk request, such as one into a secret field, only its length, such as "10 characters, hidden", so the text never reaches the card, and Then says that Enter submits.
+- **Sends:** for a click, an Enter or a key that submits a form, the names of the fields the form sends, its buttons left out.
+- **From and To:** for a navigation, the page's URL and the URL it goes to.
+
+The names, the page's title, the form's name and the fields' names are the page's own and may say anything, while the roles, the host and the URLs are what the browser reads.
+So each piece of page text is cut on its own, with an ellipsis, after the parts the browser reads, and loses its Unicode format characters (`Cf`), such as the bidirectional overrides and isolates and zero-width spaces a page could use to reorder or hide what the card says; a long or crafted name or title can't push the host or the URL out of view.
+Each item over 2,000 characters is cut with an ellipsis.
+
 Each tool that may change the page classifies its action before it acts, and every call of it raises exactly one request with that risk level.
 A read-only tool whose maximum risk is Low, which only reads the page, raises none: Noldova Desktop runs its call without one and refuses any request it raises.
 A low-risk request says that it doesn't ask the person, and the app's policy decides whether it does.
@@ -328,7 +345,7 @@ Which calls on the view a tool uses to classify an action is in [ARCHITECTURE.md
 | Click anything but the submit control of a form that holds a secret field: a submit control of a form that holds none, a link or an area, any other element or plain content, and a click the tool can't classify beforehand, with no element reference, at a point, or on a node it can't resolve; the click scrolls its element into view first, and Browser has no scroll of its own | Medium | Yes, unless the person allowed this tool on this origin for the chat; the options are allow once, allow always, labelled "Allow for this chat", and deny; a download or a new window a link would open is then refused anyway | Every medium-risk call of this tool on this origin, for the chat (Noldova Desktop keeps it by action, origin and scope) |
 | Type, or press any key, in a field that isn't a secret field, or with nothing focused, unless it submits a form that holds a secret field; Enter in a form field and the type tool's submit option included | Medium | Yes, unless the person allowed this tool on this origin for the chat; the options are allow once, allow always, labelled "Allow for this chat", and deny | Every medium-risk call of this tool on this origin, for the chat (Noldova Desktop keeps it by action, origin and scope) |
 | Submit a form that holds a secret field: click its submit control, press Enter or Space on it, or press Enter in any of its fields, the type tool's submit option included | High | Yes, every time; the options are allow once and deny | Not offered |
-| Any input into a secret field: typing, any key through press_key, Enter and the type tool's submit option included | High | Yes, every time; the options are allow once and deny, and the request's details mask the text; typing or any key but Enter that doesn't submit also offers take over, labelled "I'll type it myself", which focuses the field again and runs nothing | Not offered |
+| Any input into a secret field: typing, any key through press_key, Enter and the type tool's submit option included | High | Yes, every time; the options are allow once and deny, and the request's details give only the text's length; typing or any key but Enter that doesn't submit also offers take over, labelled "I'll type it myself", which focuses the field again and runs nothing | Not offered |
 | Wait for text, an element or a load | Low | No; the tool raises no request | Nothing |
 | Download, upload, open a new window, use a site permission, answer an authentication prompt or pass a certificate error | Refused in the preview | No | Nothing |
 
@@ -362,7 +379,7 @@ No answer from the person makes the module do these:
 - Page text can imitate the module's fixed item, so the marking lowers the risk of a page steering the agent and doesn't prevent it.
 - Page text that tells the agent to act is returned as data, and nothing else happens.
 - A snapshot's content carries the origin of the document it was read from: the snapshot reads the frame before and after the tree, and fails as `Stale` rather than mark one document's text with another's origin.
-- Snapshots and permission requests mask the values of secret fields.
+- Snapshots mask the values of secret fields, and permission requests give only the length of the text an agent types into one.
 - Results never carry cookies, storage, request or response headers, or a secret field's value.
 - Every result's structured fields, which the app reads to show the call, hold only the page's origin and path and its title and, for a click or typing, the element's role, name and whether it is a secret field, as [ARCHITECTURE.md](ARCHITECTURE.md#tools) says; never the typed text, a field's value, or the URL's user info, query or fragment.
   The title and the name are the page's own: they may repeat whatever the page shows, as its content does, so the app treats them as untrusted.
