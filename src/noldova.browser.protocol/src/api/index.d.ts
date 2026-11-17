@@ -1245,7 +1245,7 @@ export declare const PageAction: {
 export type PageAction = (typeof PageAction)[keyof typeof PageAction];
 
 /**
- * How far an agent's call on a page got.
+ * Where an agent's control of a page stands.
  *
  * @example
  * ```ts
@@ -1258,23 +1258,28 @@ export type PageAction = (typeof PageAction)[keyof typeof PageAction];
  */
 export declare const PageActivityState: {
   /**
-   * The call works on the page, wire value `"Acting"`.
+   * One of the agent's calls works on the page, wire value `"Acting"`.
    */
   readonly Acting: "Acting";
 
   /**
-   * The call's permission request waits for the person, wire value `"Asking"`.
+   * One of the agent's calls waits for the person to answer its permission request, wire value `"Asking"`.
    */
   readonly Asking: "Asking";
 
   /**
-   * The call is over, by its result or its failure, wire value `"Ended"`.
+   * The agent controls the page, and none of its calls runs, wire value `"Idle"`.
+   */
+  readonly Idle: "Idle";
+
+  /**
+   * The agent's control is over: it closed the page, the person took over or stopped it, or its session ended, wire value `"Ended"`.
    */
   readonly Ended: "Ended";
 };
 
 /**
- * One of {@link PageActivityState}'s wire values: `"Acting"`, `"Asking"` or `"Ended"`.
+ * One of {@link PageActivityState}'s wire values: `"Acting"`, `"Asking"`, `"Idle"` or `"Ended"`.
  */
 export type PageActivityState = (typeof PageActivityState)[keyof typeof PageActivityState];
 
@@ -1436,7 +1441,8 @@ export declare class PagePoint {
 }
 
 /**
- * One agent call on a page document, as the runtime part reports it to every window.
+ * An agent's control of a page document, from its first call on the page until it closes the page, the person takes over or stops it, or its session ends,
+ * as the runtime part reports it to every window.
  */
 export declare class PageActivity {
   /**
@@ -1445,7 +1451,7 @@ export declare class PageActivity {
   public readonly instance: string;
 
   /**
-   * The call's own id, a UUID in lowercase, the same in each event of the call.
+   * The control's own id, a UUID in lowercase, the same in each event of the control.
    */
   public readonly activity: string;
 
@@ -1455,12 +1461,12 @@ export declare class PageActivity {
   public readonly agentName: string;
 
   /**
-   * What the call does on the page.
+   * What the running call does on the page, or what the last one did while none runs.
    */
   public readonly action: PageAction;
 
   /**
-   * How far the call got.
+   * Where the control stands.
    */
   public readonly state: PageActivityState;
 
@@ -1489,10 +1495,10 @@ export declare class PageActivity {
    * Creates the activity.
    *
    * @param instance The page document's instance.
-   * @param activity The call's own id.
+   * @param activity The control's own id.
    * @param agentName The agent's name, or empty.
-   * @param action What the call does.
-   * @param state How far the call got.
+   * @param action What the running call does, or what the last one did.
+   * @param state Where the control stands.
    * @param box The element the call acts on, or null.
    * @param point Where a click lands, or null.
    * @param refusal The address a navigation didn't open, or null.
