@@ -43,6 +43,7 @@ function pageViews(...instances: readonly string[]): ScriptedViews {
   const surface: ScriptedViews = new ScriptedViews(instances.map((_instance, index) => `view-${index + 1}`));
   instances.forEach((instance, index) => surface.instances.set(`view-${index + 1}`, instance));
   surface.acknowledge(...ScriptedViews.emptyReplies);
+  surface.serveWorlds();
   surface.answer("Page.getFrameTree", FRAME);
   surface.answer("Accessibility.getFullAXTree", TREE);
   return surface;
