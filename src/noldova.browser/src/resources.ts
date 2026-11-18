@@ -53,7 +53,6 @@ export class Resources {
   public static readonly notSubmittedCode: string = "browser.notSubmitted";
   public static readonly changedAfterGrant: string = "The page changed after the action was allowed, so nothing ran; take a new snapshot.";
   public static readonly changedDuringRead: string = "The page went to another document while it was read, twice; take a new snapshot.";
-  public static readonly childrenChanged: string = "The page changed the children of a node while the snapshot read them; take a new snapshot.";
   public static readonly denied: string = "The person didn't allow it.";
   public static readonly expired: string = "The request expired before the person answered.";
   public static readonly withdrawn: string = "The request was withdrawn.";
@@ -392,9 +391,6 @@ export class Resources {
   public static readonly nodeNameField: string = "nodeName";
   public static readonly attributesField: string = "attributes";
   public static readonly childrenField: string = "children";
-  public static readonly pseudoElementsField: string = "pseudoElements";
-  public static readonly pseudoTypeField: string = "pseudoType";
-  public static readonly afterPseudoType: string = "after";
   public static readonly nodeValueField: string = "nodeValue";
   public static readonly textNodeName: string = "#text";
   public static readonly titleElement: string = "TITLE";
@@ -412,7 +408,6 @@ export class Resources {
   public static readonly getPartialAXTreeMethod: "Accessibility.getPartialAXTree" = "Accessibility.getPartialAXTree";
   public static readonly accessibilityEnableMethod: "Accessibility.enable" = "Accessibility.enable";
   public static readonly accessibilityDisableMethod: "Accessibility.disable" = "Accessibility.disable";
-  public static readonly getRootAXNodeMethod: "Accessibility.getRootAXNode" = "Accessibility.getRootAXNode";
   public static readonly getChildAXNodesMethod: "Accessibility.getChildAXNodes" = "Accessibility.getChildAXNodes";
   public static readonly querySelectorMethod: "DOM.querySelector" = "DOM.querySelector";
   public static readonly documentOnlyDepth: number = 0;
@@ -425,7 +420,6 @@ export class Resources {
   public static readonly stateChanging: readonly AllowedMethod[] = ["DOM.focus", "DOM.scrollIntoViewIfNeeded", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent", "Input.insertText"];
   public static readonly maximumTimeoutMilliseconds: number = 10_000;
   public static readonly releaseMilliseconds: number = 2_000;
-  public static readonly treeReadsAhead: number = 8;
   public static readonly bindingCalledEvent: "Runtime.bindingCalled" = "Runtime.bindingCalled";
   public static readonly addBindingMethod: "Runtime.addBinding" = "Runtime.addBinding";
   public static readonly createIsolatedWorldMethod: "Page.createIsolatedWorld" = "Page.createIsolatedWorld";
@@ -572,10 +566,6 @@ export class Resources {
 
   public static formatObjectNotReleased(viewId: string, error: string): string {
     return `The view ${viewId} may keep an element the risk check read: ${error}`;
-  }
-
-  public static formatChildrenTooMany(role: string, count: number): string {
-    return `A ${role} element on the page has ${count} children, more than one answer can carry, so the snapshot can't read past it.`;
   }
 
   public static formatAccessibilityNotDisabled(viewId: string, error: string): string {
