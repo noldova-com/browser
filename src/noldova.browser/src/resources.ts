@@ -415,6 +415,9 @@ export class Resources {
   public static readonly focusedSelector: string = ":focus";
   public static readonly rootLevelDepth: number = 1;
   public static readonly gapMilliseconds: number = 100;
+  // A click reads the point again this long after a scroll or a layout, a few frames, at most this many times.
+  public static readonly settleMilliseconds: number = 50;
+  public static readonly settleReads: number = 5;
   public static readonly profileKeyField: string = "profileKey";
   public static readonly instancePattern: RegExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
   public static readonly profileKeyPattern: RegExp = /^[a-z0-9][a-z0-9-]{0,63}$/u;

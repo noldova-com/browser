@@ -75,7 +75,7 @@ export class ClickTool implements IBrowserTool {
       const confirmRiskAsync = (): Promise<void> => this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk,
         now => RiskClassifier.classifyClick(now.path, now.form), options);
       await this.layout.holdAsync(page.viewId, options,
-        () => this.pressAsync(page.viewId, element.backendNodeId, button, clickCount, activity, options, confirmRiskAsync));
+        isLaidOut => this.pressAsync(page.viewId, element.backendNodeId, button, clickCount, isLaidOut, activity, options, confirmRiskAsync));
       return this.kit.doneAsync(page.viewId, Resources.clicked, shown, options);
     });
   }
@@ -90,22 +90,37 @@ export class ClickTool implements IBrowserTool {
     return new PagePoint(x, y);
   }
 
+  // Whether the point, in the viewport's own coordinates, is inside the viewport the metrics give.
+  private static isInView(reply: JsonObject, point: PagePoint): boolean {
+    const viewport: JsonValue | undefined = reply[Resources.cssVisualViewportField];
+    const { clientWidth: width, clientHeight: height }: JsonObject = JsonShapes.isObject(viewport) ? viewport : {};
+    if (typeof width !== "number" || typeof height !== "number")
+      throw new MalformedReplyException();
+    return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
+  }
+
   private static readButton(name: string): MouseButton {
     if (name === Resources.mouseButtonNames[MouseButton.Middle])
       return MouseButton.Middle;
     return name === Resources.mouseButtonNames[MouseButton.Right] ? MouseButton.Right : MouseButton.Left;
   }
 
-  private async pressAsync(viewId: string, backendNodeId: number, button: MouseButton, clickCount: number, activity: PageActivity, options: CallOptions,
-    confirmRiskAsync: () => Promise<void>): Promise<void> {
-    await this.kit.calls.sendAsync(viewId, Resources.scrollIntoViewIfNeededMethod, { backendNodeId }, options);
-    const quad: readonly number[] | null = ContentQuads.readFirst(await this.kit.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+  // An element whose centre is in view is pressed where it is, so the page doesn't move; one out of view is scrolled to first. After a
+  // scroll, or a layout of a page that had no size, the point is read once two reads a moment apart agree, as the page may still move.
+  private async pressAsync(viewId: string, backendNodeId: number, button: MouseButton, clickCount: number, isLaidOut: boolean, activity: PageActivity,
+    options: CallOptions, confirmRiskAsync: () => Promise<void>): Promise<void> {
+    let [quad, metrics]: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
+    const isShown: boolean = quad !== null && ClickTool.isInView(metrics, ContentQuads.toCentre(quad));
+    if (!isShown)
+      await this.kit.calls.sendAsync(viewId, Resources.scrollIntoViewIfNeededMethod, { backendNodeId }, options);
+    if (!isShown || isLaidOut)
+      [quad, metrics] = await this.settleAsync(viewId, backendNodeId, options);
     if (quad === null)
       throw new ElementNotVisibleException();
     const centre: PagePoint = ContentQuads.toCentre(quad);
     const { x, y }: PagePoint = centre;
     activity.aim(ContentQuads.toBox(quad), centre);
-    const scroll: PagePoint = await this.readScrollAsync(viewId, options);
+    const scroll: PagePoint = ClickTool.readScroll(metrics);
     await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
     const mouse: { x: number; y: number; button: "left" | "middle" | "right" } = { x, y, button: Resources.mouseButtonNames[button] };
     await this.kit.calls.sendAsync(viewId, Resources.dispatchMouseEventMethod, { type: Resources.mouseMovedType, x, y }, options);
@@ -124,6 +139,40 @@ export class ClickTool implements IBrowserTool {
       throw new PageChangedAfterGrantException();
     const { x, y }: PagePoint = ContentQuads.toCentre(quad);
     await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
+  }
+
+  // The element's first box and the page's metrics, read together.
+  private async readPointAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<[readonly number[] | null, JsonObject]> {
+    const quad: readonly number[] | null = ContentQuads.readFirst(await this.kit.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+    return [quad, await this.kit.calls.sendAsync(viewId, Resources.getLayoutMetricsMethod, {}, options)];
+  }
+
+  // The element's box and the page's metrics once two reads a moment apart agree, or the last of a few reads; a page still moving then
+  // fails the check before the press.
+  private async settleAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<[readonly number[] | null, JsonObject]> {
+    let read: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
+    for (let count: number = 1; count < Resources.settleReads; count++) {
+      await ClickTool.pauseAsync(options.signal);
+      const next: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
+      const isSame: boolean = JSON.stringify([next[0], ClickTool.readScroll(next[1])]) === JSON.stringify([read[0], ClickTool.readScroll(read[1])]);
+      read = next;
+      if (isSame)
+        break;
+    }
+    return read;
+  }
+
+  // A moment for the page to finish moving, cut short when the call is stopped, which the next call to the view then reports.
+  private static pauseAsync(signal: AbortSignal): Promise<void> {
+    return new Promise<void>(resolve => {
+      const end = (): void => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", end);
+        resolve();
+      };
+      const timer: ReturnType<typeof setTimeout> = setTimeout(end, Resources.settleMilliseconds);
+      signal.addEventListener("abort", end, { once: true });
+    });
   }
 
   private async readScrollAsync(viewId: string, options: CallOptions): Promise<PagePoint> {

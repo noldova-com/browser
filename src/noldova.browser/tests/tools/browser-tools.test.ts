@@ -45,7 +45,7 @@ const SCENARIOS: readonly IScenario[] = [
     breakAfterPoint: t => t.surface.navigationOutcome = new WebViewNavigation(WebViewNavigationKind.Refused, ShopPage.ORIGIN) },
   { name: "browser_snapshot", descriptor: ToolDescriptors.snapshot, create: t => new SnapshotTool(t), input: () => ({}), breakAfterPoint: null },
   { name: "browser_click", descriptor: ToolDescriptors.click, create: t => new ClickTool(t), input: t => ({ reference: t }),
-    breakAfterPoint: t => t.surface.fail("DOM.scrollIntoViewIfNeeded", CRASHED) },
+    breakAfterPoint: t => t.surface.fail("Input.dispatchMouseEvent", CRASHED) },
   { name: "browser_type", descriptor: ToolDescriptors.type, create: t => new TypeTool(t), input: t => ({ reference: t, text: "red" }),
     breakAfterPoint: t => t.surface.fail("DOM.focus", CRASHED) },
   { name: "browser_press_key", descriptor: ToolDescriptors.pressKey, create: t => new PressKeyTool(t), input: () => ({ key: "a" }),
