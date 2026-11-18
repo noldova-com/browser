@@ -226,7 +226,8 @@ export class AccessibilityWalk {
   }
 
   // The children of a node with too many to read at once, as its element's children, each read on its own as the walk comes near it, so
-  // the walk reads only a few more of them than the snapshot shows. An element whose children alone are too many for one answer fails as
+  // the walk reads only a few more of them than the snapshot shows. Its ::before and ::after are children of the node too, which the element
+  // lists apart from the others: they come first and last. An element whose children alone are too many for one answer fails as
   // too large, naming the node by its role.
   private async listChildrenAsync(viewId: string, end: ListedEnd, options: CallOptions): Promise<readonly UnreadChild[]> {
     let reply: JsonObject;
@@ -239,10 +240,14 @@ export class AccessibilityWalk {
       throw new ChildrenTooManyException(end.parent.role, end.parent.childIds.length, error);
     }
     const element: JsonValue | undefined = reply[Resources.nodeField];
-    const children: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.childrenField] ?? [] : undefined;
-    if (!JsonShapes.isArray(children))
+    if (!JsonShapes.isObject(element))
       throw new MalformedReplyException();
-    return children.map(child => {
+    const children: JsonValue = element[Resources.childrenField] ?? [];
+    const pseudos: JsonValue = element[Resources.pseudoElementsField] ?? [];
+    if (!JsonShapes.isArray(children) || !JsonShapes.isArray(pseudos))
+      throw new MalformedReplyException();
+    const after: readonly JsonValue[] = pseudos.filter(t => JsonShapes.isObject(t) && t[Resources.pseudoTypeField] === Resources.afterPseudoType);
+    return [...pseudos.filter(t => !after.includes(t)), ...children, ...after].map(child => {
       const backendNodeId: JsonValue | undefined = JsonShapes.isObject(child) ? child[Resources.backendNodeIdField] : undefined;
       if (typeof backendNodeId !== "number")
         throw new MalformedReplyException();

@@ -358,6 +358,9 @@ export class Resources {
   public static readonly nodeNameField: string = "nodeName";
   public static readonly attributesField: string = "attributes";
   public static readonly childrenField: string = "children";
+  public static readonly pseudoElementsField: string = "pseudoElements";
+  public static readonly pseudoTypeField: string = "pseudoType";
+  public static readonly afterPseudoType: string = "after";
   public static readonly nodeValueField: string = "nodeValue";
   public static readonly textNodeName: string = "#text";
   public static readonly titleElement: string = "TITLE";

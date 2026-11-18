@@ -265,6 +265,17 @@ describe("AccessibilityWalk", () => {
         ...[31, 40, 70, 80, 50, 60].map(t => ["Accessibility.getPartialAXTree", { backendNodeId: t, fetchRelatives: false }])]);
     });
 
+    it("reads the element's ::before first and its ::after last, as the node names them, though the element lists them apart", async () => {
+      listed([50]);
+      surface.answer("DOM.describeNode", { node: { backendNodeId: 30, children: [{ backendNodeId: 50 }],
+        pseudoElements: [{ backendNodeId: 60, pseudoType: "after" }, { backendNodeId: 40, pseudoType: "before" }] } });
+
+      const tree: AccessibilityTree = await readAsync();
+
+      expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "9", "4", "5", "6"], true]);
+      expect(partials().map(t => t["backendNodeId"])).toEqual([40, 50, 60]);
+    });
+
     it("reads the children of a child it read on its own", async () => {
       listed([40, 50, 60]);
       surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [t["backendNodeId"] === 60 ? { ...node("6", "listitem", "Three", ["61"]), backendDOMNodeId: 60 } : ITEMS[Number(t["backendNodeId"])] ?? {}] }));
@@ -321,7 +332,8 @@ describe("AccessibilityWalk", () => {
 
     it("reads an element's list that isn't one, or a child without its element, as malformed, and fails on any other failure", async () => {
       listed([40]);
-      for (const reply of [{}, { node: { children: "LI" } }, { node: { children: ["LI"] } }, { node: { children: [{ nodeName: "LI" }] } }]) {
+      for (const reply of [{}, { node: { children: "LI" } }, { node: { children: ["LI"] } }, { node: { children: [{ nodeName: "LI" }] } }, { node: { pseudoElements: "after" } },
+        { node: { pseudoElements: ["after"] } }]) {
         surface.answer("DOM.describeNode", reply);
         await expect(readAsync()).rejects.toBeInstanceOf(MalformedReplyException);
       }

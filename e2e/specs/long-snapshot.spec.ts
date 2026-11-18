@@ -27,16 +27,17 @@ const PAGE = "<!doctype html><title>Long page</title><ul>"
 // children at a time. Each row's name is long, so the snapshot's limit comes after a few hundred rows, well within its time limit. 12,000
 // rows, with shorter names that keep the list of their element's children within the limit, make that element's children alone pass it too; they are
 // elements with a button role, a node each that the page reads quickly on its own, as 12,000 link rows make a whole tree whose first read
-// alone nearly fills the time limit (#68).
+// alone nearly fills the time limit (#68). The element's ::before is a child its element lists apart from the others.
 const ROWS = 12_000;
 const LINK_ROWS = 4_000;
 // With a long attribute on each row, even the list of that element's children passes the limit.
 const ROW_PAD_LENGTH = 400;
 const LINK_NAME_WORDS = 30;
 const BUTTON_NAME_WORDS = 10;
+const ROWS_BEFORE = "Rows begin";
 
 function rowsPage(title: string, rows: number, row: (i: string) => string): string {
-  return `<!doctype html><title>${title}</title><div id="rows">`
+  return `<!doctype html><title>${title}</title><style>#rows::before { content: "${ROWS_BEFORE}"; }</style><div id="rows">`
     + `<script>document.write(Array.from({ length: ${rows} }, (_, i) => ${row("i")}).join(''))</script></div>`;
 }
 
@@ -104,7 +105,7 @@ test.describe("a snapshot of a long page", () => {
       expect(result, `The snapshot failed: ${JSON.stringify(result).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
       const notes = textsOf(result);
       const tree = treeOf(notes);
-      expect(tree).toMatch(new RegExp(`^ *- ${role} "Row 0(?: word){${words}}" \\[e1\\]$`, "mu"));
+      expect(tree).toMatch(new RegExp(`^ *- StaticText "${ROWS_BEFORE}"$(?:\\n.*)*?\\n *- ${role} "Row 0(?: word){${words}}" \\[e1\\]$`, "mu"));
       expect(tree).toMatch(new RegExp(`^ *- ${role} "Row 1(?: word){${words}}" \\[e2\\]$`, "mu"));
       expect(tree).not.toMatch(new RegExp(`"Row ${rows - 1} `, "u"));
       expect(Buffer.byteLength(tree, "utf8")).toBeLessThanOrEqual(SNAPSHOT_LIMIT_BYTES);
@@ -120,7 +121,7 @@ test.describe("a snapshot of a long page", () => {
     const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
 
     expect(result).toEqual(expect.objectContaining({ isFailure: true, code: "TooLarge",
-      message: `A generic element on the page has ${ROWS} children, more than one answer can carry, so the snapshot can't read past it.` }));
+      message: `A generic element on the page has ${ROWS + 1} children, more than one answer can carry, so the snapshot can't read past it.` }));
   });
 
   test("on such a page scrolled down, the snapshot starts where it is scrolled to, after the lines that lead there, and says so", async ({ app, servers }) => {
