@@ -437,7 +437,7 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
   `DOM.getNodeForLocation` takes the point in the document, so the page's scroll from `Page.getLayoutMetrics` is added to it.
   Any other element is scrolled into view with `DOM.scrollIntoViewIfNeeded`, such as one below the view, one out of an inner pane's or a frame's view, or one under a sticky header; that call on its own would also scroll an element that shows only in part.
   On a [hidden page](#a-press-on-a-hidden-page) laid out for the press, it decides once the page rests after the layout, and after a scroll the page may still move for a few frames; each time it reads the element's box and the page's scroll every `Resources.settleMilliseconds`, 50 ms, until two reads agree, `Resources.settleReads`, 5 reads, at most, and a page still moving then fails the check before the press.
-  After a scroll it finds the topmost element at the element's centre again and presses only when that is the element or inside it; otherwise it fails as `Refused` with `browser.covered`.
+  After a scroll it finds the topmost element at the element's centre again and presses only when that is the element or inside it; otherwise it fails with `browser.covered`, which past the scroll ends the call as `OutcomeUncertain` with that code in its message.
 
   <a id="a-press-on-a-hidden-page"></a>The page may be hidden while the click runs, since the person answers its request on the chat that covers it.
   A hidden view holds a mouse move until the page draws, 5 seconds or more, and on macOS a press after it never arrived; Noldova Desktop keeps the page drawing with focus emulation from an agent's first press or focus on the view, and refuses a module's own call to change it ([desktop#52](https://github.com/noldova-com/desktop/issues/52)), so the click asks for none.
@@ -500,7 +500,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | Code | Reason | Means |
 |---|---|---|
 | `browser.originRefused` | `Refused` | The typed-address policy refused the navigation's address, such as a local or link-local one, before anything asked |
-| `browser.covered` | `Refused` | Another element is topmost at the clicked element's centre, so nothing was pressed |
+| `browser.covered` | `Refused` | Another element is topmost at the clicked element's centre, so nothing was pressed; since the element was scrolled to first, the call's result is `OutcomeUncertain` with this code in its message |
 | `browser.pageNotShowing` | `Refused` | The page has no layout at the point, or none at all, so nothing was pressed; never a stale reference |
 | `browser.notVisible` | `Refused` | The clicked or captured element has no box on the page, or a screenshot's area has no size |
 | `browser.pageHidden` | `Refused` | The page has no size even when laid out for a screenshot, as when its tab is hidden, so nothing was captured |
