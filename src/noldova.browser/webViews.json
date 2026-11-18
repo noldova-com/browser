@@ -41,7 +41,7 @@
     { "name": "DOM.getDocument", "parameters": { "depth": { "required": true, "values": [0] }, "pierce": { "required": true, "values": [true] } } },
     { "name": "DOM.querySelector", "parameters": { "nodeId": { "required": true, "minimum": 1 }, "selector": { "required": true, "values": [":focus"] } } },
     { "name": "DOM.resolveNode", "parameters": { "backendNodeId": { "required": true, "minimum": 1 }, "executionContextId": { "required": true, "minimum": 1 } } },
-    { "name": "DOM.describeNode", "parameters": { "backendNodeId": { "minimum": 1 }, "objectId": { "maxLength": 128 }, "depth": { "values": [-1] }, "pierce": { "values": [true] } } },
+    { "name": "DOM.describeNode", "parameters": { "backendNodeId": { "minimum": 1 }, "objectId": { "maxLength": 128 }, "depth": { "values": [-1, 1] }, "pierce": { "values": [true] } } },
     { "name": "DOM.scrollIntoViewIfNeeded", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
     { "name": "DOM.getContentQuads", "parameters": { "backendNodeId": { "required": true, "minimum": 1 } } },
     { "name": "DOM.getNodeForLocation", "parameters": { "x": { "required": true }, "y": { "required": true }, "includeUserAgentShadowDOM": { "values": [false] } } },
