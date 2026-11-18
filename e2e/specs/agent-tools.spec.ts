@@ -167,10 +167,14 @@ test.describe("the agent tools on a real page", () => {
   test("a screenshot gives a PNG of the view's shape and its page, of the size its text says", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
-    // The first call shows the agent's bar, which makes the view shorter, so the size is read once the bar shows and two reads agree.
+    // The first call shows the agent's bar, which makes the view shorter, so the size is read once the view is shorter than before the
+    // call and two reads agree.
+    const sizeAsync = (): Promise<string> => app.viewPages.runAtAsync(docs.url("/"), "innerWidth + ' ' + innerHeight");
+    const heightOf = (size: string): number => Number(size.split(" ")[1]);
+    const free = heightOf(await sizeAsync());
     await callAsync(app, bindings, "browser_snapshot");
     await expect(app.window.locator(AGENT_BAR)).toBeVisible();
-    const sizeAsync = (): Promise<string> => app.viewPages.runAtAsync(docs.url("/"), "innerWidth + ' ' + innerHeight");
+    await expect.poll(async () => heightOf(await sizeAsync()), { message: "The view never got shorter for the agent's bar." }).toBeLessThan(free);
     let last = "";
     await expect.poll(async () => {
       const [earlier, now] = [last, await sizeAsync()];
