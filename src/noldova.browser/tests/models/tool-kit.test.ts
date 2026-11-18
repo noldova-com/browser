@@ -14,13 +14,17 @@ import { describe, expect, it, vi } from "vitest";
 import { CallCancelledException } from "../../src/exceptions/call-cancelled.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
+import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PageNotControlledException } from "../../src/exceptions/page-not-controlled.exception.ts";
+import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import { TypedRedirectAfterAgentException } from "../../src/exceptions/typed-redirect-after-agent.exception.ts";
+import { UnknownReferenceException } from "../../src/exceptions/unknown-reference.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
 import { ElementReference } from "../../src/models/element-reference.ts";
 import { SessionPage } from "../../src/models/session-page.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { ToolDescriptors } from "../../src/models/tool-descriptors.ts";
 import { ToolKit } from "../../src/models/tool-kit.ts";
 import { Resources } from "../../src/resources.ts";
@@ -279,6 +283,66 @@ describe("ToolKit", () => {
 
     expect(reads[0]).toBe(0);
     expect(reads[1]).toBeGreaterThanOrEqual(1);
+  });
+
+  describe("findReferencedNodeAsync", () => {
+    function readingOptions(): CallOptions {
+      return new CallOptions(new AbortController().signal, Date.now() + 1_000, 100_000, true, new ActionProgress(() => undefined));
+    }
+
+    it("finds the node of the element the snapshot kept by the reference's index, and releases the element's object", async () => {
+      using bench: ToolBench = new ToolBench();
+      bench.surface.answer("Page.getFrameTree", ShopPage.frame());
+      const id: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.LINK));
+
+      const element: ElementReference = await bench.kit.findReferencedNodeAsync(ToolBench.SESSION, id, ToolBench.VIEW, "L1", readingOptions());
+
+      expect(element).toStrictEqual(new ElementReference(ToolBench.VIEW, "L1", ShopPage.LINK));
+      const objects: readonly string[] = ["Runtime.callFunctionOn", "DOM.describeNode", "Runtime.releaseObject"];
+      expect(bench.surface.calls.filter(t => objects.includes(t.method)).map(t => [t.method, t.params["objectId"] ?? t.params["arguments"]])).toEqual([
+        ["Runtime.callFunctionOn", [{ value: { element: ShopPage.LINK } }]],
+        ["DOM.describeNode", "snapshot-element-7"],
+        ["Runtime.releaseObject", "snapshot-element-7"]
+      ]);
+    });
+
+    it("fails a reference whose element left the page as stale, describing nothing", async () => {
+      using bench: ToolBench = new ToolBench();
+      bench.surface.answer("Page.getFrameTree", ShopPage.frame());
+      bench.surface.goneElements.add(ShopPage.LINK);
+      const id: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.LINK));
+
+      await expect(bench.kit.findReferencedNodeAsync(ToolBench.SESSION, id, ToolBench.VIEW, "L1", readingOptions())).rejects.toBeInstanceOf(StaleReferenceException);
+      expect(bench.methods).not.toContain("DOM.describeNode");
+    });
+
+    it("gives the node of an element read inside a closed shadow root as it was issued, sending nothing", async () => {
+      using bench: ToolBench = new ToolBench();
+      const id: string = bench.sessions.issueReference(ToolBench.SESSION, new ElementReference(ToolBench.VIEW, "L1", 27));
+
+      expect(await bench.kit.findReferencedNodeAsync(ToolBench.SESSION, id, ToolBench.VIEW, "L1", readingOptions())).toStrictEqual(new ElementReference(ToolBench.VIEW, "L1", 27));
+      expect(bench.methods).toEqual([]);
+    });
+
+    it("fails a reference no snapshot gave as unknown, sending nothing", async () => {
+      using bench: ToolBench = new ToolBench();
+
+      await expect(bench.kit.findReferencedNodeAsync(ToolBench.SESSION, "e4", ToolBench.VIEW, "L1", readingOptions())).rejects.toBeInstanceOf(UnknownReferenceException);
+      expect(bench.methods).toEqual([]);
+    });
+
+    it("fails a description without the node's id as malformed, and releases the element's object all the same", async () => {
+      using bench: ToolBench = new ToolBench();
+      bench.surface.answer("Page.getFrameTree", ShopPage.frame());
+      bench.surface.findElement = () => ({ result: { type: "object", subtype: "node", objectId: "element-7" } });
+      const id: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.LINK));
+
+      for (const reply of [{ node: { nodeName: "A" } }, { node: 7 }, {}]) {
+        bench.surface.answer("DOM.describeNode", reply);
+        await expect(bench.kit.findReferencedNodeAsync(ToolBench.SESSION, id, ToolBench.VIEW, "L1", readingOptions())).rejects.toBeInstanceOf(MalformedReplyException);
+      }
+      expect(bench.surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params)).toEqual(Array(3).fill({ objectId: "element-7" }));
+    });
   });
 
   it("cuts a title past Noldova Desktop's 200 characters, and marks the cut", () => {

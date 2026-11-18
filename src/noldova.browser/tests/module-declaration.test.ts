@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol";
 import { describe, expect, it } from "vitest";
 
+import { PageSnapshotScript } from "../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../src/models/page-text-script.ts";
 
 async function readDeclarationAsync(file: string): Promise<unknown> {
@@ -128,7 +129,8 @@ describe("webViews.json", () => {
       { name: "Runtime.addBinding", parameters: { name: { required: true, values: ["noldovaBrowserChanged"] },
         executionContextName: { required: true, values: ["noldova-browser-changes"] } } },
       { name: "Runtime.callFunctionOn", parameters: {
-        functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration] },
+        functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration,
+          PageSnapshotScript.functionDeclaration] },
         uniqueContextId: { maxLength: 64 }, objectId: { maxLength: 128 },
         arguments: {}, returnByValue: { required: true, values: [true, false] }, silent: { required: true, values: [true] }
       } },

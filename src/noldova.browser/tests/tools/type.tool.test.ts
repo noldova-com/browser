@@ -19,7 +19,7 @@ import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-ti
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
-import { ElementReference } from "../../src/models/element-reference.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { TypeTool } from "../../src/tools/type.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -31,7 +31,7 @@ describe("TypeTool", () => {
   let tool: TypeTool;
 
   function reference(backendNodeId: number): string {
-    return bench.sessions.issueReference(ToolBench.SESSION, new ElementReference(ToolBench.VIEW, "L1", backendNodeId));
+    return bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", backendNodeId));
   }
 
   function sent(method: string): readonly JsonObject[] {
@@ -67,7 +67,7 @@ describe("TypeTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods.slice(7, 18)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
+    expect(bench.methods.slice(17, 28)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
       "Input.insertText"]);
     expect([sent("DOM.focus"), sent("Input.insertText"), sent("Input.dispatchKeyEvent")]).toEqual([[{ backendNodeId: ShopPage.SEARCH }], [{ text: "red shoes" }], []]);
     expect(result.content[0]?.value).toBe("Typed.");

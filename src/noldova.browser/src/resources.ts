@@ -46,6 +46,7 @@ export class Resources {
   public static readonly protocolFailed: string = "The page engine refused the call.";
   public static readonly malformedReply: string = "The page's answer didn't have the expected shape.";
   public static readonly staleReference: string = "The element reference is stale; take a new snapshot.";
+  public static readonly unknownReference: string = "No snapshot gave this element reference; take a snapshot and use a reference from it.";
   public static readonly riskRose: string = "The page made this element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; call it again to ask at high risk.";
   public static readonly riskRoseCode: string = "browser.riskRose";
   public static readonly notSubmitted: string = "The text was typed, but the page gave its form a secret field, so it wasn't submitted; call it again with submit to ask at high risk.";
@@ -73,6 +74,7 @@ export class Resources {
   public static readonly profileClearedCode: string = "browser.profileCleared";
   public static readonly protocolCode: string = "browser.protocol";
   public static readonly staleReferenceCode: string = "browser.staleReference";
+  public static readonly unknownReferenceCode: string = "browser.unknownReference";
   public static readonly viewClosedCode: string = "browser.viewClosed";
   public static readonly shortcutRefusedCode: string = "browser.shortcutRefused";
   public static readonly viewsUnavailableCode: string = "browser.viewsUnavailable";
@@ -93,7 +95,7 @@ export class Resources {
   public static readonly unbound: string = "The app bound this session to no page of its workspace.";
   public static readonly pageNotOpen: string = "The session's page isn't open; ask the person to open it again.";
   public static readonly maskedValue: string = "••••••";
-  public static readonly snapshotCut: string = "The snapshot was cut at its limit; act on what it shows, or scroll and take another.";
+  public static readonly snapshotCut: string = "The snapshot was cut at its limit; take another with interactive or a depth for less, read an element's part by its reference with part, or scroll and take another.";
   public static readonly snapshotFromView: string = "The page is too large to read from its start, so the snapshot starts where it is scrolled to; scroll up and take another for what is above.";
   public static readonly navigateAction: string = "browser.navigate";
   public static readonly originRefusedCode: string = "browser.originRefused";
@@ -142,7 +144,7 @@ export class Resources {
   public static readonly navigateTitle: string = "Open a page";
   public static readonly navigateDescription: string = "Opens a URL in the browser pane, or goes back, forward or reloads. Origins outside the allowed list are refused until the person allows them.";
   public static readonly snapshotTitle: string = "Read the page";
-  public static readonly snapshotDescription: string = "Returns the page's accessibility tree as text, with a reference for each element you can act on, and the page's URL and title. References last until the next snapshot or navigation.";
+  public static readonly snapshotDescription: string = "Returns the page's accessibility tree as text, with a reference for each element you can act on, and the page's URL and title, up to 128 KiB, cut at a line with a note saying so. interactive returns only the elements you can act on and the headings; depth stops at that many levels, giving a reference to each element whose lines it left out; part returns only the lines of the element an earlier snapshot's reference names. References last until the next snapshot or navigation.";
   public static readonly clickTitle: string = "Click an element";
   public static readonly clickDescription: string = "Clicks an element by its reference from the last snapshot. Clicks that submit a form or leave the page ask the person first.";
   public static readonly typeTitle: string = "Type into a field";
@@ -204,6 +206,38 @@ export class Resources {
   public static readonly clickCountField: string = "clickCount";
   public static readonly submitField: string = "submit";
   public static readonly fullPageField: string = "fullPage";
+  public static readonly interactiveField: string = "interactive";
+  public static readonly depthField: string = "depth";
+  public static readonly partField: string = "part";
+  public static readonly mostSnapshotDepth: number = 100;
+  // The bytes a line's reference takes at most, " [e9999999]", which the page counts for each line it gives one.
+  public static readonly snapshotReferenceBytes: number = 11;
+  public static readonly elementField: string = "element";
+  public static readonly staleField: string = "stale";
+  public static readonly linesField: string = "lines";
+  public static readonly isCutField: string = "isCut";
+  public static readonly isDeeperField: string = "isDeeper";
+  public static readonly isFromViewField: string = "isFromView";
+  public static readonly closedRootType: string = "closed";
+  public static readonly openRootType: string = "open";
+  public static readonly shadowRootTypeField: string = "shadowRootType";
+  public static readonly nodeTypeField: string = "nodeType";
+  public static readonly localNameField: string = "localName";
+  public static readonly elementNodeType: number = 1;
+  public static readonly closedRootReads: number = 64;
+  // The time the snapshot spends finding closed shadow roots' hosts on a page too large to describe in one answer, from its first split,
+  // within the step's 15 s: measured three times on each system, 64 at a time describe at least 1,152 rows within it on the slowest, so an
+  // 800-row page that needs the split is searched whole with 30% to spare (6,000 rows on a Mac), and a larger one names what it left
+  // unsearched.
+  public static readonly closedRootSearchMilliseconds: number = 2_000;
+  public static readonly mostUnsearchedNames: number = 20;
+  public static readonly mostNamedIdLength: number = 64;
+  public static readonly closedRootMarginMilliseconds: number = 1_000;
+  public static readonly documentName: string = "the document";
+  public static readonly shadowRootName: string = "a shadow root";
+  public static readonly headingRole: string = "heading";
+  public static readonly staticTextRole: string = "StaticText";
+  public static readonly inlineTextBoxRole: string = "InlineTextBox";
   public static readonly cursorField: string = "cursor";
   public static readonly levelField: string = "level";
   public static readonly timeoutMillisecondsField: string = "timeoutMilliseconds";
@@ -671,6 +705,30 @@ export class Resources {
 
   public static formatSnapshotValue(value: string): string {
     return `value=${JSON.stringify(value)}`;
+  }
+
+  public static formatClosedUnsearched(names: readonly string[]): string {
+    const named: string = names.length > Resources.mostUnsearchedNames
+      ? `${names.slice(0, Resources.mostUnsearchedNames).join("; ")}; and ${names.length - Resources.mostUnsearchedNames} more`
+      : names.join("; ");
+    return `Closed parts inside ${named} were not searched, as there was too much to describe in one answer or in the time for it; a closed part there shows only its element's line.`;
+  }
+
+  public static formatUnsearchedChildren(name: string, count: number, total: number): string {
+    return `${name}: ${count.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} children`;
+  }
+
+  public static formatElementName(localName: string, id: string): string {
+    const shown: string = id.length > Resources.mostNamedIdLength ? `${id.slice(0, Resources.mostNamedIdLength)}…` : id;
+    return id === "" ? `<${localName}>` : `<${localName} id="${shown}">`;
+  }
+
+  public static formatClosedUnread(count: number): string {
+    return `${count} of the page's closed parts, which its own script hides, went unread within the snapshot's limit or time; each shows only its element's line, and part reads one by its reference.`;
+  }
+
+  public static formatSnapshotDeeper(depth: number): string {
+    return `Lines deeper than ${depth} levels were left out; read an element's part by its reference with part.`;
   }
 
   public static formatSnapshotReference(reference: string): string {

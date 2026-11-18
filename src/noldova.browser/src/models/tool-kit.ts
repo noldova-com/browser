@@ -25,6 +25,7 @@ import { AimFollower } from "../services/aim-follower.ts";
 import { ConsoleBuffers } from "../services/console-buffers.ts";
 import { ContentQuads } from "../services/content-quads.ts";
 import { FrameTreeReader } from "../services/frame-tree.reader.ts";
+import { JsonShapes } from "../services/json-shapes.ts";
 import { NodeFactsReader } from "../services/node-facts.reader.ts";
 import { PageChanges } from "../services/page-changes.ts";
 import { PermissionGate } from "../services/permission-gate.ts";
@@ -35,13 +36,14 @@ import { ToolFailures } from "../services/tool-failures.ts";
 import { ToolResults } from "../services/tool-results.ts";
 import { ViewCalls } from "../services/view-calls.ts";
 import type { WorkspaceOrigins } from "../services/workspace-origins.ts";
-import type { JsonObject } from "../types/json-value.ts";
+import type { JsonObject, JsonValue } from "../types/json-value.ts";
+import type { SessionReference } from "../types/session-reference.ts";
 import type { AccessibilityNode } from "./accessibility-node.ts";
 import { ActionProgress } from "./action-progress.ts";
 import { BrowserLimits } from "./browser-limits.ts";
 import { CallOptions } from "./call-options.ts";
 import { ElementFacts } from "./element-facts.ts";
-import type { ElementReference } from "./element-reference.ts";
+import { ElementReference } from "./element-reference.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import type { NodeFacts } from "./node-facts.ts";
 import type { PageActivity } from "./page-activity.ts";
@@ -209,6 +211,27 @@ export class ToolKit {
       throw new PageChangedAfterGrantException();
     if (risk !== ToolRisk.High && classify(now) === ToolRisk.High)
       throw rose();
+  }
+
+  // The node of the element a session's reference names: the element the snapshot that gave the reference kept in the page, while it is
+  // still there.
+  public async findReferencedNodeAsync(session: string, id: string, viewId: string, documentId: string, options: CallOptions): Promise<ElementReference> {
+    const reference: SessionReference = this.sessions.resolveReference(session, id, viewId, documentId);
+    if (reference instanceof ElementReference)
+      return reference;
+    const objectId: string | null = await this.changes.findSnapshotElementAsync(viewId, reference.index, options);
+    if (objectId === null)
+      throw new StaleReferenceException();
+    try {
+      const node: JsonValue | undefined = (await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId }, options))[Resources.nodeField];
+      const backendNodeId: JsonValue | undefined = JsonShapes.isObject(node) ? node[Resources.backendNodeIdField] : undefined;
+      if (typeof backendNodeId !== "number")
+        throw new MalformedReplyException();
+      return new ElementReference(viewId, documentId, backendNodeId);
+    }
+    finally {
+      await this.changes.releaseAsync(viewId, objectId, options);
+    }
   }
 
   public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ElementFacts> {

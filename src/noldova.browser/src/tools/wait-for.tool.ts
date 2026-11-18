@@ -59,7 +59,7 @@ export class WaitForTool implements IBrowserTool {
           ? await loads.waitAsync(until, activity.signal)
           : await this.whenAsync(page.viewId, options, until, choice === Resources.textField
             ? this.checkText(page.viewId, text, options)
-            : async () => this.isShownAsync(page.viewId, this.kit.sessions.resolveReference(call.session, reference, page.viewId, frame.documentId), options));
+            : await this.checkShownAsync(call.session, reference, page.viewId, frame.documentId, options));
         const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
         return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(timeout), new ShownPage(now.url, await this.kit.readTitleOfAsync(page.viewId, now.documentId, options)));
       }
@@ -67,6 +67,12 @@ export class WaitForTool implements IBrowserTool {
         loads[Symbol.dispose]();
       }
     });
+  }
+
+  // The check that the referenced element is shown, which finds its node once, before the wait.
+  private async checkShownAsync(session: string, reference: string, viewId: string, documentId: string, options: CallOptions): Promise<() => Promise<boolean>> {
+    const element: ElementReference = await this.kit.findReferencedNodeAsync(session, reference, viewId, documentId, options);
+    return async () => this.isShownAsync(viewId, element, options);
   }
 
   private static ignoreUnheard(error: unknown): null {

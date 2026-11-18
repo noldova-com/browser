@@ -9,11 +9,12 @@
 import { describe, expect, it } from "vitest";
 
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
-import { ElementReference } from "../../src/models/element-reference.ts";
+import { UnknownReferenceException } from "../../src/exceptions/unknown-reference.exception.ts";
 import { SessionStates } from "../../src/models/session-states.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 
-const BUTTON: ElementReference = new ElementReference("view", "document-1", 11);
-const OTHER_VIEW: ElementReference = new ElementReference("other", "document-9", 12);
+const BUTTON: SnapshotReference = new SnapshotReference("view", "document-1", 11);
+const OTHER_VIEW: SnapshotReference = new SnapshotReference("other", "document-9", 12);
 
 describe("SessionStates", () => {
   it("issues short references, counted per session", () => {
@@ -31,14 +32,20 @@ describe("SessionStates", () => {
     expect(states.resolveReference("one", id, "view", "document-1")).toBe(BUTTON);
   });
 
-  it("refuses a reference from another session, document, view or none at all as stale", () => {
+  it("refuses a reference of another document or view as stale", () => {
     const states: SessionStates = new SessionStates();
     const id: string = states.issueReference("one", BUTTON);
 
-    expect(() => states.resolveReference("two", id, "view", "document-1")).toThrow(StaleReferenceException);
     expect(() => states.resolveReference("one", id, "view", "document-2")).toThrow(StaleReferenceException);
     expect(() => states.resolveReference("one", id, "other", "document-1")).toThrow(StaleReferenceException);
-    expect(() => states.resolveReference("one", "e9", "view", "document-1")).toThrow(StaleReferenceException);
+  });
+
+  it("refuses a reference no snapshot of the session gave as unknown", () => {
+    const states: SessionStates = new SessionStates();
+    const id: string = states.issueReference("one", BUTTON);
+
+    expect(() => states.resolveReference("two", id, "view", "document-1")).toThrow(UnknownReferenceException);
+    expect(() => states.resolveReference("one", "e9", "view", "document-1")).toThrow(UnknownReferenceException);
   });
 
   it("drops one view's references for every session and keeps the others", () => {
@@ -85,7 +92,7 @@ describe("SessionStates", () => {
 
     states.end("one");
 
-    expect(() => states.resolveReference("one", id, "view", "document-1")).toThrow(StaleReferenceException);
+    expect(() => states.resolveReference("one", id, "view", "document-1")).toThrow(UnknownReferenceException);
     expect(states.readCursor("one", "view")).toBe(0);
     expect(states.issueReference("one", BUTTON)).toBe("e1");
   });

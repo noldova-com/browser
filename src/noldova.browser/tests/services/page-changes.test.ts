@@ -21,6 +21,8 @@ import { PageChangesContextMissingException } from "../../src/exceptions/page-ch
 import { PageChangesNotSwitchedException } from "../../src/exceptions/page-changes-not-switched.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import { MarkedSnapshot } from "../../src/models/marked-snapshot.ts";
+import { PageSnapshotScript } from "../../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
 import { ResolvedElement } from "../../src/models/resolved-element.ts";
 import { ConsoleBuffers } from "../../src/services/console-buffers.ts";
@@ -108,6 +110,81 @@ describe("PageChanges", () => {
     surface.answer("Page.createIsolatedWorld", {});
 
     await expect(changes.hasTextAsync("view-1", "Order placed", options)).rejects.toBeInstanceOf(PageChangesContextMissingException);
+  });
+
+  it("reads the snapshot with the pinned function in the main frame's world, by value, silent and bound by the tree's limit", async () => {
+    const snapshot: JsonObject = { title: "x".repeat(200_000), lines: [], isCut: false, isDeeper: false, isFromView: false };
+    surface.snapshot = () => ScriptedViews.byValue(snapshot);
+
+    const read: MarkedSnapshot = await changes.snapshotAsync("view-1", { interactive: true }, [], options);
+
+    expect(read).toStrictEqual(new MarkedSnapshot(snapshot, []));
+    expect(surface.calls.filter(t => t.method === "Runtime.callFunctionOn").map(t => t.params)).toEqual([{
+      functionDeclaration: PageSnapshotScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: { interactive: true } }],
+      returnByValue: true, silent: true
+    }]);
+  });
+
+  it("gives the function the hosts as objects in its world, leaves out one the page removed, and releases them all after", async () => {
+    surface.answerWith("DOM.resolveNode", t => {
+      if (t["backendNodeId"] === 8)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+      return { object: { type: "object", subtype: "node", objectId: `node-${String(t["backendNodeId"])}` } };
+    });
+
+    // A snapshot's calls name no reference, so a node the page removed fails as a protocol failure.
+    const reading: CallOptions = new CallOptions(stop.signal, Date.now() + 1_000, 100_000, false, new ActionProgress(() => undefined));
+
+    const read: MarkedSnapshot = await changes.snapshotAsync("view-1", { interactive: false }, [7, 8, 9], reading);
+
+    expect(read.hosts).toEqual([7, 9]);
+    expect(surface.snapshotObjects).toEqual([["node-7", "node-9"]]);
+    expect(surface.snapshotRequests).toEqual([{ interactive: false }]);
+    expect(surface.calls.filter(t => t.method === "DOM.resolveNode").map(t => t.params)).toEqual([7, 8, 9].map(t => ({ backendNodeId: t, executionContextId: 1 })));
+    expect(surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params["objectId"])).toEqual(["node-7", "node-9"]);
+  });
+
+  it("releases the objects when the function fails, and fails a resolved node without an object's id as malformed, or with any other failure", async () => {
+    surface.answer("DOM.resolveNode", { object: { type: "object", objectId: "node-7" } });
+    surface.snapshot = () => {
+      throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+    };
+
+    await expect(changes.snapshotAsync("view-1", {}, [7], options)).rejects.toBeInstanceOf(CallFailureException);
+    expect(surface.calls.filter(t => t.method === "Runtime.releaseObject").map(t => t.params["objectId"])).toEqual(["node-7"]);
+
+    surface.answer("DOM.resolveNode", { object: { type: "object" } });
+    await expect(changes.snapshotAsync("view-1", {}, [7], options)).rejects.toBeInstanceOf(MalformedReplyException);
+    surface.answer("DOM.resolveNode", {});
+    await expect(changes.snapshotAsync("view-1", {}, [7], options)).rejects.toBeInstanceOf(MalformedReplyException);
+    surface.fail("DOM.resolveNode", new WebViewFailure(WebViewFailureKind.ViewClosed));
+    await expect(changes.snapshotAsync("view-1", {}, [7], options)).rejects.toBeInstanceOf(CallFailureException);
+    expect(surface.snapshotRequests).toEqual([{}]);
+  });
+
+  it("reads a snapshot answer that isn't an object as malformed", async () => {
+    for (const reply of [ScriptedViews.byValue("yes"), ScriptedViews.byValue(null), { result: 1 }, {}]) {
+      surface.snapshot = () => reply;
+      await expect(changes.snapshotAsync("view-1", {}, [], options)).rejects.toBeInstanceOf(MalformedReplyException);
+    }
+  });
+
+  it("finds the element a snapshot gave the index as an object in the main frame's world, or none once it left the page", async () => {
+    surface.goneElements.add(4);
+
+    const found: readonly (string | null)[] = [await changes.findSnapshotElementAsync("view-1", 3, options), await changes.findSnapshotElementAsync("view-1", 4, options)];
+
+    expect(found).toEqual(["snapshot-element-3", null]);
+    expect(surface.calls.filter(t => t.method === "Runtime.callFunctionOn").map(t => t.params)).toEqual([3, 4].map(t => ({
+      functionDeclaration: PageSnapshotScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: { element: t } }], returnByValue: false, silent: true
+    })));
+  });
+
+  it("reads an element answer without an object's id as malformed", async () => {
+    for (const reply of [{ result: { type: "object", subtype: "node" } }, { result: { type: "object", subtype: "node", objectId: 3 } }, { result: 1 }, {}]) {
+      surface.findElement = () => reply;
+      await expect(changes.findSnapshotElementAsync("view-1", 3, options)).rejects.toBeInstanceOf(MalformedReplyException);
+    }
   });
 
   it("resolves the element in the main frame's world, reads its facts by value with its reply bound by the tree's limit, and describes its form's subtree through shadow roots", async () => {
