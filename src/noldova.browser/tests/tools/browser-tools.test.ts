@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { IBrowserTool } from "../../src/interfaces/i-browser-tool.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
-import { ElementReference } from "../../src/models/element-reference.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { ToolDescriptors } from "../../src/models/tool-descriptors.ts";
 import type { ToolKit } from "../../src/models/tool-kit.ts";
 import { ToolFailures } from "../../src/services/tool-failures.ts";
@@ -73,7 +73,7 @@ describe.each(SCENARIOS)("$name", (scenario: IScenario) => {
   let tool: IBrowserTool;
 
   function callOf(controller: AbortController = new AbortController(), milliseconds: number = 5_000): ToolCall {
-    const reference: string = bench.sessions.issueReference(ToolBench.SESSION, new ElementReference(ToolBench.VIEW, "L1", ShopPage.SEARCH));
+    const reference: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.SEARCH));
     return bench.call(scenario.input(reference), controller, ToolBench.SESSION, milliseconds);
   }
 
@@ -186,7 +186,7 @@ describe.each(ACTIONS)("$name after its point of no return", (scenario: IScenari
     scenario.breakAfterPoint?.(bench);
     const tool: IBrowserTool = scenario.create(bench.kit);
     bench.checkAs(tool.descriptor);
-    const call: ToolCall = bench.call(scenario.input(bench.sessions.issueReference(ToolBench.SESSION, new ElementReference(ToolBench.VIEW, "L1", ShopPage.SEARCH))));
+    const call: ToolCall = bench.call(scenario.input(bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.SEARCH))));
     const progress: ActionProgress = new ActionProgress(() => call.markSending());
 
     const failure: unknown = await tool.callAsync(call, progress).then(() => null, (error: unknown) => error);

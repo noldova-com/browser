@@ -81,4 +81,18 @@ describe("Resources", () => {
       "The address is a link-local or unspecified one, which the browser never opens."
     ]);
   });
+
+  it("names at most 20 unsearched parts, and says how many more there were", () => {
+    const names: readonly string[] = Array.from({ length: 22 }, (_value: unknown, index: number) => `<p id="p${index}">`);
+
+    expect(Resources.formatClosedUnsearched(names)).toBe(
+      `Closed parts inside ${names.slice(0, 20).join("; ")}; and 2 more were not searched, as there was too much to describe in one answer or in the time for it; a closed part there shows only its element's line.`);
+    expect(Resources.formatClosedUnsearched(names.slice(0, 20))).toContain(`${names.slice(0, 20).join("; ")} were not searched`);
+  });
+
+  it("names an element by its tag and an id of at most 64 characters", () => {
+    expect([Resources.formatElementName("div", ""), Resources.formatElementName("div", "a".repeat(64)), Resources.formatElementName("div", "a".repeat(65))])
+      .toEqual(["<div>", `<div id="${"a".repeat(64)}">`, `<div id="${"a".repeat(64)}…">`]);
+    expect(Resources.formatUnsearchedChildren("<div id=\"rows\">", 9_412, 12_000)).toBe("<div id=\"rows\">: 9,412 of 12,000 children");
+  });
 });

@@ -9,11 +9,9 @@
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { AccessibilityNode } from "../models/accessibility-node.ts";
 import { AccessibilityTree } from "../models/accessibility-tree.ts";
-import { CutText } from "../models/cut-text.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
-import { OutputLimits } from "./output-limits.ts";
 
 export class AccessibilitySnapshot {
   public static readNodes(reply: JsonObject): AccessibilityTree {
@@ -26,10 +24,6 @@ export class AccessibilitySnapshot {
     return new AccessibilityTree(AccessibilitySnapshot.readNode(root), rest.map(t => AccessibilitySnapshot.readNode(t)));
   }
 
-  public static readRoot(reply: JsonObject): AccessibilityNode {
-    return AccessibilitySnapshot.readNode(reply[Resources.nodeField] ?? null);
-  }
-
   public static readChildren(reply: JsonObject): readonly AccessibilityNode[] {
     const nodes: JsonValue | undefined = reply[Resources.nodesField];
     if (!JsonShapes.isArray(nodes))
@@ -37,83 +31,12 @@ export class AccessibilitySnapshot {
     return nodes.map(t => AccessibilitySnapshot.readNode(t));
   }
 
-  // The fewest bytes the node's line takes in the snapshot, whatever its depth, value or reference; none for a node the snapshot doesn't show.
-  public static leastLineBytes(node: AccessibilityNode): number {
-    if (!AccessibilitySnapshot.isShown(node))
-      return 0;
-    const line: string = Resources.formatSnapshotNode(0, node.role);
-    return OutputLimits.byteLength(node.name === "" ? line : `${line}${Resources.snapshotPartSeparator}${JSON.stringify(node.name)}`) + 1;
-  }
-
   public static readTitle(tree: AccessibilityTree): string {
     return tree.root.name;
   }
 
-  public static typedFields(tree: AccessibilityTree): readonly number[] {
-    const fields: number[] = [];
-    for (const node of tree.nodes)
-      if (node.backendNodeId !== null && node.value !== "" && Resources.typedRoles.has(node.role))
-        fields.push(node.backendNodeId);
-    return fields;
-  }
-
-  public static write(tree: AccessibilityTree, secrets: ReadonlySet<number>, issue: (backendNodeId: number) => string, maximumBytes: number): CutText {
-    const byId: ReadonlyMap<string, AccessibilityNode> = new Map(tree.nodes.map(t => [t.id, t]));
-    const visited: Set<string> = new Set();
-    const lines: string[] = [];
-    let bytes: number = 0;
-    const pending: [AccessibilityNode, number][] = [[tree.root, 0]];
-    for (let visit: [AccessibilityNode, number] | undefined = pending.pop(); visit !== undefined; visit = pending.pop()) {
-      const [node, depth]: [AccessibilityNode, number] = visit;
-      if (visited.has(node.id))
-        continue;
-      visited.add(node.id);
-
-      const isShown: boolean = AccessibilitySnapshot.isShown(node);
-      const isSecret: boolean = AccessibilitySnapshot.isMasked(node, secrets);
-      if (isShown) {
-        const line: string = AccessibilitySnapshot.formatLine(node, depth, isSecret, issue);
-        const lineBytes: number = OutputLimits.byteLength(line) + 1;
-        if (bytes + lineBytes > maximumBytes)
-          return new CutText(lines.join(Resources.lineSeparator), true);
-        lines.push(line);
-        bytes += lineBytes;
-      }
-      if (isSecret)
-        continue;
-      const childDepth: number = isShown ? depth + 1 : depth;
-      for (const childId of [...node.childIds].reverse()) {
-        const child: AccessibilityNode | undefined = byId.get(childId);
-        if (child !== undefined)
-          pending.push([child, childDepth]);
-      }
-    }
-    return new CutText(lines.join(Resources.lineSeparator), false);
-  }
-
   public static findFocused(nodes: readonly AccessibilityNode[]): AccessibilityNode | null {
     return nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
-  }
-
-  private static isShown(node: AccessibilityNode): boolean {
-    return !node.isIgnored && !(Resources.liftedRoles.has(node.role) && node.name === "");
-  }
-
-  private static isMasked(node: AccessibilityNode, secrets: ReadonlySet<number>): boolean {
-    if (node.value === "" || !Resources.typedRoles.has(node.role))
-      return false;
-    return node.backendNodeId === null || secrets.has(node.backendNodeId);
-  }
-
-  private static formatLine(node: AccessibilityNode, depth: number, isSecret: boolean, issue: (backendNodeId: number) => string): string {
-    const parts: string[] = [Resources.formatSnapshotNode(depth, node.role)];
-    if (node.name !== "")
-      parts.push(JSON.stringify(node.name));
-    if (node.value !== "")
-      parts.push(Resources.formatSnapshotValue(isSecret ? Resources.maskedValue : node.value));
-    if (node.backendNodeId !== null && Resources.actionableRoles.has(node.role))
-      parts.push(Resources.formatSnapshotReference(issue(node.backendNodeId)));
-    return parts.join(Resources.snapshotPartSeparator);
   }
 
   private static readNode(value: JsonValue): AccessibilityNode {

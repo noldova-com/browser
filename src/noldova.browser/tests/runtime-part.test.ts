@@ -16,9 +16,9 @@ import { PageInstanceInvalidException } from "../src/exceptions/page-instance-in
 import { StaleReferenceException } from "../src/exceptions/stale-reference.exception.ts";
 import type { WindowRequestMalformedException } from "../src/exceptions/window-request-malformed.exception.ts";
 import { WindowRequestUnreadException } from "../src/exceptions/window-request-unread.exception.ts";
-import { ElementReference } from "../src/models/element-reference.ts";
 import type { SessionStates } from "../src/models/session-states.ts";
 import { ShownPage } from "../src/models/shown-page.ts";
+import { SnapshotReference } from "../src/models/snapshot-reference.ts";
 import { ToolDescriptors } from "../src/models/tool-descriptors.ts";
 import type { ToolKit } from "../src/models/tool-kit.ts";
 import { RuntimePart } from "../src/runtime-part.ts";
@@ -34,7 +34,7 @@ import { BrowserContext, linesAsync, SqliteModuleDatabase, writtenTo } from "./f
 import { ProductFile } from "./fixtures/product-file.fixture.ts";
 import { ScriptedViews } from "./fixtures/scripted-views.fixture.ts";
 
-const REFERENCE: ElementReference = new ElementReference("view-1", "document", 7);
+const REFERENCE: SnapshotReference = new SnapshotReference("view-1", "document", 7);
 const PAGE: ShownPage = new ShownPage("https://shop.test/", "Shop");
 const FRAME: JsonValue = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://shop.test/", securityOrigin: "https://shop.test" } } };
 const TREE: JsonValue = { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Shop" } }] };
@@ -43,6 +43,7 @@ function pageViews(...instances: readonly string[]): ScriptedViews {
   const surface: ScriptedViews = new ScriptedViews(instances.map((_instance, index) => `view-${index + 1}`));
   instances.forEach((instance, index) => surface.instances.set(`view-${index + 1}`, instance));
   surface.acknowledge(...ScriptedViews.emptyReplies);
+  surface.serveWorlds();
   surface.answer("Page.getFrameTree", FRAME);
   surface.answer("Accessibility.getFullAXTree", TREE);
   return surface;
@@ -145,10 +146,10 @@ describe("RuntimePart", () => {
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const surface: ScriptedViews = pageViews(instance);
     const reading: PromiseWithResolvers<void> = Promise.withResolvers<void>();
-    surface.answerWith("Accessibility.getFullAXTree", () => {
+    surface.snapshot = () => {
       reading.resolve();
       return new Promise<JsonValue>(() => undefined);
-    });
+    };
     const context: BrowserContext = new BrowserContext(surface);
     const bindings: JsonObject = { page: instance, profileKey: "workspace-1", agentName: "Scout" };
     const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
@@ -163,7 +164,7 @@ describe("RuntimePart", () => {
     expect(await waiting).toMatchObject({ isFailure: true, code: "Stopped" });
     expect(await requestAsync(context, BrowserMethods.readActivities, null)).toEqual([]);
     expect(await taken.callAsync("browser_snapshot", {})).toMatchObject({ isFailure: true, code: "Unavailable", moduleCode: "browser.takenOver" });
-    surface.answer("Accessibility.getFullAXTree", TREE);
+    surface.snapshot = () => ScriptedViews.snapshotOf("Shop", []);
     expect(await context.tools.openSession("conversation-2", bindings).callAsync("browser_snapshot", {})).toMatchObject({ isFailure: false });
     expect(kitOf(create).stops.isTakenOver(instance, taken.id)).toBe(true);
     taken.end();

@@ -20,7 +20,9 @@ import { ProtocolFailedException } from "../exceptions/protocol-failed.exception
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
+import { MarkedSnapshot } from "../models/marked-snapshot.ts";
 import { PageFrames } from "../models/page-frames.ts";
+import { PageSnapshotScript } from "../models/page-snapshot-script.ts";
 import { PageTextScript } from "../models/page-text-script.ts";
 import { ResolvedElement } from "../models/resolved-element.ts";
 import { Resources } from "../resources.ts";
@@ -81,17 +83,52 @@ export class PageChanges {
   // Whether the page's main frame shows the text, as the one pinned function reads it in the page changes' isolated world of that frame,
   // which the engine keeps by its name, so the page's own world and script never see the call.
   public async hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
-    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
-    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
-    const uniqueContextId: string = await this.findWorldAsync(viewId, mainId, options);
-    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
-      functionDeclaration: PageTextScript.functionDeclaration, uniqueContextId, arguments: [{ value: text }], returnByValue: true, silent: true
-    }, options);
-    const result: JsonValue | undefined = reply[Resources.resultField];
+    const result: JsonValue | undefined = await this.runInMainWorldAsync(viewId, PageTextScript.functionDeclaration, text, true, options);
     const has: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
     if (typeof has !== "boolean")
       throw new MalformedReplyException();
     return has;
+  }
+
+  // The page's lines as the pinned snapshot function walks them in the same world, by value, within the tree reply's bound. The hosts of
+  // closed shadow roots go to it as objects in that world and are released after it; a host the page removed since is left out, so the
+  // snapshot comes with the hosts it was given, in their order.
+  public async snapshotAsync(viewId: string, request: JsonObject, hosts: readonly number[], options: CallOptions): Promise<MarkedSnapshot> {
+    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
+    const [executionContextId, uniqueContextId]: [number, string] = await this.findWorldIdsAsync(viewId, mainId, options);
+    const objects: string[] = [];
+    try {
+      const given: number[] = [];
+      for (const host of hosts)
+        if (await this.markAsync(viewId, host, executionContextId, objects, options))
+          given.push(host);
+      const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
+        functionDeclaration: PageSnapshotScript.functionDeclaration, uniqueContextId,
+        arguments: [{ value: request }, ...objects.map(t => ({ objectId: t }))], returnByValue: true, silent: true
+      }, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+      const result: JsonValue | undefined = reply[Resources.resultField];
+      const snapshot: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
+      if (!JsonShapes.isObject(snapshot))
+        throw new MalformedReplyException();
+      return new MarkedSnapshot(snapshot, given);
+    }
+    finally {
+      for (const objectId of objects)
+        await this.releaseAsync(viewId, objectId, options);
+    }
+  }
+
+  // The element the last snapshot gave the index, as an object in the same world, or none once it left the page; the caller releases it.
+  public async findSnapshotElementAsync(viewId: string, index: number, options: CallOptions): Promise<string | null> {
+    const result: JsonValue | undefined = await this.runInMainWorldAsync(viewId, PageSnapshotScript.functionDeclaration, { [Resources.elementField]: index },
+      false, options);
+    if (JsonShapes.isObject(result) && result[Resources.subtypeField] === Resources.nullSubtype)
+      return null;
+    const objectId: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.objectIdField] : undefined;
+    if (typeof objectId !== "string")
+      throw new MalformedReplyException();
+    return objectId;
   }
 
   // The element as an object in the page changes' isolated world of the main frame, where the pinned function reads it, so the page's own
@@ -154,6 +191,36 @@ export class PageChanges {
     }
   }
 
+  private async runInMainWorldAsync(viewId: string, functionDeclaration: string, value: JsonValue, returnByValue: boolean,
+    options: CallOptions): Promise<JsonValue | undefined> {
+    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
+    const uniqueContextId: string = await this.findWorldAsync(viewId, mainId, options);
+    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
+      functionDeclaration, uniqueContextId, arguments: [{ value }], returnByValue, silent: true
+    }, options);
+    return reply[Resources.resultField];
+  }
+
+  // The node as an object in the world, kept to release; none for a node the page removed since it was found.
+  private async markAsync(viewId: string, backendNodeId: number, executionContextId: number, objects: string[], options: CallOptions): Promise<boolean> {
+    let resolved: JsonObject;
+    try {
+      resolved = await this.calls.sendAsync(viewId, Resources.resolveNodeMethod, { backendNodeId, executionContextId }, options);
+    }
+    catch (error) {
+      if (!(error instanceof ProtocolFailedException))
+        throw error;
+      return false;
+    }
+    const element: JsonValue | undefined = resolved[Resources.objectField];
+    const objectId: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.objectIdField] : undefined;
+    if (typeof objectId !== "string")
+      throw new MalformedReplyException();
+    objects.push(objectId);
+    return true;
+  }
+
   private async startAsync(viewId: string, frameId: string, options: CallOptions, contexts: string[]): Promise<void> {
     const uniqueId: string = await this.findWorldAsync(viewId, frameId, options);
     contexts.push(uniqueId);
@@ -162,15 +229,20 @@ export class PageChanges {
   }
 
   private async findWorldAsync(viewId: string, frameId: string, options: CallOptions): Promise<string> {
+    return (await this.findWorldIdsAsync(viewId, frameId, options))[1];
+  }
+
+  // The world's context by its number in this process, which DOM.resolveNode takes, and by its unique id, which a call takes.
+  private async findWorldIdsAsync(viewId: string, frameId: string, options: CallOptions): Promise<[number, string]> {
     const world: JsonObject = await this.calls.sendAsync(viewId, Resources.createIsolatedWorldMethod, { frameId, worldName: PageChangeScript.worldName, grantUniveralAccess: false },
       options);
     const id: JsonValue | undefined = world[Resources.executionContextIdField];
     const uniqueId: string | null = typeof id === "number"
       ? await this.domains.findContextAsync(viewId, id, frameId, PageChangeScript.worldName, options.deadline - Date.now(), options.signal)
       : null;
-    if (uniqueId === null)
+    if (uniqueId === null || typeof id !== "number")
       throw options.signal.aborted ? ToolFailures.fromAbort(options.signal.reason) : new PageChangesContextMissingException(viewId, frameId);
-    return uniqueId;
+    return [id, uniqueId];
   }
 
   private async switchAsync(viewId: string, uniqueContextId: string, isOn: boolean, options: CallOptions): Promise<JsonValue | undefined> {

@@ -38,7 +38,11 @@ export class ToolDescriptors {
     name: BrowserToolNames.snapshot,
     title: Resources.snapshotTitle,
     description: Resources.snapshotDescription,
-    inputSchema: ToolSchemas.objectSchema({}, []),
+    inputSchema: ToolSchemas.objectSchema({
+      interactive: { type: Resources.booleanSchemaType },
+      depth: { type: Resources.integerSchemaType, minimum: 1, maximum: Resources.mostSnapshotDepth },
+      part: ToolSchemas.reference
+    }, []),
     outputSchema: ToolSchemas.output,
     hints: ToolSchemas.reading,
     risk: { default: ToolRisk.Low, maximum: ToolRisk.Low },

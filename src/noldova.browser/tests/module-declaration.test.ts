@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol";
 import { describe, expect, it } from "vitest";
 
+import { PageSnapshotScript } from "../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../src/models/page-text-script.ts";
 
 async function readDeclarationAsync(file: string): Promise<unknown> {
@@ -82,7 +83,7 @@ describe("webViews.json", () => {
   it("declares the debugging calls and the events the built tools send and take, and takes its views' new windows", async () => {
     const methods: readonly string[] = ["Page.enable", "Page.getFrameTree", "Page.getNavigationHistory", "Page.getLayoutMetrics", "Page.createIsolatedWorld",
       "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Runtime.releaseObject", "Log.enable",
-      "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Accessibility.enable", "Accessibility.disable", "Accessibility.getRootAXNode",
+      "Accessibility.getFullAXTree", "Accessibility.getPartialAXTree", "Accessibility.enable", "Accessibility.disable",
       "Accessibility.getChildAXNodes", "DOM.getDocument", "DOM.querySelector", "DOM.resolveNode", "DOM.describeNode", "DOM.scrollIntoViewIfNeeded", "DOM.getContentQuads",
       "DOM.getNodeForLocation", "DOM.focus", "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride", "Input.dispatchMouseEvent", "Input.dispatchKeyEvent",
       "Input.insertText"];
@@ -99,8 +100,7 @@ describe("webViews.json", () => {
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ methods: expect.arrayContaining([
       { name: "DOM.getDocument", parameters: { depth: { required: true, values: [0] }, pierce: { required: true, values: [true] } } },
       { name: "DOM.querySelector", parameters: { nodeId: { required: true, minimum: 1 }, selector: { required: true, values: [":focus"] } } },
-      { name: "Accessibility.getPartialAXTree", parameters: { backendNodeId: { minimum: 1 }, nodeId: { minimum: 1 }, fetchRelatives: { required: true, values: [false, true] } } },
-      { name: "Accessibility.getRootAXNode" },
+      { name: "Accessibility.getPartialAXTree", parameters: { backendNodeId: { minimum: 1 }, nodeId: { minimum: 1 }, fetchRelatives: { required: true, values: [false] } } },
       { name: "Accessibility.getChildAXNodes", parameters: { id: { required: true, maxLength: 64 } } },
       { name: "DOM.resolveNode", parameters: { backendNodeId: { required: true, minimum: 1 }, executionContextId: { required: true, minimum: 1 } } },
       { name: "DOM.describeNode", parameters: { backendNodeId: { minimum: 1 }, objectId: { maxLength: 128 }, depth: { values: [-1, 1] }, pierce: { values: [true] } } },
@@ -128,7 +128,8 @@ describe("webViews.json", () => {
       { name: "Runtime.addBinding", parameters: { name: { required: true, values: ["noldovaBrowserChanged"] },
         executionContextName: { required: true, values: ["noldova-browser-changes"] } } },
       { name: "Runtime.callFunctionOn", parameters: {
-        functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration] },
+        functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration,
+          PageSnapshotScript.functionDeclaration] },
         uniqueContextId: { maxLength: 64 }, objectId: { maxLength: 128 },
         arguments: {}, returnByValue: { required: true, values: [true, false] }, silent: { required: true, values: [true] }
       } },

@@ -7,22 +7,27 @@
  */
 
 import { Resources } from "../resources.ts";
-import type { ElementReference } from "./element-reference.ts";
+import type { SessionReference } from "../types/session-reference.ts";
 
 export class SessionState {
-  private readonly references: Map<string, ElementReference> = new Map();
+  private readonly references: Map<string, SessionReference> = new Map();
   private readonly cursors: Map<string, number> = new Map();
   private issued: number = 0;
 
-  public issue(reference: ElementReference): string {
+  public issue(reference: SessionReference): string {
     this.issued += 1;
     const id: string = `${Resources.referencePrefix}${this.issued}`;
     this.references.set(id, reference);
     return id;
   }
 
-  public referenceOf(id: string): ElementReference | undefined {
+  public referenceOf(id: string): SessionReference | undefined {
     return this.references.get(id);
+  }
+
+  public wasIssued(id: string): boolean {
+    const number: number = Number(id.slice(Resources.referencePrefix.length));
+    return id.startsWith(Resources.referencePrefix) && `${Resources.referencePrefix}${number}` === id && number >= 1 && number <= this.issued;
   }
 
   public dropReferences(viewId: string): void {

@@ -55,7 +55,7 @@ export class ScreenshotTool implements IBrowserTool {
     return this.kit.actAsync(call, page, PageAction.Reading, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, reference !== null);
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      const element: number | null = reference === null ? null : this.kit.sessions.resolveReference(call.session, reference, page.viewId, frame.documentId).backendNodeId;
+      const element: number | null = reference === null ? null : (await this.kit.findReferencedNodeAsync(call.session, reference, page.viewId, frame.documentId, options)).backendNodeId;
       const { area, data, mimeType, isLaidOut }: ScreenshotCapture = await this.hidden.captureAsync(page.viewId, options, async (metrics: LayoutMetrics, laidOut: boolean) => {
         const box: PageBox | null = element === null ? null : await this.kit.readBoxAsync(page.viewId, element, options);
         if (element !== null && box === null)
