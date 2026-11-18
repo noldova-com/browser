@@ -364,7 +364,9 @@ The runtime part registers eight tools by default, which `module.json` declares 
   A point without an element, an element without a node, or a node whose ancestors don't reach the root, such as one in a frame, starts the walk at the root.
   A node whose children alone pass the 4 MiB bound, such as a list of many thousand rows, has its element's children listed instead with `DOM.describeNode`, one level, and each child's node read on its own with `Accessibility.getPartialAXTree` without relatives, in order, as the walk comes near it, so the walk reads only a few more of them than the snapshot shows.
   A child without a node of its own, such as text that is only space, one the page removed since, and one the node doesn't name are left out.
-  A node whose element's children are too many even to list in one reply, one without an element, or one whose element doesn't list every child the node names, such as rows in a shadow root or children it takes by `aria-owns`, fails as `TooLarge` with a message that names its role and its children's count.
+  When a child the node names wasn't read by the time a later child or the list's end comes, the node is read again the same way: a child it no longer names, one the page removed during the walk, is left out, so a cut snapshot has no gap.
+  When it still names such a child and its children changed meanwhile, the snapshot fails as `Stale`, so a new snapshot may read them.
+  A node whose element's children are too many even to list in one reply, one without an element, or one that still names a child its element doesn't list, such as rows in a shadow root or children it takes by `aria-owns`, fails as `TooLarge` with a message that names its role and its children's count.
 - A reference belongs to one session and one document, and stays valid until that pane's next snapshot or navigation.
   A stale reference, or one from another session, fails as `Refused` with the module code `browser.staleReference` and a message that says to take a new snapshot.
 - A click by reference checks that the element is the topmost one at its point before it presses, so a cover over it is reported rather than clicked.
@@ -474,7 +476,7 @@ A tool that fails rejects with Noldova Desktop's `ToolFailureException`, whose `
 | `Withdrawn` | The call was aborted while its permission request waited, for any reason: cancelled, its session ended, stopped, timed out or switched off |
 | `Cancelled` | The call was cancelled, or its session ended, before its point of no return and outside the permission wait |
 | `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop or Take over |
-| `Stale` | The page changed after the grant, so nothing ran; or a snapshot's page went to another document during each of its two reads; take a new snapshot |
+| `Stale` | The page changed after the grant, so nothing ran; or a snapshot's page went to another document during each of its two reads, or changed the children of a node it was reading a part at a time; take a new snapshot |
 | `TimedOut` | The call's time limit passed before its point of no return |
 | `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page; the message keeps the reason it ended with |
 | `TooLarge` | The page's answer or the result is over its limit, even cut |

@@ -43,9 +43,9 @@ export class TreeWalk {
     return ordered;
   }
 
-  // Whether the walk has read every one of these nodes.
-  public hasRead(ids: readonly string[]): boolean {
-    return ids.every(t => this.seen.has(t));
+  // The ones of these nodes the walk hasn't read.
+  public unread(ids: readonly string[]): readonly string[] {
+    return ids.filter(t => !this.seen.has(t));
   }
 
   // Takes one child read on its own, and says whether it was taken: only when its parent names it and it wasn't read already.

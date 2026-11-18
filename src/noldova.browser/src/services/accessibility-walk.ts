@@ -9,6 +9,7 @@
 import type { IModuleLog } from "@noldova/desktop.runtime";
 
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
+import { ChildrenChangedException } from "../exceptions/children-changed.exception.ts";
 import { ChildrenTooManyException } from "../exceptions/children-too-many.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageCrashedException } from "../exceptions/page-crashed.exception.ts";
@@ -86,11 +87,12 @@ export class AccessibilityWalk {
     maximumBytes: number): Promise<boolean> {
     for (let next: AccessibilityNode | UnreadChild | ListedEnd | undefined = walk.pending.pop(); next !== undefined; next = walk.pending.pop()) {
       if (next instanceof ListedEnd) {
-        AccessibilityWalk.checkListed(walk, next);
+        await this.checkNamedAsync(viewId, walk, next, next.childIds.length, options);
         continue;
       }
       this.readAhead(viewId, next, walk, reads, options);
-      const node: AccessibilityNode | null = next instanceof UnreadChild ? AccessibilityWalk.adopt(walk, next, await this.takeAsync(viewId, next, reads, options)) : next;
+      const node: AccessibilityNode | null = next instanceof UnreadChild ? await this.adoptAsync(viewId, walk, next, await this.takeAsync(viewId, next, reads, options), options)
+        : next;
       if (node === null)
         continue;
       if (!walk.count(node, maximumBytes))
@@ -98,8 +100,10 @@ export class AccessibilityWalk {
       if (node.childIds.length === 0)
         continue;
       const children: readonly AccessibilityNode[] | null = await this.takeAsync(viewId, node, reads, options);
-      if (children === null)
-        walk.pending.push(new ListedEnd(node, node.childIds), ...[...await this.listChildrenAsync(viewId, node, options)].reverse());
+      if (children === null) {
+        const end: ListedEnd = AccessibilityWalk.endOf(node, node.childIds);
+        walk.pending.push(end, ...[...await this.listChildrenAsync(viewId, end, options)].reverse());
+      }
       else
         walk.pending.push(...[...walk.take(node.childIds, children)].reverse());
     }
@@ -119,7 +123,7 @@ export class AccessibilityWalk {
   }
 
   private startRead(viewId: string, item: AccessibilityNode | UnreadChild, reads: Map<AccessibilityNode | UnreadChild, TreeRead>, options: CallOptions): TreeRead {
-    const read: TreeRead = Promise.allSettled([item instanceof UnreadChild ? this.readUnreadAsync(viewId, item, options) : this.readChildrenAsync(viewId, item, options)]);
+    const read: TreeRead = Promise.allSettled([item instanceof UnreadChild ? this.readElementAsync(viewId, item.backendNodeId, options) : this.readChildrenAsync(viewId, item, options)]);
     reads.set(item, read);
     return read;
   }
@@ -146,7 +150,8 @@ export class AccessibilityWalk {
       const children: readonly AccessibilityNode[] | null = await this.readChildrenAsync(viewId, parent, options);
       if (children === null) {
         walk.adopt(parent, child);
-        walk.pending.push(new ListedEnd(parent, later), ...[...AccessibilityWalk.after(child, await this.listChildrenAsync(viewId, parent, options))].reverse());
+        const end: ListedEnd = AccessibilityWalk.endOf(parent, later);
+        walk.pending.push(end, ...[...AccessibilityWalk.after(child, await this.listChildrenAsync(viewId, end, options))].reverse());
       }
       else
         walk.pending.push(...walk.take(later, children).filter(t => t.id !== child.id).reverse());
@@ -212,20 +217,26 @@ export class AccessibilityWalk {
     }
   }
 
-  // The children of a node with too many to read at once, as its element's children, each read on its own as the walk comes near it, so
-  // the walk reads only a few more of them than the snapshot shows. An element whose children alone are too many for one answer, or a node
-  // without an element, fails as too large, naming the node by its role.
-  private async listChildrenAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<readonly UnreadChild[]> {
+  // Where the children of a node with too many to read at once end, from the one named first here; a node without an element fails as too
+  // large, naming the node by its role.
+  private static endOf(node: AccessibilityNode, childIds: readonly string[]): ListedEnd {
     if (node.backendNodeId === null)
       throw new ChildrenTooManyException(node.role, node.childIds.length);
+    return new ListedEnd(node, node.backendNodeId, childIds);
+  }
+
+  // The children of a node with too many to read at once, as its element's children, each read on its own as the walk comes near it, so
+  // the walk reads only a few more of them than the snapshot shows. An element whose children alone are too many for one answer fails as
+  // too large, naming the node by its role.
+  private async listChildrenAsync(viewId: string, end: ListedEnd, options: CallOptions): Promise<readonly UnreadChild[]> {
     let reply: JsonObject;
     try {
-      reply = await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId: node.backendNodeId, depth: 1 }, options);
+      reply = await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId: end.backendNodeId, depth: 1 }, options);
     }
     catch (error) {
       if (!(error instanceof ReplyTooLargeException))
         throw error;
-      throw new ChildrenTooManyException(node.role, node.childIds.length, error);
+      throw new ChildrenTooManyException(end.parent.role, end.parent.childIds.length, error);
     }
     const element: JsonValue | undefined = reply[Resources.nodeField];
     const children: JsonValue | undefined = JsonShapes.isObject(element) ? element[Resources.childrenField] ?? [] : undefined;
@@ -235,15 +246,15 @@ export class AccessibilityWalk {
       const backendNodeId: JsonValue | undefined = JsonShapes.isObject(child) ? child[Resources.backendNodeIdField] : undefined;
       if (typeof backendNodeId !== "number")
         throw new MalformedReplyException();
-      return new UnreadChild(backendNodeId, node);
+      return new UnreadChild(backendNodeId, end);
     });
   }
 
-  // The nodes read for a child known only by its element; none for one the page removed since its parent was listed.
-  private async readUnreadAsync(viewId: string, child: UnreadChild, options: CallOptions): Promise<readonly AccessibilityNode[] | null> {
+  // The nodes read for an element on its own, such as a child known only by its element; none for one the page removed.
+  private async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<readonly AccessibilityNode[] | null> {
     try {
       return AccessibilitySnapshot.readChildren(await this.calls.sendAsync(viewId, Resources.getPartialAXTreeMethod,
-        { backendNodeId: child.backendNodeId, fetchRelatives: false }, options));
+        { backendNodeId, fetchRelatives: false }, options));
     }
     catch (error) {
       if (!(error instanceof ProtocolFailedException))
@@ -253,16 +264,33 @@ export class AccessibilityWalk {
   }
 
   // The child's node, when its parent names it and the walk hasn't read it; none for an element without a node of its own, such as text
-  // that is only space, or one the page removed.
-  private static adopt(walk: TreeWalk, child: UnreadChild, nodes: readonly AccessibilityNode[] | null): AccessibilityNode | null {
+  // that is only space, or one the page removed. The children named before it must be read or gone first, so a cut snapshot has no hole.
+  private async adoptAsync(viewId: string, walk: TreeWalk, child: UnreadChild, nodes: readonly AccessibilityNode[] | null, options: CallOptions)
+    : Promise<AccessibilityNode | null> {
     const node: AccessibilityNode | undefined = nodes?.find(t => t.backendNodeId === child.backendNodeId);
-    return node !== undefined && walk.adopt(child.parent, node) ? node : null;
+    if (node === undefined)
+      return null;
+    const index: number = child.end.childIds.indexOf(node.id);
+    if (index > 0)
+      await this.checkNamedAsync(viewId, walk, child.end, index, options);
+    return walk.adopt(child.end.parent, node) ? node : null;
   }
 
-  // A node whose listed children didn't hold every child it names fails as too large, as the walk can't read the others a part at a time.
-  private static checkListed(walk: TreeWalk, end: ListedEnd): void {
-    if (!walk.hasRead(end.childIds))
-      throw new ChildrenTooManyException(end.parent.role, end.parent.childIds.length);
+  // The named children up to this one that the walk hasn't read are ones the page removed since the node was read, or ones its element
+  // doesn't list, such as rows in a shadow root or children it takes by aria-owns. The node is read again: the ones it no longer names are
+  // left out. Any it still names fail the snapshot: as changed when the node's children changed meanwhile, so a new snapshot may read them,
+  // and otherwise as too large, as the walk can't read them a part at a time.
+  private async checkNamedAsync(viewId: string, walk: TreeWalk, end: ListedEnd, upTo: number, options: CallOptions): Promise<void> {
+    const unread: readonly string[] = walk.unread(end.childIds.slice(end.checked, upTo));
+    end.checked = Math.max(end.checked, upTo);
+    if (unread.length === 0)
+      return;
+    const named: readonly string[] = (await this.readElementAsync(viewId, end.backendNodeId, options))?.find(t => t.id === end.parent.id)?.childIds ?? [];
+    if (!unread.some(t => named.includes(t)))
+      return;
+    if (named.join(" ") !== end.parent.childIds.join(" "))
+      throw new ChildrenChangedException();
+    throw new ChildrenTooManyException(end.parent.role, end.parent.childIds.length);
   }
 
   // The listed children after the walk's own child, by its element, or all of them when its element isn't one of them.

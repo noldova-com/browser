@@ -52,6 +52,7 @@ export class Resources {
   public static readonly notSubmittedCode: string = "browser.notSubmitted";
   public static readonly changedAfterGrant: string = "The page changed after the action was allowed, so nothing ran; take a new snapshot.";
   public static readonly changedDuringRead: string = "The page went to another document while it was read, twice; take a new snapshot.";
+  public static readonly childrenChanged: string = "The page changed the children of a node while the snapshot read them; take a new snapshot.";
   public static readonly denied: string = "The person didn't allow it.";
   public static readonly expired: string = "The request expired before the person answered.";
   public static readonly withdrawn: string = "The request was withdrawn.";

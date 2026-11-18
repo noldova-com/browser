@@ -6,16 +6,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { AccessibilityNode } from "./accessibility-node.ts";
+import type { ListedEnd } from "./listed-end.ts";
 
 // A child the walk knows only by its element, from a parent whose children are too many for one answer; its node is read when the walk
 // comes to it.
 export class UnreadChild {
   public readonly backendNodeId: number;
-  public readonly parent: AccessibilityNode;
+  public readonly end: ListedEnd;
 
-  public constructor(backendNodeId: number, parent: AccessibilityNode) {
+  public constructor(backendNodeId: number, end: ListedEnd) {
     this.backendNodeId = backendNodeId;
-    this.parent = parent;
+    this.end = end;
   }
 }

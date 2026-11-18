@@ -12,6 +12,7 @@ import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { CallDeadlineReachedException } from "../../src/exceptions/call-deadline-reached.exception.ts";
+import { ChildrenChangedException } from "../../src/exceptions/children-changed.exception.ts";
 import { ChildrenTooManyException } from "../../src/exceptions/children-too-many.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { ViewClosedException } from "../../src/exceptions/view-closed.exception.ts";
@@ -227,6 +228,7 @@ describe("AccessibilityWalk", () => {
     const LIST: JsonObject = { ...node("3", "list", "", ["4", "5", "6"]), backendDOMNodeId: 30 };
     const LAST: JsonObject = node("9", "link", "D");
     const ITEMS: Readonly<Record<number, JsonObject>> = {
+      30: LIST,
       40: { ...node("4", "listitem", "One"), backendDOMNodeId: 40 },
       50: { ...node("5", "listitem", "Two"), backendDOMNodeId: 50 },
       60: { ...node("6", "listitem", "Three"), backendDOMNodeId: 60 },
@@ -344,12 +346,57 @@ describe("AccessibilityWalk", () => {
       };
       for (const page of [shadowHost, owner, scrolled]) {
         page();
+        const before: number = partials().length;
 
         const failure: unknown = await readAsync().catch((error: unknown) => error);
 
         expect(failure).toBeInstanceOf(ChildrenTooManyException);
         expect(failure).toMatchObject({ message: "A list element on the page has 3 children, more than one answer can carry, so the snapshot can't read past it." });
+        expect(partials().slice(before).filter(t => t["backendNodeId"] === 30)).toEqual([{ backendNodeId: 30, fetchRelatives: false }]);
       }
+    });
+
+    it("leaves out a child the page removed during the walk, at the list's end or ahead of a later child, once the node read again no longer names it", async () => {
+      for (const [elements, ids] of [[[40, 50], ["4", "5"]], [[40, 60], ["4", "6"]]] as const) {
+        listed(elements);
+        surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [t["backendNodeId"] === 30 ? { ...LIST, childIds: [...ids] } : ITEMS[Number(t["backendNodeId"])] ?? {}] }));
+        const before: number = partials().length;
+
+        const tree: AccessibilityTree = await readAsync();
+
+        expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "9", ...ids], true]);
+        expect(partials().slice(before).filter(t => t["backendNodeId"] === 30)).toEqual([{ backendNodeId: 30, fetchRelatives: false }]);
+      }
+    });
+
+    it("leaves out the missing children when the page removed the node itself, or its element no longer has it", async () => {
+      const rereads: readonly (() => JsonObject)[] = [() => {
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+      }, () => ({ nodes: [] })];
+      for (const reread of rereads) {
+        listed([40, 60]);
+        surface.answerWith("Accessibility.getPartialAXTree", t => t["backendNodeId"] === 30 ? reread() : { nodes: [ITEMS[Number(t["backendNodeId"])] ?? {}] });
+
+        const tree: AccessibilityTree = await readAsync();
+
+        expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "9", "4", "6"], true]);
+      }
+    });
+
+    it("fails as changed, not too large, when the node read again still names a missing child but its children changed meanwhile", async () => {
+      listed([40, 60]);
+      surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [t["backendNodeId"] === 30 ? { ...LIST, childIds: ["4", "5", "6", "7"] } : ITEMS[Number(t["backendNodeId"])] ?? {}] }));
+
+      await expect(readAsync()).rejects.toBeInstanceOf(ChildrenChangedException);
+    });
+
+    it("fails as too large ahead of a later child, rather than cut with a gap, when the node read again still names the child missing before it", async () => {
+      listed([40, 60]);
+
+      const failure: unknown = await readAsync(ROOT_LINE_BYTES + LINK_LINE_BYTES + 30).catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ChildrenTooManyException);
+      expect(partials().map(t => t["backendNodeId"])).toEqual([40, 60, 30]);
     });
   });
 

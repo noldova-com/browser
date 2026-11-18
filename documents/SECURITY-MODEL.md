@@ -415,7 +415,7 @@ Every failure ends the tool call with an error result whose code is one of the s
 | `Expired` | The request expired before the person answered. |
 | `Withdrawn` | The call was aborted, for any reason, while its request waited. |
 | `Cancelled` | The call was cancelled, or its session ended, before its point of no return. |
-| `Stale` | The page changed after the grant, such as to another document or to a higher risk, so nothing ran; or a snapshot's page went to another document during both of its reads. |
+| `Stale` | The page changed after the grant, such as to another document or to a higher risk, so nothing ran; or a snapshot's page went to another document during both of its reads, or changed the children of a node it was reading a part at a time. |
 | `TimedOut` | The call's deadline passed before its point of no return. |
 | `Stopped` | The person stopped the call before its point of no return, outside the request's wait. |
 | `OutcomeUncertain` | An action that can't be repeated safely ended after its input may have reached the page; the agent takes a new snapshot. |
