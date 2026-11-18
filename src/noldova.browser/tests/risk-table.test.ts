@@ -153,7 +153,7 @@ describe("the risk table", () => {
     {
       action: "Click anything but the submit control of a form that holds a secret field: a submit control of a form that holds none, a link or an area, any other "
         + "element or plain content, and a click the tool can't classify beforehand, with no element reference, at a point, or on a node it can't resolve; the click "
-        + "scrolls its element into view first, and Browser has no scroll of its own",
+        + "scrolls its element into view unless the element shows at its centre, in the view and topmost there, and Browser has no scroll of its own",
       checkAsync: async () => {
         const tool: ClickTool = new ClickTool(bench.kit);
         bench.permissions.automaticDecision = PermissionDecision.AllowedAlways;
@@ -163,7 +163,8 @@ describe("the risk table", () => {
 
         expect([first, second, asked()]).toEqual(["Done", "Done", [["browser.click", ToolRisk.Medium, true, ACTING]]]);
         expect(bench.permissions.requests[0]?.labels).toEqual({ [PermissionOption.AllowAlways]: "Allow for this chat" });
-        expect([sent("DOM.scrollIntoViewIfNeeded"), sent("Input.dispatchMouseEvent")]).toEqual([2, 6]);
+        // Both elements are in view, so neither click scrolls.
+        expect([sent("DOM.scrollIntoViewIfNeeded"), sent("Input.dispatchMouseEvent")]).toEqual([0, 6]);
       }
     },
     {

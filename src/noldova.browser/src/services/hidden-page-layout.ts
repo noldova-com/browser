@@ -20,6 +20,7 @@ import type { JsonObject, JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
 import { ViewCalls } from "./view-calls.ts";
 
+// Lays a page whose view has no size out for a press, and tells the press whether it did, since the layout moves the page.
 export class HiddenPageLayout {
   private readonly calls: ViewCalls;
   private readonly log: IModuleLog;
@@ -29,16 +30,16 @@ export class HiddenPageLayout {
     this.log = log;
   }
 
-  public async holdAsync(viewId: string, options: CallOptions, press: () => Promise<void>): Promise<void> {
+  public async holdAsync(viewId: string, options: CallOptions, press: (isLaidOut: boolean) => Promise<void>): Promise<void> {
     if (await this.readHasSizeAsync(viewId, options)) {
-      await press();
+      await press(false);
       return;
     }
     try {
       await this.calls.sendAsync(viewId, Resources.setDeviceMetricsOverrideMethod, Resources.hiddenPageMetrics, options);
       if (!await this.readHasSizeAsync(viewId, options))
         throw new PageNotShowingException();
-      await press();
+      await press(true);
     }
     finally {
       await this.releaseAsync(viewId, options);
