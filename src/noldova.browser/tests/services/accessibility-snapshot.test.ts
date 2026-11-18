@@ -6,14 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Buffer } from "node:buffer";
-
 import { describe, expect, it } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { AccessibilityNode } from "../../src/models/accessibility-node.ts";
 import type { AccessibilityTree } from "../../src/models/accessibility-tree.ts";
-import { CutText } from "../../src/models/cut-text.ts";
 import { AccessibilitySnapshot } from "../../src/services/accessibility-snapshot.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 
@@ -26,124 +23,39 @@ function text(value: string | number | boolean): JsonObject {
 }
 
 const PAGE: JsonObject = { nodes: [
-  node("1", "RootWebArea", { name: text("Sign in"), childIds: ["2", "3", "4", "5", "6"], backendDOMNodeId: 1 }),
-  node("2", "heading", { name: text("Welcome back"), childIds: ["7"], backendDOMNodeId: 2 }),
-  node("3", "link", { name: text("Help"), backendDOMNodeId: 3 }),
-  node("4", "searchbox", { name: text("Search"), value: text("shoes"), backendDOMNodeId: 4 }),
-  node("5", "textbox", { name: text("Password"), value: text("hunter2"), childIds: ["8"], backendDOMNodeId: 5 }),
-  node("6", "generic", { childIds: ["9"] }),
-  node("7", "StaticText", { name: text("Welcome back") }),
-  node("8", "StaticText", { name: text("hunter2") }),
-  node("9", "button", { name: text("Sign in"), backendDOMNodeId: 9 })
+  node("1", "RootWebArea", { name: text("Sign in"), childIds: ["2", "3"], backendDOMNodeId: 1 }),
+  node("2", "heading", { name: text("Welcome back"), backendDOMNodeId: 2 }),
+  node("3", "textbox", { name: text("Password"), value: text("hunter2"), backendDOMNodeId: 3 })
 ] };
-
-function issuer(): [(backendNodeId: number) => string, number[]] {
-  const issued: number[] = [];
-  return [(backendNodeId: number): string => {
-    issued.push(backendNodeId);
-    return `e${issued.length}`;
-  }, issued];
-}
-
-function write(nodes: AccessibilityTree, secrets: readonly number[], maximumBytes: number = 10_000): [CutText, number[]] {
-  const [issue, issued]: [(backendNodeId: number) => string, number[]] = issuer();
-  return [AccessibilitySnapshot.write(nodes, new Set(secrets), issue, maximumBytes), issued];
-}
 
 function expectMalformed(read: () => unknown): void {
   expect(read).toThrow(MalformedReplyException);
 }
 
 describe("AccessibilitySnapshot", () => {
-  it("writes the tree indented from its root, lifts a wrapper with no name, and references only the elements an agent may act on", () => {
-    const [cut, issued]: [CutText, number[]] = write(AccessibilitySnapshot.readNodes(PAGE), []);
+  it("reads every node with the root first, by its id, role, name, value, children and element", () => {
+    const tree: AccessibilityTree = AccessibilitySnapshot.readNodes(PAGE);
 
-    expect(cut).toStrictEqual(new CutText([
-      "- RootWebArea \"Sign in\"",
-      "  - heading \"Welcome back\"",
-      "    - StaticText \"Welcome back\"",
-      "  - link \"Help\" [e1]",
-      "  - searchbox \"Search\" value=\"shoes\" [e2]",
-      "  - textbox \"Password\" value=\"hunter2\" [e3]",
-      "    - StaticText \"hunter2\"",
-      "  - button \"Sign in\" [e4]"
-    ].join("\n"), false));
-    expect(issued).toEqual([3, 4, 5, 9]);
+    expect(tree.nodes).toStrictEqual([
+      new AccessibilityNode("1", false, "RootWebArea", "Sign in", "", ["2", "3"], 1, false),
+      new AccessibilityNode("2", false, "heading", "Welcome back", "", [], 2, false),
+      new AccessibilityNode("3", false, "textbox", "Password", "hunter2", [], 3, false)
+    ]);
+    expect(tree.root).toBe(tree.nodes[0]);
   });
 
-  it("masks a secret field's value and leaves out what is inside it", () => {
-    const [cut]: [CutText, number[]] = write(AccessibilitySnapshot.readNodes(PAGE), [5]);
-
-    expect(cut.text).toContain(`  - textbox "Password" value="••••••" [e3]\n  - button`);
-    expect(cut.text).not.toContain("hunter2");
-  });
-
-  it("masks a typed value with no element behind it, which can't be checked, and gives it no reference", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
-      node("1", "RootWebArea", { childIds: ["2", "3"] }),
-      node("2", "textbox", { value: text("123456"), childIds: ["4"] }),
-      node("3", "slider", { value: text(40), backendDOMNodeId: 3 }),
-      node("4", "StaticText", { name: text("123456") })
-    ] });
-
-    expect(write(nodes, [])).toStrictEqual([new CutText(`- RootWebArea\n  - textbox value="••••••"\n  - slider value="40" [e1]`, false), [3]]);
-  });
-
-  it("lists as typed fields only the typed roles with a value and an element", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
-      node("1", "RootWebArea", { childIds: ["2", "3", "4", "5", "6"] }),
-      node("2", "textbox", { value: text("a"), backendDOMNodeId: 2 }),
-      node("3", "combobox", { value: text("b"), backendDOMNodeId: 3 }),
-      node("4", "textbox", { backendDOMNodeId: 4 }),
-      node("5", "textbox", { value: text("c") }),
-      node("6", "slider", { value: text(3), backendDOMNodeId: 6 })
-    ] });
-
-    expect(AccessibilitySnapshot.typedFields(nodes)).toEqual([2, 3]);
-  });
-
-  it("skips ignored nodes but keeps their children at their depth, and writes numbers and booleans as text", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
-      node("1", "RootWebArea", { childIds: ["2"] }),
-      node("2", "none", { ignored: true, name: text("hidden"), childIds: ["3"] }),
-      node("3", "checkbox", { name: text("Remember me"), value: text(true), backendDOMNodeId: 3 })
-    ] });
-
-    expect(write(nodes, [])[0].text).toBe("- RootWebArea\n  - checkbox \"Remember me\" value=\"true\" [e1]");
-  });
-
-  it("writes each node once, skips unknown children, and reads other values as none", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
-      node("1", "RootWebArea", { childIds: ["2", "2", "1", "missing"] }),
+  it("reads an ignored node, numbers and booleans as text, and other values as none", () => {
+    const tree: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
+      node("1", "none", { ignored: true, name: text(40), value: text(true) }),
       node("2", "group", { name: { type: "string" }, value: { type: "object", value: { kind: "x" } } }),
       { nodeId: "3", role: "button", name: "Bare" }
     ] });
 
-    expect(write(nodes, [])[0].text).toBe("- RootWebArea\n  - group");
-    expect(nodes.nodes[2]).toStrictEqual(new AccessibilityNode("3", false, "", "", "", [], null, false));
-  });
-
-  it("escapes a name's quotes and line breaks, so each node stays on its line", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { name: text("Say \"hi\"\nnow") })] });
-
-    expect(write(nodes, [])[0].text).toBe("- RootWebArea \"Say \\\"hi\\\"\\nnow\"");
-  });
-
-  it("stops before the line that would pass the limit, marks the cut, and shows no reference past it", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes(PAGE);
-    const limit: number = "- RootWebArea \"Sign in\"\n  - heading \"Welcome back\"\n    - StaticText \"Welcome back\"\n".length;
-
-    const [cut]: [CutText, number[]] = write(nodes, [], limit);
-
-    expect(cut).toStrictEqual(new CutText("- RootWebArea \"Sign in\"\n  - heading \"Welcome back\"\n    - StaticText \"Welcome back\"", true));
-    expect(write(nodes, [], limit - 1)[0]).toStrictEqual(new CutText("- RootWebArea \"Sign in\"\n  - heading \"Welcome back\"", true));
-  });
-
-  it("counts the limit in UTF-8 bytes", () => {
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [node("1", "RootWebArea", { name: text("\u00e9t\u00e9") })] });
-
-    expect(write(nodes, [], "- RootWebArea \"\u00e9t\u00e9\"\n".length)[0].isCut).toBe(true);
-    expect(write(nodes, [], "- RootWebArea \"\u00e9t\u00e9\"\n".length + 2)[0].isCut).toBe(false);
+    expect(tree.nodes).toStrictEqual([
+      new AccessibilityNode("1", true, "none", "40", "true", [], null, false),
+      new AccessibilityNode("2", false, "group", "", "", [], null, false),
+      new AccessibilityNode("3", false, "", "", "", [], null, false)
+    ]);
   });
 
   it("finds the deepest focused element, and none when only nodes with no element are focused", () => {
@@ -162,33 +74,17 @@ describe("AccessibilitySnapshot", () => {
     expect(AccessibilitySnapshot.readTitle(AccessibilitySnapshot.readNodes(PAGE))).toBe("Sign in");
   });
 
-  it("reads one root node, and a node's children in the order they come", () => {
-    const root: AccessibilityNode = AccessibilitySnapshot.readRoot({ node: node("1", "RootWebArea", { name: text("Sign in"), childIds: ["2"] }) });
+  it("reads a node's children in the order they come", () => {
     const children: readonly AccessibilityNode[] = AccessibilitySnapshot.readChildren({ nodes: [node("3", "link"), node("2", "button")] });
 
-    expect([root.id, root.name, root.childIds, children.map(t => t.id)]).toEqual(["1", "Sign in", ["2"], ["3", "2"]]);
+    expect(children.map(t => t.id)).toEqual(["3", "2"]);
   });
 
   it.each<[string, () => unknown]>([
-    ["a root reply with no node", () => AccessibilitySnapshot.readRoot({})],
-    ["a root that isn't a node", () => AccessibilitySnapshot.readRoot({ node: 1 })],
     ["children that aren't a list", () => AccessibilitySnapshot.readChildren({ nodes: "2" })],
     ["a child that isn't a node", () => AccessibilitySnapshot.readChildren({ nodes: [1] })]
   ])("fails as a malformed reply with %s", (_case: string, reading: () => unknown) => {
     expectMalformed(reading);
-  });
-
-  it("counts at least a shown node's line at no depth, with its name but no value or reference, and nothing for a node the snapshot doesn't show", () => {
-    const [cut]: [CutText, number[]] = write(AccessibilitySnapshot.readNodes(PAGE), []);
-    const nodes: AccessibilityTree = AccessibilitySnapshot.readNodes(PAGE);
-    const least: number[] = nodes.nodes.map(t => AccessibilitySnapshot.leastLineBytes(t));
-
-    expect(least.slice(0, 4)).toEqual(["- RootWebArea \"Sign in\"\n".length, "- heading \"Welcome back\"\n".length, "- link \"Help\"\n".length,
-      "- searchbox \"Search\"\n".length]);
-    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", false, "generic", "", "", [], null, false))).toBe(0);
-    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", true, "button", "Hidden", "", [], 9, false))).toBe(0);
-    expect(AccessibilitySnapshot.leastLineBytes(new AccessibilityNode("9", false, "list", "", "", [], null, false))).toBe("- list\n".length);
-    expect(least.reduce((sum, t) => sum + t, 0)).toBeLessThanOrEqual(Buffer.byteLength(`${cut.text}\n`, "utf8"));
   });
 
   it.each<[string, JsonObject]>([

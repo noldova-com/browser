@@ -14,7 +14,23 @@ interface ITargetInfo {
   url: string;
 }
 
+interface IAccessibilityValue {
+  value?: unknown;
+}
+
+interface IAccessibilityNode {
+  ignored?: boolean;
+  role?: IAccessibilityValue;
+  name?: IAccessibilityValue;
+}
+
+export interface IRoleName {
+  role: string;
+  name: string;
+}
+
 interface IViewDebugger {
+  sendCommand(method: "Accessibility.getFullAXTree"): Promise<{ nodes: IAccessibilityNode[] }>;
   sendCommand(method: "Target.getTargets"): Promise<{ targetInfos: ITargetInfo[] }>;
   sendCommand(method: "Target.attachToTarget", params: { targetId: string; flatten: boolean }): Promise<{ sessionId: string }>;
   sendCommand(method: "Target.detachFromTarget", params: { sessionId: string }): Promise<unknown>;
@@ -281,6 +297,18 @@ export class ViewPages {
         throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
       return String(await view.executeJavaScript(request.code, true));
     }, { url, code: script });
+  }
+
+  // The role and name of each node the engine's own accessibility tree of the view at the URL keeps, in its order.
+  public async accessibilityNodesAsync(url: string): Promise<IRoleName[]> {
+    return this.application.evaluate(async ({ webContents }, pageUrl: string): Promise<IRoleName[]> => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${pageUrl}, not one.`);
+      const { nodes } = await view.debugger.sendCommand("Accessibility.getFullAXTree");
+      return nodes.filter(t => t.ignored !== true).map(t => ({ role: String(t.role?.value ?? ""), name: String(t.name?.value ?? "") }));
+    }, url);
   }
 
   public async pressAtAsync(url: string, keyCode: string, modifiers: readonly string[]): Promise<void> {

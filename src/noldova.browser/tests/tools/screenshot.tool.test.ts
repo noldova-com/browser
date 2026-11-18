@@ -21,7 +21,8 @@ import { PageHiddenException } from "../../src/exceptions/page-hidden.exception.
 import { ResultTooLargeException } from "../../src/exceptions/result-too-large.exception.ts";
 import { ScreenshotNotVisibleException } from "../../src/exceptions/screenshot-not-visible.exception.ts";
 import { ScreenshotTargetException } from "../../src/exceptions/screenshot-target.exception.ts";
-import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
+import { UnknownReferenceException } from "../../src/exceptions/unknown-reference.exception.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { ScreenshotTool } from "../../src/tools/screenshot.tool.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -61,7 +62,7 @@ describe("ScreenshotTool", () => {
   }
 
   function reference(): string {
-    return bench.sessions.issueReference(ToolBench.SESSION, { viewId: ToolBench.VIEW, documentId: "L1", backendNodeId: 7 });
+    return bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", 7));
   }
 
   beforeEach(() => {
@@ -122,7 +123,7 @@ describe("ScreenshotTool", () => {
   });
 
   it("refuses a stale reference before it reads the page, and an element with no box or a full page with no height before it captures them", async () => {
-    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: "e9" })), StaleReferenceException, { reason: "Refused", moduleCode: "browser.staleReference" });
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: "e9" })), UnknownReferenceException, { reason: "Refused", moduleCode: "browser.unknownReference" });
     expect(bench.methods).toEqual(["Page.getFrameTree"]);
 
     bench.surface.answer("DOM.getContentQuads", { quads: [] });

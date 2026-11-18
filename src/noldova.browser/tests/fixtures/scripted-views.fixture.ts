@@ -15,6 +15,8 @@ import { UnansweredCallException } from "@noldova/desktop.protocol/testing";
 import { WebViewFailureException, WebViewProtocolEvent } from "@noldova/desktop.runtime";
 import { FakeRuntimeWebViews } from "@noldova/desktop.runtime/testing";
 
+import { PageSnapshotScript } from "../../src/models/page-snapshot-script.ts";
+import { JsonShapes } from "../../src/services/json-shapes.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 
 export interface IRelayCall {
@@ -52,6 +54,7 @@ export class ScriptedViews {
   public static readonly moduleId: string = "browser";
   public static readonly pane: WebViewPane = new WebViewPane(new QualifiedName("browser", "pane"));
   public static readonly declaration: WebViewDeclaration = WebViewDeclaration.fromJson(DECLARED);
+  public static readonly snapshotElementPrefix: string = "snapshot-element-";
   public static readonly emptyReplies: readonly string[] = [
     "Page.enable", "DOM.scrollIntoViewIfNeeded", "DOM.focus",
     "Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride",
@@ -74,6 +77,15 @@ export class ScriptedViews {
   public afterNavigation: (viewId: string) => void = () => undefined;
   public navigationOutcome: WebViewNavigation = new WebViewNavigation(WebViewNavigationKind.Started);
   public allowing: () => Promise<void> = async () => undefined;
+  // What the pinned snapshot function replies to each request, once the worlds are served, and the indexes of the elements that left the page.
+  public snapshot: (request: JsonObject) => JsonValue | Promise<JsonValue> = () => ScriptedViews.snapshotOf("Cart", []);
+  public readonly snapshotRequests: JsonObject[] = [];
+  // The objects each snapshot was given after its request: the hosts of closed shadow roots.
+  public readonly snapshotObjects: (readonly string[])[] = [];
+  public readonly goneElements: Set<number> = new Set();
+  public findElement: (index: number) => JsonValue = (index: number) => ({ result: this.goneElements.has(index) ? { type: "object", subtype: "null", value: null }
+    : { type: "object", subtype: "node", objectId: `${ScriptedViews.snapshotElementPrefix}${index}` } });
+  private isServingSnapshots: boolean = false;
 
   public constructor(viewIds: readonly string[], foreignViewIds: readonly string[] = []) {
     this.views = new Set(viewIds);
@@ -157,6 +169,19 @@ export class ScriptedViews {
       return {};
     });
     this.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: true } });
+    this.isServingSnapshots = true;
+  }
+
+  // The snapshot function's reply: the document's line, then the lines given as [depth, role, name, value, isMasked, index, host], a line
+  // without its host's number standing for none.
+  public static snapshotOf(title: string, lines: readonly JsonValue[], isCut: boolean = false, isDeeper: boolean = false, isFromView: boolean = false): JsonObject {
+    const full: JsonValue[] = lines.map(t => JsonShapes.isArray(t) && t.length === 6 ? [...t, -1] : t);
+    return ScriptedViews.byValue({ title, lines: [[0, "RootWebArea", title, "", false, -1, -1], ...full], isCut, isDeeper, isFromView });
+  }
+
+  // A function's reply that gives the value by value.
+  public static byValue(value: JsonValue): JsonObject {
+    return { result: { type: "object", value } };
   }
 
   public reportChange(viewId: string): void {
@@ -202,7 +227,12 @@ export class ScriptedViews {
     const wireParams: unknown = JSON.parse(JSON.stringify(params));
     if (!ScriptedViews.declaration.allows(method, wireParams))
       throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.NotAllowed));
-    const answer: Answer | undefined = this.answers.get(method);
+    if (this.isServingSnapshots && method === "Runtime.callFunctionOn" && params["functionDeclaration"] === PageSnapshotScript.functionDeclaration)
+      return this.answerSnapshotAsync(params);
+    const objectId: JsonValue | undefined = params["objectId"];
+    if (this.isServingSnapshots && method === "DOM.describeNode" && typeof objectId === "string" && objectId.startsWith(ScriptedViews.snapshotElementPrefix))
+      return { node: { backendNodeId: Number(objectId.slice(ScriptedViews.snapshotElementPrefix.length)), nodeName: "DIV" } };
+    const answer: Answer | undefined = this.answers.get(method) ?? this.defaultAnswer(method, params);
     if (answer === undefined)
       throw new UnscriptedMethodException(method);
     if (answer.kind === "failure")
@@ -214,6 +244,32 @@ export class ScriptedViews {
     return new Promise<JsonValue>((_resolve, reject) => {
       this.pending.add({ viewId, reject });
     });
+  }
+
+  // Once the worlds are served, a page without closed shadow roots: the document holds only its root element, which a test can script.
+  private defaultAnswer(method: string, params: JsonObject): Answer | undefined {
+    if (!this.isServingSnapshots)
+      return undefined;
+    if (method === "DOM.getDocument")
+      return { kind: "reply", reply: { root: { backendNodeId: 1, nodeType: 9, nodeName: "#document" } } };
+    if (method === "DOM.describeNode" && params["backendNodeId"] === 1)
+      return { kind: "reply", reply: { node: { backendNodeId: 1, nodeType: 9, nodeName: "#document", children: [{ backendNodeId: 2, nodeType: 1, localName: "html" }] } } };
+    return undefined;
+  }
+
+  // An element the page keeps by its index is given as an object whose id names the index, which DOM.describeNode gives as its node.
+  private async answerSnapshotAsync(params: JsonObject): Promise<JsonValue> {
+    const passed: JsonValue | undefined = params["arguments"];
+    const [argument, ...objects]: readonly JsonValue[] = JsonShapes.isArray(passed) ? passed : [];
+    const request: JsonValue | undefined = JsonShapes.isObject(argument) ? argument["value"] : undefined;
+    if (!JsonShapes.isObject(request))
+      throw new Error("The snapshot function was called without a request.");
+    const index: JsonValue | undefined = request["element"];
+    if (typeof index === "number")
+      return this.findElement(index);
+    this.snapshotRequests.push(request);
+    this.snapshotObjects.push(objects.map(t => JsonShapes.isObject(t) ? String(t["objectId"]) : ""));
+    return this.snapshot(request);
   }
 
   private async navigateAsync(viewId: string, url: string): Promise<WebViewNavigation> {

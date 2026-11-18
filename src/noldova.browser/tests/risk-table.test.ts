@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CallFailureException } from "../src/exceptions/call-failure.exception.ts";
 import { NavigationRefusedException } from "../src/exceptions/navigation-refused.exception.ts";
 import type { IBrowserTool } from "../src/interfaces/i-browser-tool.ts";
-import { ElementReference } from "../src/models/element-reference.ts";
+import { SnapshotReference } from "../src/models/snapshot-reference.ts";
 import { BrowserTools } from "../src/tools/browser-tools.ts";
 import { ClickTool } from "../src/tools/click.tool.ts";
 import { ConsoleTool } from "../src/tools/console.tool.ts";
@@ -63,7 +63,7 @@ describe("the risk table", () => {
   let bench: ToolBench;
 
   function reference(backendNodeId: number): string {
-    return bench.sessions.issueReference(ToolBench.SESSION, new ElementReference(ToolBench.VIEW, "L1", backendNodeId));
+    return bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", backendNodeId));
   }
 
   async function runAsync(tool: IBrowserTool, input: JsonObject): Promise<string> {

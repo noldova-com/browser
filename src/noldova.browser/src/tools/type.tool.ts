@@ -48,7 +48,7 @@ export class TypeTool implements IBrowserTool {
     return this.kit.actAsync(call, page, PageAction.Typing, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, true);
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      const element: ElementReference = this.kit.sessions.resolveReference(call.session, reference, page.viewId, frame.documentId);
+      const element: ElementReference = await this.kit.findReferencedNodeAsync(call.session, reference, page.viewId, frame.documentId, options);
       const facts: ElementFacts = await this.kit.readElementAsync(page.viewId, element.backendNodeId, options);
       const shown: ShownElement = await this.kit.readShownElementAsync(page.viewId, element.backendNodeId, facts, options);
       const risk: ToolRisk = RiskClassifier.classifyTyping(facts.path, isSubmitting, facts.form);

@@ -17,6 +17,7 @@ import { PageCrashedException } from "../../src/exceptions/page-crashed.exceptio
 import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { ViewClosedException } from "../../src/exceptions/view-closed.exception.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
+import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { WaitForTool } from "../../src/tools/wait-for.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -110,7 +111,7 @@ describe("WaitForTool", () => {
 
   it("is met once the element has a box, and not while the engine says it has none, reading again only when the page reports a change", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const id: string = bench.sessions.issueReference(ToolBench.SESSION, { viewId: ToolBench.VIEW, documentId: "L1", backendNodeId: ShopPage.LINK });
+    const id: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.LINK));
     const replies: (JsonObject | null)[] = [null, { quads: [] }, { quads: [[0, 0, 1, 0, 1, 1, 0, 1]] }];
     bench.surface.answerWith("DOM.getContentQuads", () => {
       const reply: JsonObject | null | undefined = replies.shift();
@@ -129,7 +130,7 @@ describe("WaitForTool", () => {
     bench.surface.reportChange(ToolBench.VIEW);
 
     expect((await running).content[0]?.value).toBe("The wait was met.");
-    expect([heard, unchanged, reads(), bench.methods.filter(t => t === "Runtime.callFunctionOn").length]).toEqual([2, 2, 3, 2]);
+    expect([heard, unchanged, reads(), bench.methods.filter(t => t === "Runtime.callFunctionOn").length]).toEqual([2, 2, 3, 3]);
   });
 
   it("reads a page that can't report its changes at once and once more at its limit, never on a timer between", async () => {
@@ -203,7 +204,7 @@ describe("WaitForTool", () => {
   });
 
   it("fails on another failure of the element's boxes, and as malformed on a reply without boxes", async () => {
-    const id: string = bench.sessions.issueReference(ToolBench.SESSION, { viewId: ToolBench.VIEW, documentId: "L1", backendNodeId: ShopPage.LINK });
+    const id: string = bench.sessions.issueReference(ToolBench.SESSION, new SnapshotReference(ToolBench.VIEW, "L1", ShopPage.LINK));
     bench.surface.fail("DOM.getContentQuads", new WebViewFailure(WebViewFailureKind.Crashed));
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: id, timeoutMilliseconds: 50 })), PageCrashedException, { moduleCode: "browser.pageCrashed" });
 

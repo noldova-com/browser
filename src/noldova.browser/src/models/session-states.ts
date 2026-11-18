@@ -7,18 +7,22 @@
  */
 
 import { StaleReferenceException } from "../exceptions/stale-reference.exception.ts";
-import type { ElementReference } from "./element-reference.ts";
+import { UnknownReferenceException } from "../exceptions/unknown-reference.exception.ts";
+import type { SessionReference } from "../types/session-reference.ts";
 import { SessionState } from "./session-state.ts";
 
 export class SessionStates {
   private readonly states: Map<string, SessionState> = new Map();
 
-  public issueReference(session: string, reference: ElementReference): string {
+  public issueReference(session: string, reference: SessionReference): string {
     return this.readState(session).issue(reference);
   }
 
-  public resolveReference(session: string, id: string, viewId: string, documentId: string): ElementReference {
-    const reference: ElementReference | undefined = this.states.get(session)?.referenceOf(id);
+  public resolveReference(session: string, id: string, viewId: string, documentId: string): SessionReference {
+    const state: SessionState | undefined = this.states.get(session);
+    if (state === undefined || !state.wasIssued(id))
+      throw new UnknownReferenceException();
+    const reference: SessionReference | undefined = state.referenceOf(id);
     if (reference === undefined || reference.viewId !== viewId || reference.documentId !== documentId)
       throw new StaleReferenceException();
     return reference;

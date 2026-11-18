@@ -17,7 +17,6 @@ export type AllowedMethod =
   | "Accessibility.getPartialAXTree"
   | "Accessibility.enable"
   | "Accessibility.disable"
-  | "Accessibility.getRootAXNode"
   | "Accessibility.getChildAXNodes"
   | "DOM.getDocument"
   | "DOM.querySelector"
