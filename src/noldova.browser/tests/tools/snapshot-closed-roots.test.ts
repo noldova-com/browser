@@ -103,20 +103,28 @@ describe("SnapshotTool with closed shadow roots", () => {
       new SnapshotReference("view-1", "L1", 1)]);
   });
 
-  it("masks a secret value of any role, leaves it out of the names around it, keeps another's, and reads no option of a combobox", async () => {
+  it("masks a secret value of any role, in its own name and those of the lines that hold it only, keeps another's, and reads no option of a select", async () => {
     const around: ReadonlyMap<string, JsonObject> = new Map([
-      axNode(7, "generic", "Card", [20, 21, 22, 23]),
+      axNode(7, "generic", "Card", [20, 21, 30, 31, 22, 23, 26]),
       axNode(20, "LabelText", "PIN 1234", [9]),
       axNode(9, "textbox", "PIN", [], "1234"),
-      axNode(21, "spinbutton", "Security code 987", [], "987"),
+      axNode(21, "LabelText", "Month 1", [28]),
+      axNode(28, "spinbutton", "Month 1", [], "1"),
+      axNode(30, "heading", "Step 1 of 2"),
+      axNode(31, "spinbutton", "Security code 987", [], "987"),
       axNode(22, "slider", "Volume", [], "40"),
       axNode(23, "combobox", "Size", [24], "Small"),
-      axNode(24, "option", "Small")
+      axNode(24, "MenuListPopup", "", [25]),
+      axNode(25, "option", "Small"),
+      axNode(26, "combobox", "Search", [27]),
+      axNode(27, "option", "Red")
     ].map(t => [String(t["nodeId"]), t]));
+    const secrets: ReadonlyMap<JsonValue | undefined, readonly string[]> = new Map([[9, ["type", "password"]], [28, ["autocomplete", "cc-exp-month"]],
+      [31, ["autocomplete", "cc-csc"]]]);
     bench.surface.answerWith("DOM.describeNode", t => {
       if (t["depth"] !== undefined)
         return { node: DOCUMENT };
-      return { node: { nodeName: "INPUT", attributes: t["backendNodeId"] === 9 ? ["type", "password"] : t["backendNodeId"] === 21 ? ["autocomplete", "cc-csc"] : [] } };
+      return { node: { nodeName: "INPUT", attributes: [...secrets.get(t["backendNodeId"]) ?? []] } };
     });
     bench.surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [around.get(String(t["backendNodeId"]))].filter(n => n !== undefined) }));
     bench.surface.answerWith("Accessibility.getChildAXNodes", t => {
@@ -126,16 +134,22 @@ describe("SnapshotTool with closed shadow roots", () => {
 
     const result: ToolResult = await bench.runAsync(tool, bench.call({}));
 
-    expect(String(result.content[1]?.value).split("\n").slice(4, 10)).toEqual([
+    expect(String(result.content[1]?.value).split("\n").slice(4, 16)).toEqual([
       "  - generic \"Card\" [e1]",
-      "    - LabelText \"PIN\"",
+      "    - LabelText \"PIN ••••••\"",
       "      - textbox \"PIN\" value=\"••••••\" [e2]",
-      "    - spinbutton \"Security code\" value=\"••••••\" [e3]",
-      "    - slider \"Volume\" value=\"40\" [e4]",
-      "    - combobox \"Size\" value=\"Small\" [e5]"
+      "    - LabelText \"Month ••••••\"",
+      "      - spinbutton \"Month ••••••\" value=\"••••••\" [e3]",
+      "    - heading \"Step 1 of 2\"",
+      "    - spinbutton \"Security code ••••••\" value=\"••••••\" [e4]",
+      "    - slider \"Volume\" value=\"40\" [e5]",
+      "    - combobox \"Size\" value=\"Small\" [e6]",
+      "    - combobox \"Search\" [e7]",
+      "      - option \"Red\" [e8]",
+      "  - link \"After\" [e9]"
     ]);
     expect([JSON.stringify(result).includes("1234"), JSON.stringify(result).includes("987")]).toEqual([false, false]);
-    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getChildAXNodes").map(t => t.params["id"])).toEqual(["7", "20"]);
+    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getChildAXNodes").map(t => t.params["id"])).toEqual(["7", "20", "21", "23", "26"]);
   });
 
   it("keeps interactive and the depth inside the closed root, and says when it left out deeper lines", async () => {

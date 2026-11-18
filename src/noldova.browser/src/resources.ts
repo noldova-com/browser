@@ -235,7 +235,7 @@ export class Resources {
   public static readonly documentName: string = "the document";
   public static readonly shadowRootName: string = "a shadow root";
   public static readonly headingRole: string = "heading";
-  public static readonly comboboxRole: string = "combobox";
+  public static readonly menuListPopupRole: string = "MenuListPopup";
   public static readonly staticTextRole: string = "StaticText";
   public static readonly inlineTextBoxRole: string = "InlineTextBox";
   public static readonly cursorField: string = "cursor";
