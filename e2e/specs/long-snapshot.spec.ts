@@ -25,9 +25,10 @@ const PAGE = "<!doctype html><title>Long page</title><ul>"
 
 // Rows under one element: 4,000 link rows make the page's whole tree pass the 4 MiB reply limit, so the snapshot reads it a node's
 // children at a time. Each row's name is long, so the snapshot's limit comes after a few hundred rows, well within its time limit. 12,000
-// rows, with shorter names that keep the list of their element's children within the limit, make that element's children alone pass it too; they are
-// elements with a button role, a node each that the page reads quickly on its own, as 12,000 link rows make a whole tree whose first read
-// alone nearly fills the time limit (#68). The element's ::before is a child its element lists apart from the others.
+// rows, with shorter names that keep the list of their element's children within the limit, make that element's children alone pass it too,
+// as elements with a button role, a node each, or as link rows, more elements than a whole tree of one reply holds, which the snapshot
+// reads a node's children at a time without trying the whole tree, which alone would nearly fill its time limit. The element's ::before is a
+// child its element lists apart from the others.
 const ROWS = 12_000;
 const LINK_ROWS = 4_000;
 // With a long attribute on each row, even the list of that element's children passes the limit.
@@ -93,7 +94,8 @@ test.describe("a snapshot of a long page", () => {
   });
 
   for (const [title, rows, role, words, row] of [["a page with thousands of link rows under one element", LINK_ROWS, "link", LINK_NAME_WORDS, linkRow],
-    ["a page with more children under one element than one reply holds", ROWS, "button", BUTTON_NAME_WORDS, buttonRow]] as const)
+    ["a page with more children under one element than one reply holds", ROWS, "button", BUTTON_NAME_WORDS, buttonRow],
+    ["a page with more link rows under one element than one reply holds", ROWS, "link", LINK_NAME_WORDS, linkRow]] as const)
     test(`${title} gives its first lines, with references and the cut note`, async ({ app, servers }) => {
       const docs = await servers.startAsync("docs.localhost", { "/": rowsPage("Rows page", rows, row) });
       await app.allowLocalSitesAsync([docs.origin]);

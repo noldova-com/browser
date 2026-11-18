@@ -9,6 +9,7 @@
 import { PageAction } from "@noldova/browser.protocol";
 import { type IToolDescriptor, type ToolCall, ToolContent, type ToolResult } from "@noldova/desktop.runtime";
 
+import { BrowserRuntimeException } from "../exceptions/browser-runtime.exception.ts";
 import { ChangedDuringReadException } from "../exceptions/changed-during-read.exception.ts";
 import { ReplyTooLargeException } from "../exceptions/reply-too-large.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
@@ -74,7 +75,11 @@ export class SnapshotTool implements IBrowserTool {
     throw new ChangedDuringReadException();
   }
 
+  // A page with more elements than a whole tree of one reply can hold is read a node's children at a time from the start, as the engine
+  // takes longer to build its whole tree than the snapshot has; a page whose elements can't be counted is read as before.
   private async readTreeAsync(viewId: string, options: CallOptions): Promise<AccessibilityTree> {
+    if (!await this.mayFitOneReplyAsync(viewId, options))
+      return this.walk.readAsync(viewId, options, BrowserLimits.maximumSnapshotBytes);
     try {
       return AccessibilitySnapshot.readNodes(
         await this.kit.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, {}, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes)));
@@ -83,6 +88,17 @@ export class SnapshotTool implements IBrowserTool {
       if (!(error instanceof ReplyTooLargeException))
         throw error;
       return this.walk.readAsync(viewId, options, BrowserLimits.maximumSnapshotBytes);
+    }
+  }
+
+  private async mayFitOneReplyAsync(viewId: string, options: CallOptions): Promise<boolean> {
+    try {
+      return await this.kit.changes.hasAtMostElementsAsync(viewId, BrowserLimits.maximumWholeTreeElements, options);
+    }
+    catch (error) {
+      if (!(error instanceof BrowserRuntimeException))
+        throw error;
+      return true;
     }
   }
 }

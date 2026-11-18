@@ -13,6 +13,7 @@ export class BrowserLimits {
   public static readonly maximumWaitMilliseconds: number = 30_000;
   public static readonly maximumSnapshotBytes: number = 128 * 1024;
   public static readonly maximumTreeReplyBytes: number = 4 * 1024 * 1024;
+  public static readonly maximumWholeTreeElements: number = 20_000;
   public static readonly maximumNodeReplyBytes: number = 64 * 1024;
   public static readonly consoleRingEntries: number = 500;
   public static readonly consoleRingBytes: number = 256 * 1024;

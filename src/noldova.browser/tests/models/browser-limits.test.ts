@@ -29,6 +29,7 @@ describe("BrowserLimits", () => {
   it("bounds the page's replies", () => {
     expect(BrowserLimits.maximumTreeReplyBytes).toBe(4194304);
     expect(BrowserLimits.maximumNodeReplyBytes).toBe(65536);
+    expect(BrowserLimits.maximumWholeTreeElements).toBe(20000);
   });
 
   it("bounds the console ring", () => {

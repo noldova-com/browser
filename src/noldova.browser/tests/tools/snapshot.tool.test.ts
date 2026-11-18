@@ -10,18 +10,24 @@ import { Buffer } from "node:buffer";
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import type { ToolResult } from "@noldova/desktop.runtime";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChangedDuringReadException } from "../../src/exceptions/changed-during-read.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageNotOpenException } from "../../src/exceptions/page-not-open.exception.ts";
 import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
+import { ElementCountScript } from "../../src/models/element-count-script.ts";
 import { ElementReference } from "../../src/models/element-reference.ts";
 import { SnapshotTool } from "../../src/tools/snapshot.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
+
+// The element count before the whole tree's read: the frame, the page's runtime the first time, the world, then the pinned function.
+const COUNT: readonly string[] = ["Page.getFrameTree", "Page.enable", "Runtime.disable", "Runtime.enable", "Log.enable", "Runtime.discardConsoleEntries",
+  "Page.createIsolatedWorld", "Runtime.callFunctionOn"];
+const RECOUNT: readonly string[] = ["Page.getFrameTree", "Page.createIsolatedWorld", "Runtime.callFunctionOn"];
 
 const FRAME: JsonObject = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://shop.test/login", securityOrigin: "https://shop.test" } } };
 
@@ -100,11 +106,15 @@ describe("SnapshotTool", () => {
     expect(result.structured).toEqual({ page: { url: "about:blank", title: "" } });
   });
 
-  it("reads the frame, then the tree, checks each typed field and reads the frame again, all on the session's view and within the reply limits, raising no request", async () => {
+  it("reads the frame, counts the page's elements, then reads the tree, checks each typed field and reads the frame again, all on the session's view and within the reply limits, raising no request", async () => {
     await bench.runAsync(tool, bench.call({}));
 
     expect(bench.surface.calls.map(t => [t.viewId, t.method, t.params])).toEqual([
       ["view-1", "Page.getFrameTree", {}],
+      ...COUNT.slice(0, -2).map(t => ["view-1", t, {}]),
+      ["view-1", "Page.createIsolatedWorld", { frameId: "F1", worldName: "noldova-browser-changes", grantUniveralAccess: false }],
+      ["view-1", "Runtime.callFunctionOn", { functionDeclaration: ElementCountScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: 20_000 }],
+        returnByValue: true, silent: true }],
       ["view-1", "Accessibility.getFullAXTree", {}],
       ["view-1", "DOM.describeNode", { backendNodeId: 2 }],
       ["view-1", "DOM.describeNode", { backendNodeId: 3 }],
@@ -153,7 +163,8 @@ describe("SnapshotTool", () => {
     ]);
     expect(result.structured).toEqual({ page: { url: "https://a.test/", title: "Welcome" } });
     expect(bench.sessions.resolveReference(ToolBench.SESSION, "e1", "view-1", "L2")).toStrictEqual(new ElementReference("view-1", "L2", 2));
-    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree", "Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree"]);
+    expect(bench.methods).toEqual(["Page.getFrameTree", ...COUNT, "Accessibility.getFullAXTree", "Page.getFrameTree", "Page.getFrameTree", ...RECOUNT,
+      "Accessibility.getFullAXTree", "Page.getFrameTree"]);
   });
 
   it("reads again when the page went to another document while its fields were checked, so a field's mask comes from the content's document", async () => {
@@ -201,8 +212,49 @@ describe("SnapshotTool", () => {
     expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(128 * 1024 + 200);
     expect(Buffer.byteLength(text, "utf8")).toBeGreaterThan(128 * 1024 - 100);
     expect(result.content[2]?.value).toBe("The snapshot was cut at its limit; act on what it shows, or scroll and take another.");
-    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree", "Accessibility.enable", "Accessibility.getRootAXNode", "Page.getLayoutMetrics",
+    expect(bench.methods).toEqual(["Page.getFrameTree", ...COUNT, "Accessibility.getFullAXTree", "Accessibility.enable", "Accessibility.getRootAXNode", "Page.getLayoutMetrics",
       "Accessibility.getChildAXNodes", "Accessibility.disable", "Page.getFrameTree"]);
+  });
+
+  it("reads a page with more elements than its whole tree can hold in one reply a node's children at a time from the start, and one with no more as a whole", async () => {
+    const counts: boolean[] = [false, true];
+    bench.surface.answerWith("Runtime.callFunctionOn", () => ({ result: { type: "boolean", value: counts.shift() ?? true } }));
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getRootAXNode", { node: node("1", "RootWebArea", "Rows", { childIds: ["2"], backendDOMNodeId: 1 }) });
+    bench.surface.answer("Accessibility.getChildAXNodes", { nodes: [node("2", "link", "Row 0", { backendDOMNodeId: 2 })] });
+    bench.surface.answer("Page.getLayoutMetrics", layout(0));
+
+    const walked: ToolResult = await bench.runAsync(tool, bench.call({}));
+    const methods: number = bench.methods.length;
+    const whole: ToolResult = await bench.runAsync(tool, bench.call({}));
+
+    expect(String(walked.content[1]?.value).split("\n").slice(3)).toEqual(["- RootWebArea \"Rows\"", "  - link \"Row 0\" [e1]"]);
+    expect(String(whole.content[1]?.value).split("\n")[3]).toBe("- RootWebArea \"Sign in\"");
+    expect(bench.methods.slice(0, methods)).toEqual(["Page.getFrameTree", ...COUNT, "Accessibility.enable", "Accessibility.getRootAXNode", "Page.getLayoutMetrics",
+      "Accessibility.getChildAXNodes", "Accessibility.disable", "Page.getFrameTree"]);
+    expect(bench.methods.slice(methods, methods + 5)).toEqual(["Page.getFrameTree", ...RECOUNT, "Accessibility.getFullAXTree"]);
+  });
+
+  it("reads the whole tree first, then a node's children at a time, when the page's elements can't be counted", async () => {
+    bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.TooLarge));
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getRootAXNode", { node: node("1", "RootWebArea", "Rows", { childIds: [], backendDOMNodeId: 1 }) });
+    bench.surface.answer("Page.getLayoutMetrics", layout(0));
+    const failures: readonly (() => void)[] = [
+      () => bench.surface.fail("Runtime.callFunctionOn", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Execution context was destroyed.")),
+      () => bench.surface.answer("Runtime.callFunctionOn", { exceptionDetails: { text: "Uncaught" } }),
+      () => bench.surface.answer("Page.createIsolatedWorld", {})
+    ];
+
+    for (const fail of failures) {
+      fail();
+      const methods: number = bench.methods.length;
+      const result: ToolResult = await bench.runAsync(tool, bench.call({}));
+
+      expect(String(result.content[1]?.value).split("\n")[3]).toBe("- RootWebArea \"Rows\"");
+      expect(bench.methods.slice(methods).filter(t => t.startsWith("Accessibility."))).toEqual(["Accessibility.getFullAXTree", "Accessibility.enable",
+        "Accessibility.getRootAXNode", "Accessibility.disable"]);
+    }
   });
 
   it("starts a page whose whole tree is too large for one reply where it is scrolled to, and says so", async () => {
@@ -226,11 +278,19 @@ describe("SnapshotTool", () => {
       "The snapshot was cut at its limit; act on what it shows, or scroll and take another."]);
   });
 
+  it("fails on a fault of the module's own in the count, and reads no tree", async () => {
+    const fault: Error = new RangeError("The count broke.");
+    vi.spyOn(bench.kit.changes, "hasAtMostElementsAsync").mockRejectedValue(fault);
+
+    await expect(bench.runAsync(tool, bench.call({}))).rejects.toBe(fault);
+    expect(bench.methods.filter(t => t.startsWith("Accessibility."))).toEqual([]);
+  });
+
   it("passes on any other failure reading the whole tree, and reads it no other way", async () => {
     bench.surface.fail("Accessibility.getFullAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({})), ProtocolFailedException, { reason: "Unavailable" });
-    expect(bench.methods).toEqual(["Page.getFrameTree", "Accessibility.getFullAXTree"]);
+    expect(bench.methods).toEqual(["Page.getFrameTree", ...COUNT, "Accessibility.getFullAXTree"]);
   });
 
   it("fails as closed when the session's page isn't open, and sends nothing", async () => {

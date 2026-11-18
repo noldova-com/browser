@@ -20,6 +20,7 @@ import { ProtocolFailedException } from "../exceptions/protocol-failed.exception
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
+import { ElementCountScript } from "../models/element-count-script.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageTextScript } from "../models/page-text-script.ts";
 import { ResolvedElement } from "../models/resolved-element.ts";
@@ -78,20 +79,16 @@ export class PageChanges {
     return stop;
   }
 
-  // Whether the page's main frame shows the text, as the one pinned function reads it in the page changes' isolated world of that frame,
+  // Whether the page's main frame shows the text, as the pinned function reads it in the page changes' isolated world of that frame,
   // which the engine keeps by its name, so the page's own world and script never see the call.
-  public async hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
-    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
-    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
-    const uniqueContextId: string = await this.findWorldAsync(viewId, mainId, options);
-    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
-      functionDeclaration: PageTextScript.functionDeclaration, uniqueContextId, arguments: [{ value: text }], returnByValue: true, silent: true
-    }, options);
-    const result: JsonValue | undefined = reply[Resources.resultField];
-    const has: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
-    if (typeof has !== "boolean")
-      throw new MalformedReplyException();
-    return has;
+  public hasTextAsync(viewId: string, text: string, options: CallOptions): Promise<boolean> {
+    return this.askMainWorldAsync(viewId, PageTextScript.functionDeclaration, text, options);
+  }
+
+  // Whether the page's main frame holds no more than the most elements, open shadow roots' too, as the pinned function counts them in the
+  // same world, so the snapshot knows before it reads whether the page's whole accessibility tree can fit one reply.
+  public hasAtMostElementsAsync(viewId: string, most: number, options: CallOptions): Promise<boolean> {
+    return this.askMainWorldAsync(viewId, ElementCountScript.functionDeclaration, most, options);
   }
 
   // The element as an object in the page changes' isolated world of the main frame, where the pinned function reads it, so the page's own
@@ -152,6 +149,20 @@ export class PageChanges {
         || error instanceof ProfileClearedException))
         this.log.write(Resources.formatObjectNotReleased(viewId, String(error)));
     }
+  }
+
+  private async askMainWorldAsync(viewId: string, functionDeclaration: string, value: JsonValue, options: CallOptions): Promise<boolean> {
+    const { origin, mainId }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    await this.domains.startAsync(viewId, origin, (method, params) => this.calls.sendAsync(viewId, method, params, options));
+    const uniqueContextId: string = await this.findWorldAsync(viewId, mainId, options);
+    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod, {
+      functionDeclaration, uniqueContextId, arguments: [{ value }], returnByValue: true, silent: true
+    }, options);
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    const has: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
+    if (typeof has !== "boolean")
+      throw new MalformedReplyException();
+    return has;
   }
 
   private async startAsync(viewId: string, frameId: string, options: CallOptions, contexts: string[]): Promise<void> {

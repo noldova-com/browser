@@ -21,6 +21,7 @@ import { PageChangesContextMissingException } from "../../src/exceptions/page-ch
 import { PageChangesNotSwitchedException } from "../../src/exceptions/page-changes-not-switched.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import { ElementCountScript } from "../../src/models/element-count-script.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
 import { ResolvedElement } from "../../src/models/resolved-element.ts";
 import { ConsoleBuffers } from "../../src/services/console-buffers.ts";
@@ -98,6 +99,20 @@ describe("PageChanges", () => {
       functionDeclaration: PageTextScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: "Order placed" }], returnByValue: true, silent: true
     }));
     expect(switches(2)[0]).toBe("view-1.1 on");
+  });
+
+  it("asks whether the main frame holds no more than the most elements with the pinned count alone, in the same world, by value and silent", async () => {
+    const fits: boolean = await changes.hasAtMostElementsAsync("view-1", 20_000, options);
+    surface.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: false } });
+    const passes: boolean = await changes.hasAtMostElementsAsync("view-1", 20_000, options);
+    surface.answer("Runtime.callFunctionOn", { result: { type: "number", value: 20_001 } });
+
+    await expect(changes.hasAtMostElementsAsync("view-1", 20_000, options)).rejects.toBeInstanceOf(MalformedReplyException);
+    expect([fits, passes]).toEqual([true, false]);
+    expect(surface.calls.map(t => t.method).slice(0, 8)).toEqual(["Page.getFrameTree", ...ENABLES, "Page.createIsolatedWorld", "Runtime.callFunctionOn"]);
+    expect(surface.calls.filter(t => t.method === "Runtime.callFunctionOn").map(t => t.params)).toEqual(Array(3).fill({
+      functionDeclaration: ElementCountScript.functionDeclaration, uniqueContextId: "view-1.1", arguments: [{ value: 20_000 }], returnByValue: true, silent: true
+    }));
   });
 
   it("reads a text check that gives no boolean as malformed, and fails as the hearing does when the frame's world has no context", async () => {

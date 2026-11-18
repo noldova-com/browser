@@ -85,6 +85,19 @@ export declare class BrowserLimits {
   public static readonly maximumTreeReplyBytes: number;
 
   /**
+   * The most elements a page may hold, open shadow roots' too, for a snapshot to read its whole accessibility tree in one reply; a page with
+   * more is read a node's children at a time, since its whole tree passes the reply limit.
+   *
+   * @example
+   * ```ts
+   * import { BrowserLimits } from "@noldova/browser/runtime";
+   *
+   * const thousands: number = BrowserLimits.maximumWholeTreeElements / 1_000;
+   * ```
+   */
+  public static readonly maximumWholeTreeElements: number;
+
+  /**
    * The most bytes of a page's reply that describes one node or a frame tree; a larger reply fails the call.
    *
    * @example
