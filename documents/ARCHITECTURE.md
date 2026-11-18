@@ -500,7 +500,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | Code | Reason | Means |
 |---|---|---|
 | `browser.originRefused` | `Refused` | The typed-address policy refused the navigation's address, such as a local or link-local one, before anything asked |
-| `browser.covered` | `Refused` | Another element is topmost at the clicked element's centre, so nothing was pressed; since the element was scrolled to first, the call's result is `OutcomeUncertain` with this code in its message |
+| `browser.covered` | `Refused` | Another element is topmost at the clicked element's centre, so nothing was pressed; a cover is found only after the scroll or the pointer's move, so the call's result is always `OutcomeUncertain` with this code in its message |
 | `browser.pageNotShowing` | `Refused` | The page has no layout at the point, or none at all, so nothing was pressed; never a stale reference |
 | `browser.notVisible` | `Refused` | The clicked or captured element has no box on the page, or a screenshot's area has no size |
 | `browser.pageHidden` | `Refused` | The page has no size even when laid out for a screenshot, as when its tab is hidden, so nothing was captured |
