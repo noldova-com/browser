@@ -23,6 +23,32 @@ const FROM_VIEW_NOTE = "The page is too large to read from its start, so the sna
 const PAGE = "<!doctype html><title>Long page</title><ul>"
   + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`;
 
+// Rows under one element: 4,000 link rows make the page's whole tree pass the 4 MiB reply limit, so the snapshot reads it a node's
+// children at a time. Each row's name is long, so the snapshot's limit comes after a few hundred rows, well within its time limit. 12,000
+// rows, with shorter names that keep the list of their element's children within the limit, make that element's children alone pass it too; they are
+// elements with a button role, a node each that the page reads quickly on its own, as 12,000 link rows make a whole tree whose first read
+// alone nearly fills the time limit (#68). The element's ::before is a child its element lists apart from the others.
+const ROWS = 12_000;
+const LINK_ROWS = 4_000;
+// With a long attribute on each row, even the list of that element's children passes the limit.
+const ROW_PAD_LENGTH = 400;
+const LINK_NAME_WORDS = 30;
+const BUTTON_NAME_WORDS = 10;
+const ROWS_BEFORE = "Rows begin";
+
+function rowsPage(title: string, rows: number, row: (i: string) => string): string {
+  return `<!doctype html><title>${title}</title><style>#rows::before { content: "${ROWS_BEFORE}"; }</style><div id="rows">`
+    + `<script>document.write(Array.from({ length: ${rows} }, (_, i) => ${row("i")}).join(''))</script></div>`;
+}
+
+function linkRow(i: string): string {
+  return `'<div><a href="#r' + ${i} + '">Row ' + ${i} + ' word'.repeat(${LINK_NAME_WORDS}) + '</a></div>'`;
+}
+
+function buttonRow(i: string, pad: number = 0): string {
+  return `'<div role="button" aria-label="Row ' + ${i} + ' word'.repeat(${BUTTON_NAME_WORDS}) + '"${pad === 0 ? "" : ` data-pad="' + 'x'.repeat(${pad}) + '"`}></div>'`;
+}
+
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -64,6 +90,38 @@ test.describe("a snapshot of a long page", () => {
     expect(Buffer.byteLength(tree, "utf8")).toBeGreaterThan(SNAPSHOT_LIMIT_BYTES - LONGEST_LINE_BYTES);
     expect(notes).toContain(CUT_NOTE);
     expect(notes).not.toContain(FROM_VIEW_NOTE);
+  });
+
+  for (const [title, rows, role, words, row] of [["a page with thousands of link rows under one element", LINK_ROWS, "link", LINK_NAME_WORDS, linkRow],
+    ["a page with more children under one element than one reply holds", ROWS, "button", BUTTON_NAME_WORDS, buttonRow]] as const)
+    test(`${title} gives its first lines, with references and the cut note`, async ({ app, servers }) => {
+      const docs = await servers.startAsync("docs.localhost", { "/": rowsPage("Rows page", rows, row) });
+      await app.allowLocalSitesAsync([docs.origin]);
+      const instance = await app.openPageAsync(docs.url("/"));
+      await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Rows page")]);
+
+      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+
+      expect(result, `The snapshot failed: ${JSON.stringify(result).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
+      const notes = textsOf(result);
+      const tree = treeOf(notes);
+      expect(tree).toMatch(new RegExp(`^ *- StaticText "${ROWS_BEFORE}"$(?:\\n.*)*?\\n *- ${role} "Row 0(?: word){${words}}" \\[e1\\]$`, "mu"));
+      expect(tree).toMatch(new RegExp(`^ *- ${role} "Row 1(?: word){${words}}" \\[e2\\]$`, "mu"));
+      expect(tree).not.toMatch(new RegExp(`"Row ${rows - 1} `, "u"));
+      expect(Buffer.byteLength(tree, "utf8")).toBeLessThanOrEqual(SNAPSHOT_LIMIT_BYTES);
+      expect(notes).toContain(CUT_NOTE);
+    });
+
+  test("a page with an element whose children are too many even to list fails as too large, naming the element", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": rowsPage("Wider page", ROWS, i => buttonRow(i, ROW_PAD_LENGTH)) });
+    await app.allowLocalSitesAsync([docs.origin]);
+    const instance = await app.openPageAsync(docs.url("/"));
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Wider page")]);
+
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+
+    expect(result).toEqual(expect.objectContaining({ isFailure: true, code: "TooLarge",
+      message: `A generic element on the page has ${ROWS + 1} children, more than one answer can carry, so the snapshot can't read past it.` }));
   });
 
   test("on such a page scrolled down, the snapshot starts where it is scrolled to, after the lines that lead there, and says so", async ({ app, servers }) => {
