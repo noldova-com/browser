@@ -13,6 +13,8 @@ import { TestApp } from "../fixtures/test-app.ts";
 test.describe("the test app", () => {
   test("a quit after the app has closed doesn't ask Playwright for the closed app", async ({ loopbackProxy }, testInfo) => {
     const app = await TestApp.launchAsync(testInfo, {}, LaunchSettings.forRun(loopbackProxy.address));
+    // The command line's quit finds the app only once its runtime is running, which the start's end shows.
+    await app.waitForStartAsync();
     await app.quitAsync();
     await app.closedAsync();
 
