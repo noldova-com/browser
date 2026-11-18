@@ -105,23 +105,27 @@ export class ClickTool implements IBrowserTool {
     return name === Resources.mouseButtonNames[MouseButton.Right] ? MouseButton.Right : MouseButton.Left;
   }
 
-  // An element whose centre is in view is pressed where it is, so the page doesn't move; one out of view is scrolled to first. After a
-  // scroll, or a layout of a page that had no size, the point is read once two reads a moment apart agree, as the page may still move.
+  // An element shown at its centre, in the view and topmost there, is pressed where it is, so the page doesn't move; any other is scrolled
+  // to first, such as one below the view, out of an inner pane's view or under a sticky header. A page laid out for the press is read
+  // once it rests, and after a scroll the point is read again once two reads a moment apart agree, as the page may still move.
   private async pressAsync(viewId: string, backendNodeId: number, button: MouseButton, clickCount: number, isLaidOut: boolean, activity: PageActivity,
     options: CallOptions, confirmRiskAsync: () => Promise<void>): Promise<void> {
-    let [quad, metrics]: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
-    const isShown: boolean = quad !== null && ClickTool.isInView(metrics, ContentQuads.toCentre(quad));
-    if (!isShown)
+    let [quad, metrics]: [readonly number[] | null, JsonObject] = isLaidOut
+      ? await this.settleAsync(viewId, backendNodeId, options)
+      : await this.readPointAsync(viewId, backendNodeId, options);
+    const isShown: boolean = await this.isShownAsync(viewId, backendNodeId, quad, metrics, options);
+    if (!isShown) {
       await this.kit.calls.sendAsync(viewId, Resources.scrollIntoViewIfNeededMethod, { backendNodeId }, options);
-    if (!isShown || isLaidOut)
       [quad, metrics] = await this.settleAsync(viewId, backendNodeId, options);
+    }
     if (quad === null)
       throw new ElementNotVisibleException();
     const centre: PagePoint = ContentQuads.toCentre(quad);
     const { x, y }: PagePoint = centre;
     activity.aim(ContentQuads.toBox(quad), centre);
     const scroll: PagePoint = ClickTool.readScroll(metrics);
-    await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
+    if (!isShown)
+      await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
     const mouse: { x: number; y: number; button: "left" | "middle" | "right" } = { x, y, button: Resources.mouseButtonNames[button] };
     await this.kit.calls.sendAsync(viewId, Resources.dispatchMouseEventMethod, { type: Resources.mouseMovedType, x, y }, options);
     for (let count: number = 1; count <= clickCount; count++) {
@@ -139,6 +143,18 @@ export class ClickTool implements IBrowserTool {
       throw new PageChangedAfterGrantException();
     const { x, y }: PagePoint = ContentQuads.toCentre(quad);
     await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
+  }
+
+  // Whether the element shows at its centre: the centre is in the view and the topmost element there is the element or inside it.
+  private async isShownAsync(viewId: string, backendNodeId: number, quad: readonly number[] | null, metrics: JsonObject, options: CallOptions): Promise<boolean> {
+    if (quad === null)
+      return false;
+    const centre: PagePoint = ContentQuads.toCentre(quad);
+    if (!ClickTool.isInView(metrics, centre))
+      return false;
+    const { x, y }: PagePoint = centre;
+    const scroll: PagePoint = ClickTool.readScroll(metrics);
+    return this.isTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
   }
 
   // The element's first box and the page's metrics, read together.
@@ -180,16 +196,21 @@ export class ClickTool implements IBrowserTool {
   }
 
   private async confirmTopmostAsync(viewId: string, backendNodeId: number, documentX: number, documentY: number, options: CallOptions): Promise<void> {
+    if (!await this.isTopmostAsync(viewId, backendNodeId, documentX, documentY, options))
+      throw new ElementCoveredException();
+  }
+
+  // Whether the topmost element at the point in the document is the element or inside it.
+  private async isTopmostAsync(viewId: string, backendNodeId: number, documentX: number, documentY: number, options: CallOptions): Promise<boolean> {
     const hit: JsonObject = await this.kit.calls.sendAsync(viewId, Resources.getNodeForLocationMethod,
       { x: Math.round(documentX), y: Math.round(documentY), includeUserAgentShadowDOM: false }, options);
     const topmost: JsonValue | undefined = hit[Resources.backendNodeIdField];
     if (typeof topmost !== "number")
       throw new MalformedReplyException();
     if (topmost === backendNodeId)
-      return;
+      return true;
     const subtree: JsonObject = await this.kit.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId, depth: Resources.wholeSubtreeDepth, pierce: true },
       options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
-    if (!NodeFactsReader.holds(subtree, topmost))
-      throw new ElementCoveredException();
+    return NodeFactsReader.holds(subtree, topmost);
   }
 }

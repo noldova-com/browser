@@ -153,7 +153,7 @@ describe("the risk table", () => {
     {
       action: "Click anything but the submit control of a form that holds a secret field: a submit control of a form that holds none, a link or an area, any other "
         + "element or plain content, and a click the tool can't classify beforehand, with no element reference, at a point, or on a node it can't resolve; the click "
-        + "scrolls its element into view only when the element's centre is outside it, and Browser has no scroll of its own",
+        + "scrolls its element into view unless the element shows at its centre, in the view and topmost there, and Browser has no scroll of its own",
       checkAsync: async () => {
         const tool: ClickTool = new ClickTool(bench.kit);
         bench.permissions.automaticDecision = PermissionDecision.AllowedAlways;

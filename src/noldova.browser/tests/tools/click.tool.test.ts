@@ -168,11 +168,27 @@ describe("ClickTool", () => {
     expect(mouseEvents().filter(t => t["type"] === "mousePressed").map(t => [t["button"], t["clickCount"]])).toEqual([["right", 1], ["right", 2], ["middle", 1]]);
   });
 
-  it("reports a cover over the element rather than clicking it", async () => {
+  it("reports a cover over the element rather than clicking it, once a scroll didn't bring the element out from under it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     ShopPage.serve(bench, ShopPage.BANNER);
 
-    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ElementCoveredException, { reason: "Refused", moduleCode: "browser.covered" });
-    expect(mouseEvents()).toEqual([]);
+    await CallFailures.expectAsync(settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }))), ElementCoveredException,
+      { reason: "Refused", moduleCode: "browser.covered" });
+    expect([bench.methods.includes("DOM.scrollIntoViewIfNeeded"), mouseEvents()]).toEqual([true, []]);
+  });
+
+  it("scrolls an element whose centre is in view but under another element there, as out of an inner pane's view, and presses it once it shows", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    let isScrolled: boolean = false;
+    bench.surface.answerWith("DOM.scrollIntoViewIfNeeded", () => {
+      isScrolled = true;
+      return {};
+    });
+    bench.surface.answerWith("DOM.getNodeForLocation", () => ({ backendNodeId: isScrolled ? ShopPage.LINK : ShopPage.BANNER, frameId: "F1" }));
+
+    await settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })));
+
+    expect([isScrolled, mouseEvents().map(t => t["type"])]).toEqual([true, ["mouseMoved", "mousePressed", "mouseReleased"]]);
   });
 
   it("refuses a reference from another document before it asks", async () => {
@@ -535,13 +551,29 @@ describe("ClickTool", () => {
       await settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })));
 
       expect(emulation()).toEqual([["Emulation.setDeviceMetricsOverride", OVERRIDE], ...RELEASED]);
-      // Read where it is after the layout, then twice more a moment apart before the press, with no scroll for an element in view.
+      // Read twice a moment apart after the layout, until the page rests, then pressed with no scroll for an element in view.
       const layout: number = bench.methods.indexOf("Emulation.setDeviceMetricsOverride");
       expect([bench.methods.includes("DOM.scrollIntoViewIfNeeded"), bench.methods.slice(layout, bench.methods.indexOf("DOM.getNodeForLocation", layout))
-        .filter(t => t === "DOM.getContentQuads").length]).toEqual([false, 3]);
+        .filter(t => t === "DOM.getContentQuads").length]).toEqual([false, 2]);
       expect(bench.methods.lastIndexOf("Input.dispatchMouseEvent")).toBeLessThan(bench.methods.indexOf("Emulation.clearDeviceMetricsOverride"));
       expect(bench.methods.filter(t => t === "DOM.getNodeForLocation").length).toBe(2);
       expect(mouseEvents().map(t => t["type"])).toEqual(["mouseMoved", "mousePressed", "mouseReleased"]);
+    });
+
+    it("scrolls to an element the page's own layout moved out of the view, deciding from where it rests after the layout", async () => {
+      neverShown();
+      let isScrolled: boolean = false;
+      bench.surface.answerWith("DOM.scrollIntoViewIfNeeded", () => {
+        isScrolled = true;
+        return {};
+      });
+      // In view at the first read after the layout, then moved below the 800 px view, as a resize handler might, until the scroll brings it in.
+      let reads: number = 0;
+      bench.surface.answerWith("DOM.getContentQuads", () => ({ quads: [quadAt(isScrolled || ++reads <= 2 ? 300 : 900, 10)] }));
+
+      await settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })));
+
+      expect([isScrolled, mouseEvents()[0]]).toEqual([true, { type: "mouseMoved", x: 20, y: 305 }]);
     });
 
     it("leaves a view that keeps its size at that size, with no emulation, since Noldova Desktop keeps a hidden page drawing for the press", async () => {
@@ -577,15 +609,15 @@ describe("ClickTool", () => {
       neverShown();
       const stop: AbortController = new AbortController();
       let reads: number = 0;
-      // The third box read is the first after the layout's own, so the stop comes in the pause before the next.
+      // The second box read is the first after the layout, so the stop comes in the pause before the next.
       bench.surface.answerWith("DOM.getContentQuads", () => {
-        if (++reads === 3)
+        if (++reads === 2)
           setTimeout(() => stop.abort(), 0);
         return { quads: [quadAt(10, 10)] };
       });
 
       await CallFailures.expectAsync(settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }, stop))), CallCancelledException);
-      expect([reads, vi.getTimerCount()]).toEqual([3, 0]);
+      expect([reads, vi.getTimerCount()]).toEqual([2, 0]);
       expect(emulation().slice(-1)).toEqual(RELEASED);
       expect(mouseEvents()).toEqual([]);
     });
