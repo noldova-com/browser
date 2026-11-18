@@ -264,8 +264,8 @@ describe("AccessibilityWalk", () => {
     });
 
     it("reads the children of a child it read on its own", async () => {
-      listed([60]);
-      surface.answerWith("Accessibility.getPartialAXTree", () => ({ nodes: [{ ...node("6", "listitem", "Three", ["61"]), backendDOMNodeId: 60 }] }));
+      listed([40, 50, 60]);
+      surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [t["backendNodeId"] === 60 ? { ...node("6", "listitem", "Three", ["61"]), backendDOMNodeId: 60 } : ITEMS[Number(t["backendNodeId"])] ?? {}] }));
       surface.answerWith("Accessibility.getChildAXNodes", t => {
         if (t["id"] === "3")
           throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
@@ -274,7 +274,7 @@ describe("AccessibilityWalk", () => {
 
       const tree: AccessibilityTree = await readAsync();
 
-      expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "9", "6", "61"], true]);
+      expect([tree.nodes.map(t => t.id), tree.isWhole]).toEqual([["1", "2", "3", "9", "4", "5", "6", "61"], true]);
     });
 
     it("reads no child past the limit", async () => {
@@ -317,21 +317,39 @@ describe("AccessibilityWalk", () => {
       expect(calls().filter(t => t[0] === "Accessibility.disable")).toHaveLength(2);
     });
 
-    it("reads an element's list that isn't one, or a child without its element, as malformed, an element without children as none, and fails on any other failure", async () => {
+    it("reads an element's list that isn't one, or a child without its element, as malformed, and fails on any other failure", async () => {
       listed([40]);
       for (const reply of [{}, { node: { children: "LI" } }, { node: { children: ["LI"] } }, { node: { children: [{ nodeName: "LI" }] } }]) {
         surface.answer("DOM.describeNode", reply);
         await expect(readAsync()).rejects.toBeInstanceOf(MalformedReplyException);
       }
-      surface.answer("DOM.describeNode", { node: { backendNodeId: 30 } });
-      const empty: AccessibilityTree = await readAsync();
       surface.fail("DOM.describeNode", new WebViewFailure(WebViewFailureKind.ViewClosed));
       await expect(readAsync()).rejects.toBeInstanceOf(ViewClosedException);
       listed([40]);
       surface.fail("Accessibility.getPartialAXTree", new WebViewFailure(WebViewFailureKind.ViewClosed));
       await expect(readAsync()).rejects.toBeInstanceOf(ViewClosedException);
+    });
 
-      expect([empty.nodes.map(t => t.id), empty.isWhole]).toEqual([["1", "2", "3", "9"], true]);
+    it("fails as too large, naming the node, when its element doesn't list every child it names, from the start or from where the page is scrolled to", async () => {
+      const shadowHost: () => void = () => {
+        listed([]);
+        surface.answer("DOM.describeNode", { node: { backendNodeId: 30 } });
+      };
+      const owner: () => void = () => listed([40, 50]);
+      const scrolled: () => void = () => {
+        listed([40, 50]);
+        surface.answer("Page.getLayoutMetrics", layout(3000));
+        surface.answer("DOM.getNodeForLocation", { backendNodeId: 50, frameId: "frame-1" });
+        surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: t["fetchRelatives"] === true ? [PAGE, LIST, ITEMS[50] ?? {}] : [ITEMS[Number(t["backendNodeId"])] ?? {}] }));
+      };
+      for (const page of [shadowHost, owner, scrolled]) {
+        page();
+
+        const failure: unknown = await readAsync().catch((error: unknown) => error);
+
+        expect(failure).toBeInstanceOf(ChildrenTooManyException);
+        expect(failure).toMatchObject({ message: "A list element on the page has 3 children, more than one answer can carry, so the snapshot can't read past it." });
+      }
     });
   });
 

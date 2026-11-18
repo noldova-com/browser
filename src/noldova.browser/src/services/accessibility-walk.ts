@@ -22,6 +22,7 @@ import { AccessibilityTree } from "../models/accessibility-tree.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import type { LayoutMetrics } from "../models/layout-metrics.ts";
+import { ListedEnd } from "../models/listed-end.ts";
 import { TreeWalk } from "../models/tree-walk.ts";
 import { UnreadChild } from "../models/unread-child.ts";
 import { Resources } from "../resources.ts";
@@ -83,7 +84,11 @@ export class AccessibilityWalk {
   // Walks the nodes still to visit, and says whether it read them all before the limit.
   private async readOnAsync(viewId: string, walk: TreeWalk, reads: Map<AccessibilityNode | UnreadChild, TreeRead>, options: CallOptions,
     maximumBytes: number): Promise<boolean> {
-    for (let next: AccessibilityNode | UnreadChild | undefined = walk.pending.pop(); next !== undefined; next = walk.pending.pop()) {
+    for (let next: AccessibilityNode | UnreadChild | ListedEnd | undefined = walk.pending.pop(); next !== undefined; next = walk.pending.pop()) {
+      if (next instanceof ListedEnd) {
+        AccessibilityWalk.checkListed(walk, next);
+        continue;
+      }
       this.readAhead(viewId, next, walk, reads, options);
       const node: AccessibilityNode | null = next instanceof UnreadChild ? AccessibilityWalk.adopt(walk, next, await this.takeAsync(viewId, next, reads, options)) : next;
       if (node === null)
@@ -93,8 +98,10 @@ export class AccessibilityWalk {
       if (node.childIds.length === 0)
         continue;
       const children: readonly AccessibilityNode[] | null = await this.takeAsync(viewId, node, reads, options);
-      const ordered: readonly (AccessibilityNode | UnreadChild)[] = children === null ? await this.listChildrenAsync(viewId, node, options) : walk.take(node.childIds, children);
-      walk.pending.push(...[...ordered].reverse());
+      if (children === null)
+        walk.pending.push(new ListedEnd(node, node.childIds), ...[...await this.listChildrenAsync(viewId, node, options)].reverse());
+      else
+        walk.pending.push(...[...walk.take(node.childIds, children)].reverse());
     }
     return true;
   }
@@ -106,7 +113,7 @@ export class AccessibilityWalk {
     for (const item of [next, ...walk.pending.slice(-Resources.treeReadsAhead).reverse()]) {
       if (reads.size >= Resources.treeReadsAhead)
         return;
-      if (!reads.has(item) && (item instanceof UnreadChild || item.childIds.length > 0))
+      if (!(item instanceof ListedEnd) && !reads.has(item) && (item instanceof UnreadChild || item.childIds.length > 0))
         this.startRead(viewId, item, reads, options);
     }
   }
@@ -139,7 +146,7 @@ export class AccessibilityWalk {
       const children: readonly AccessibilityNode[] | null = await this.readChildrenAsync(viewId, parent, options);
       if (children === null) {
         walk.adopt(parent, child);
-        walk.pending.push(...[...AccessibilityWalk.after(child, await this.listChildrenAsync(viewId, parent, options))].reverse());
+        walk.pending.push(new ListedEnd(parent, later), ...[...AccessibilityWalk.after(child, await this.listChildrenAsync(viewId, parent, options))].reverse());
       }
       else
         walk.pending.push(...walk.take(later, children).filter(t => t.id !== child.id).reverse());
@@ -250,6 +257,12 @@ export class AccessibilityWalk {
   private static adopt(walk: TreeWalk, child: UnreadChild, nodes: readonly AccessibilityNode[] | null): AccessibilityNode | null {
     const node: AccessibilityNode | undefined = nodes?.find(t => t.backendNodeId === child.backendNodeId);
     return node !== undefined && walk.adopt(child.parent, node) ? node : null;
+  }
+
+  // A node whose listed children didn't hold every child it names fails as too large, as the walk can't read the others a part at a time.
+  private static checkListed(walk: TreeWalk, end: ListedEnd): void {
+    if (!walk.hasRead(end.childIds))
+      throw new ChildrenTooManyException(end.parent.role, end.parent.childIds.length);
   }
 
   // The listed children after the walk's own child, by its element, or all of them when its element isn't one of them.
