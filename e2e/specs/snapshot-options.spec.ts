@@ -58,6 +58,13 @@ const FIELDS = `<!doctype html><title>Fields</title>
 <input aria-label="New" autocomplete="section-a new-password" value="opensesame">
 <input aria-label="Name" value="Ada">`;
 
+const AROUND = `<!doctype html><title>Around</title>
+<label>Password <input type="password" value="hunter2"></label>
+<table><tr><td>Card <input autocomplete="cc-number" value="4111111111111111"></td></tr></table>
+<div id="code">Code <input autocomplete="one-time-code" value="902614"></div><button aria-labelledby="code">Send</button>
+<label>Expiry <select autocomplete="cc-exp"><option>01/27</option><option selected>12/29</option></select></label>
+<label>Name <input value="Ada"></label>`;
+
 const NESTED = `<!doctype html><title>Nested</title><h1>Shop</h1><p>Welcome back</p>
 <nav aria-label="Menu"><ul><li><a href="#d">Deep link</a></li></ul></nav><button id="pay">Pay</button>`;
 
@@ -127,6 +134,24 @@ test.describe("the snapshot's options", () => {
       expect.stringMatching(/^ {2}- textbox "Name" value="Ada" \[e5\]$/u)
     ]);
     for (const secret of ["hunter2", "4111111111111111", "902614", "opensesame"])
+      expect(JSON.stringify(result)).not.toContain(secret);
+  });
+
+  test("leaves a secret field's value out of the names of a label, a table cell and an element labelled by what holds the field, and keeps another field's", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": AROUND });
+    const bindings = await openAsync(app, docs.url("/"), "Around");
+
+    const result = await snapshotAsync(app, bindings);
+
+    const lines = linesOf(result);
+    expect(lines.filter(t => /^ *- (LabelText|cell|button) /u.test(t)).map(t => t.replace(/ \[e\d+\]$/u, "").trim())).toEqual([
+      "- LabelText \"Password\"",
+      "- cell \"Card\"",
+      "- button \"Code\"",
+      "- LabelText \"Expiry\"",
+      "- LabelText \"Name Ada\""
+    ]);
+    for (const secret of ["hunter2", "4111111111111111", "902614", "12/29"])
       expect(JSON.stringify(result)).not.toContain(secret);
   });
 

@@ -28,7 +28,7 @@ import { ViewCalls } from "./view-calls.ts";
 
 // What a closed shadow root's host holds, which the page's own script can't reach, read from the browser's accessibility tree for that host
 // alone and written as the snapshot function writes the page's lines: the same roles, lifting, options and masking, a secret field's value
-// read only to be masked. The host's own line is the page's and these lines follow it, one level deeper; a part read by a reference to an
+// read only to be masked and left out of the names around it. The host's own line is the page's and these lines follow it, one level deeper; a part read by a reference to an
 // element inside such a root starts with the element's own line. None when the page removed the element.
 export class ClosedRootReader {
   private readonly calls: ViewCalls;
@@ -59,20 +59,24 @@ export class ClosedRootReader {
     if (root === undefined)
       return null;
     const lines: SnapshotLine[] = [];
+    const secrets: string[] = [];
     let bytes: number = 0;
     let isDeeper: boolean = false;
+    const read = (isCut: boolean): ClosedRead => new ClosedRead(ClosedRootReader.withoutSecrets(lines, secrets), isCut, isDeeper);
     const pending: [AccessibilityNode, number][] = isHostShown ? [...await this.readChildrenAsync(viewId, root, options)].reverse().map(t => [t, depth + 1])
       : [[root, depth]];
     for (let visit: [AccessibilityNode, number] | undefined = pending.pop(); visit !== undefined; visit = pending.pop()) {
       if (Date.now() > options.deadline - Resources.closedRootMarginMilliseconds)
-        return new ClosedRead(lines, true, isDeeper);
+        return read(true);
       const [node, at]: [AccessibilityNode, number] = visit;
       if (node.role === Resources.inlineTextBoxRole)
         continue;
       const isShown: boolean = !node.isIgnored && !(Resources.liftedRoles.has(node.role) && node.name === "");
       const isListed: boolean = isShown && (!isInteractive || Resources.actionableRoles.has(node.role) || node.role === Resources.headingRole);
       const isMasked: boolean = await this.isMaskedAsync(viewId, node, options);
-      const hasChildren: boolean = node.childIds.length > 0 && node.role !== Resources.staticTextRole && !isMasked;
+      if (isMasked)
+        secrets.push(node.value);
+      const hasChildren: boolean = node.childIds.length > 0 && node.role !== Resources.staticTextRole && node.role !== Resources.comboboxRole && !isMasked;
       let childDepth: number = at;
       if (isListed) {
         const isBoundary: boolean = at + 1 >= mostDepth && hasChildren;
@@ -81,7 +85,7 @@ export class ClosedRootReader {
           isReferenced ? node.backendNodeId : null);
         const lineBytes: number = PageSnapshotReader.lineBytes(line);
         if (bytes + lineBytes > maximumBytes)
-          return new ClosedRead(lines, true, isDeeper);
+          return read(true);
         bytes += lineBytes;
         lines.push(line);
         if (isBoundary) {
@@ -93,17 +97,27 @@ export class ClosedRootReader {
       if (hasChildren)
         pending.push(...[...await this.readChildrenAsync(viewId, node, options)].reverse().map((t): [AccessibilityNode, number] => [t, childDepth]));
     }
-    return new ClosedRead(lines, false, isDeeper);
+    return read(false);
   }
 
-  // A field's value is masked when its element is secret, or when the field has no element to tell.
+  // A node's value, of any role, is masked when its element is secret, or when the node has no element to tell.
   private async isMaskedAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<boolean> {
-    if (node.value === "" || !Resources.typedRoles.has(node.role))
+    if (node.value === "")
       return false;
     if (node.backendNodeId === null)
       return true;
     return RiskClassifier.isSecret(NodeFactsReader.readNode(
       await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { backendNodeId: node.backendNodeId }, options)));
+  }
+
+  // The lines with each secret value the walk masked left out of their names, which the engine builds from the fields inside an element,
+  // such as a label around a password field; a name only gets shorter, so the lines still fit their bytes.
+  private static withoutSecrets(lines: readonly SnapshotLine[], secrets: readonly string[]): readonly SnapshotLine[] {
+    return lines.map(t => {
+      const name: string = secrets.reduce((text, secret) => text.replaceAll(secret, ""), t.name);
+      return name === t.name ? t
+        : new SnapshotLine(t.depth, t.role, name.replace(/\s+/gu, " ").trim(), t.value, t.isMasked, t.index, t.host, t.backendNodeId);
+    });
   }
 
   // The node's children, in its own order; none for a node the page removed since its parent was read.

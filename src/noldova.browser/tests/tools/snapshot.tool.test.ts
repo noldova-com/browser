@@ -253,6 +253,19 @@ describe("SnapshotTool", () => {
     expect(() => bench.sessions.resolveReference(ToolBench.SESSION, "e1", "view-1", "L3")).toThrow(UnknownReferenceException);
   });
 
+  it("drops the view's references when the snapshot fails after the function ran, so an earlier one is refused rather than naming another element", async () => {
+    await bench.runAsync(tool, bench.call({}));
+    bench.surface.answerWith("Page.getFrameTree", () => {
+      if (bench.surface.snapshotRequests.length === 2)
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));
+      return FRAME;
+    });
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({})), ProtocolFailedException, { reason: "Unavailable" });
+    expect(bench.surface.snapshotRequests.length).toBe(2);
+    expect(() => bench.sessions.resolveReference(ToolBench.SESSION, "e3", "view-1", "L1")).toThrow(StaleReferenceException);
+  });
+
   it("passes on a failure of the function's call", async () => {
     bench.surface.snapshot = () => {
       throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Engine busy"));

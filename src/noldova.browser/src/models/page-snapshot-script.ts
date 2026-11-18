@@ -232,6 +232,8 @@ export class PageSnapshotScript {
           return text;
       }
     }
+    if (state.isTraversal && isSecret(node))
+      return "";
     if (state.isTraversal && state.isReferenced !== true && (typedRoles.has(role) || role === "listbox" || rangeRoles.has(role)))
       return role === "combobox" || role === "listbox" ? selectedText(node) : valueOf(node, role);
     const label = collapse(node.getAttribute("aria-label") ?? "");

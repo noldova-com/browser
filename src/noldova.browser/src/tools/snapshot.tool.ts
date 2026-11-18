@@ -11,6 +11,7 @@ import { type IToolDescriptor, type ToolCall, ToolContent, type ToolResult } fro
 
 import { ChangedDuringReadException } from "../exceptions/changed-during-read.exception.ts";
 import { StaleReferenceException } from "../exceptions/stale-reference.exception.ts";
+import { UnknownReferenceException } from "../exceptions/unknown-reference.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
@@ -59,8 +60,7 @@ export class SnapshotTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Reading, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
-      const [frame, snapshot]: [FrameFacts, PageSnapshot] = await this.readDocumentAsync(call.session, page.viewId, isInteractive, depth, part, options);
-
+      const [frame, snapshot]: [FrameFacts, PageSnapshot] = await this.readAsync(call.session, page.viewId, isInteractive, depth, part, options);
       this.kit.sessions.dropReferences(page.viewId);
       const text: CutText = PageSnapshotReader.write(snapshot.lines,
         t => this.kit.sessions.issueReference(call.session, new SnapshotReference(page.viewId, frame.documentId, t)),
@@ -75,9 +75,23 @@ export class SnapshotTool implements IBrowserTool {
       if (snapshot.unread > 0)
         content.push(ToolContent.fromText(Resources.formatClosedUnread(snapshot.unread), null));
       if (snapshot.unsearched.length > 0)
-        content.push(ToolContent.fromText(Resources.formatClosedUnsearched(snapshot.unsearched), null));
+        content.push(ToolContent.fromText(Resources.formatClosedUnsearched(snapshot.unsearched), frame.origin));
       return ToolResults.page(frame.origin, content, new ShownPage(frame.url, snapshot.title));
     });
+  }
+
+  // The function replaces the elements the view's references index before the snapshot can still fail, so a failure drops them, unless it
+  // refused a part, which the function never reached or left before it replaced them.
+  private async readAsync(session: string, viewId: string, isInteractive: boolean, depth: number | null, part: string | null, options: CallOptions)
+    : Promise<[FrameFacts, PageSnapshot]> {
+    try {
+      return await this.readDocumentAsync(session, viewId, isInteractive, depth, part, options);
+    }
+    catch (error) {
+      if (!(error instanceof StaleReferenceException || error instanceof UnknownReferenceException))
+        this.kit.sessions.dropReferences(viewId);
+      throw error;
+    }
   }
 
   // The page's lines, from a document the frame names both before and after them, so their content never carries another document's
