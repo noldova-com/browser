@@ -319,7 +319,7 @@ describe("AccessibilityWalk", () => {
 
     it("reads an element's list that isn't one, or a child without its element, as malformed, an element without children as none, and fails on any other failure", async () => {
       listed([40]);
-      for (const reply of [{}, { node: { children: "LI" } }, { node: { children: [{ nodeName: "LI" }] } }]) {
+      for (const reply of [{}, { node: { children: "LI" } }, { node: { children: ["LI"] } }, { node: { children: [{ nodeName: "LI" }] } }]) {
         surface.answer("DOM.describeNode", reply);
         await expect(readAsync()).rejects.toBeInstanceOf(MalformedReplyException);
       }
