@@ -28,11 +28,13 @@ describe("HiddenPageLayout", () => {
   let surface: ScriptedViews;
   let log: FakeModuleLog;
   let presses: number;
+  let laidOut: boolean[];
 
   function holdAsync(): Promise<void> {
     const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
-    return new HiddenPageLayout(new ViewCalls(surface.relay), log).holdAsync("view-1", options, async () => {
+    return new HiddenPageLayout(new ViewCalls(surface.relay), log).holdAsync("view-1", options, async isLaidOut => {
       presses += 1;
+      laidOut.push(isLaidOut);
     });
   }
 
@@ -45,6 +47,7 @@ describe("HiddenPageLayout", () => {
     surface.acknowledge("Emulation.setDeviceMetricsOverride", "Emulation.clearDeviceMetricsOverride");
     log = new FakeModuleLog();
     presses = 0;
+    laidOut = [];
   });
 
   it("presses on a page that has a size as it is", async () => {
@@ -52,7 +55,7 @@ describe("HiddenPageLayout", () => {
 
     await holdAsync();
 
-    expect([presses, surface.calls.map(t => t.method)]).toEqual([1, ["Page.getLayoutMetrics"]]);
+    expect([laidOut, surface.calls.map(t => t.method)]).toEqual([[false], ["Page.getLayoutMetrics"]]);
   });
 
   it("lays a page with no size out at 1280 by 800 for the press, and lets the size go after it", async () => {
@@ -60,7 +63,7 @@ describe("HiddenPageLayout", () => {
 
     await holdAsync();
 
-    expect(presses).toBe(1);
+    expect(laidOut).toEqual([true]);
     expect(surface.calls.map(t => [t.method, t.params])).toEqual([["Page.getLayoutMetrics", {}],
       ["Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 0, mobile: false }], ["Page.getLayoutMetrics", {}],
       ["Emulation.clearDeviceMetricsOverride", {}]]);
