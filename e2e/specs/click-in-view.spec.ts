@@ -22,8 +22,8 @@ const PAGE = "<!doctype html><title>One</title><body style=\"margin:0;height:600
   + "<script>window.seen = []; addEventListener(\"scroll\", t => seen.push(t.target === document ? \"scroll\" : \"pane-scroll\"), true);"
   + "addEventListener(\"click\", () => seen.push(\"click\"), true);</script>";
 
-// Each case's place for the button, from the view's height h, and what it shows before the click: whether its top or bottom is cut at the
-// view's edge, and whether its centre is in the view.
+// Each case's place for the button, from the view's height h, and what it shows before the click: whether the view's top or bottom edge
+// crosses it, and whether its centre is in the view.
 const CASES = [
   { name: "cut at the view's bottom edge, its centre in view", place: "press.style.top = (1000 + h - 50) + \"px\"; press.style.height = \"60px\"",
     isTopCut: false, isBottomCut: true, isCentreIn: true, moves: "nothing" },
@@ -83,7 +83,8 @@ test.describe("an agent's click on an element in view", () => {
       await expect.poll(() => app.viewPages.runAtAsync(docs.url("/"), "seen.includes(\"scroll\")")).toBe("true");
       const before = stateOf(await app.viewPages.runAtAsync(docs.url("/"), `seen.length = 0; ${READ}`));
       const centre = (before.top + before.bottom) / 2;
-      expect([before.top < 0, before.bottom > before.height, centre >= 0 && centre < before.height], "The button isn't placed as the case says.")
+      expect([before.top < 0 && before.bottom > 0, before.top < before.height && before.bottom > before.height, centre >= 0 && centre < before.height],
+        "The button isn't placed as the case says.")
         .toEqual([item.isTopCut, item.isBottomCut, item.isCentreIn]);
       await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
 
