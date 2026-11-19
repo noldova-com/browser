@@ -37,6 +37,12 @@ describe("TypedAddressPolicy", () => {
     ]);
   });
 
+  it("refuses a host that holds a star, written or percent-encoded, even when the app's settings name its origin, and takes a star in the path", () => {
+    expect(["https://*.com/", "http://*/", "https://ex*ample.com/", "https://a%2A.com/", "https://a%2a.com/", "https://\uff0a.com/", "http://*.localhost:3000/"]
+      .map(t => TypedAddressPolicy.judge(t, ["http://*.localhost:3000"]))).toEqual(new Array(7).fill({ kind: "Refused", reason: "NotAnAddress" }));
+    expect(TypedAddressPolicy.judge("https://example.com/*", [])).toEqual({ kind: "Allowed", origin: "https://example.com" });
+  });
+
   it("refuses an address longer than the limit, and takes one at it", () => {
     const base: string = "https://example.com/";
     const atLimit: string = base + "a".repeat(32768 - base.length);

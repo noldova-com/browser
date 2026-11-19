@@ -182,8 +182,8 @@ describe("RuntimePart", () => {
     expect(surface.viewListenerCount).toBe(0);
   });
 
-  it("declares the allowed origins' and the pages' migrations, the pages' agent last", () => {
-    expect(new RuntimePart().migrations.map(t => t.id)).toEqual(["create-allowed-origins", "create-pages", "add-page-agent"]);
+  it("declares the allowed origins' and the pages' migrations in the order they shipped, each new one after them", () => {
+    expect(new RuntimePart().migrations.map(t => t.id)).toEqual(["create-allowed-origins", "create-pages", "add-page-agent", "drop-starred-allowed-origins"]);
   });
 
   it("keeps a page's record, which a later run reads, until the window forgets it", async () => {

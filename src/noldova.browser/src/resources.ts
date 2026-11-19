@@ -167,6 +167,7 @@ export class Resources {
   public static readonly missingNodePrefix: string = "No node";
   public static readonly noNodeAtPoint: string = "No node found at given location";
   public static readonly webSchemes: readonly string[] = ["http:", "https:"];
+  public static readonly wildcardPattern: RegExp = /[*%]/u;
   public static readonly localSitesSetting: string = "browser.localSites";
   public static readonly localRefused: string =
     "The address is on this computer or its network, which the browser opens only once the person names its origin in Settings, under Sites on this computer or network (browser.localSites); ask them to, or use another address.";
@@ -329,6 +330,8 @@ export class Resources {
   public static readonly originsMigrationId: string = "create-allowed-origins";
   public static readonly createOriginsTable: string =
     "CREATE TABLE allowed_origins (profile_key TEXT NOT NULL, origin TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY (profile_key, origin)) STRICT";
+  public static readonly dropStarredOriginsMigrationId: string = "drop-starred-allowed-origins";
+  public static readonly dropStarredOrigins: string = "DELETE FROM allowed_origins WHERE instr(origin, '*') > 0 OR instr(origin, '%') > 0";
   public static readonly readOriginsStatement: string = "SELECT origin FROM allowed_origins WHERE profile_key = ? ORDER BY position";
   public static readonly originColumn: string = "origin";
   public static readonly deleteOriginsStatement: string = "DELETE FROM allowed_origins WHERE profile_key = ?";
