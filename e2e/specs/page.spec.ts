@@ -59,8 +59,18 @@ async function shownViewsAsync(window: Page): Promise<readonly IShownView[]> {
 }
 
 // Each page's own size, as its script reads it, which matches its view's box only once the view has been laid out again.
+// A move between groups destroys the page's old view and opens a new one, so the size reads as none while the window still shows the old
+// view's address with no page in the main process, or while the old view closes under the read.
 async function pageSizeAsync(app: TestApp, url: string): Promise<readonly number[]> {
-  return (await app.viewPages.runAtAsync(url, "innerWidth + ' ' + innerHeight")).split(" ").map(Number);
+  try {
+    return (await app.viewPages.runAtAsync(url, "innerWidth + ' ' + innerHeight")).split(" ").map(Number);
+  }
+  catch (error: unknown) {
+    // Playwright puts its own prefix before the main process's message, and that process's stack after it.
+    if (error instanceof Error && [`The app has 0 views at ${url}, not one.`, `The view at ${url} closed.`].some(t => error.message.includes(t)))
+      return [];
+    throw error;
+  }
 }
 
 async function expectFollowedAsync(app: TestApp, urls: readonly string[], what: string): Promise<readonly IShownView[]> {
@@ -133,10 +143,11 @@ test.describe("the page's view", () => {
     await openAsync(app, docs, "/two", "Two");
     const one = await openAsync(app, docs, "/one", "One");
     const full = await expectFollowedAsync(app, [docs.url("/one")], "before the split");
-    await app.window.mouse.click((full[0]?.host[0] ?? 0) + 20, (full[0]?.host[1] ?? 0) + 10);
-    await app.window.keyboard.type("kept");
+    // A click into the view at times doesn't give its field the focus, about once in forty runs, so the text goes in through the page's
+    // own editing, as typing does.
+    await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').focus(); document.execCommand('insertText', false, 'kept')");
     await app.viewPages.runAtAsync(docs.url("/one"), "scrollTo(0, 400); true");
-    expect(await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), "The person's typing didn't reach the field.").toBe("kept 400");
+    expect(await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), "The typed text didn't reach the field.").toBe("kept 400");
     // A moved view gets a new page, which Noldova Desktop restores from what the page last committed to its history.
     await expect.poll(() => app.viewPages.holdsPageStateAsync(docs.url("/one"), "kept"), { message: "The page never committed the typed text." }).toBe(true);
 

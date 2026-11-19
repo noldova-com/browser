@@ -73,6 +73,7 @@ interface IViewPageContents {
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
   on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
   on(event: "destroyed", listener: () => void): void;
+  removeListener(event: "destroyed", listener: () => void): void;
   emit(event: "select-bluetooth-device", details: { preventDefault(): void }, devices: readonly IBluetoothDevice[], choose: (deviceId: string) => void): boolean;
 }
 
@@ -336,7 +337,13 @@ export class ViewPages {
       const [view] = views;
       if (views.length !== 1 || view === undefined)
         throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
-      return String(await view.executeJavaScript(request.code, true));
+      // Electron's executeJavaScript never answers when its view is destroyed during the call, as a move between groups destroys the moved
+      // page's old view.
+      return new Promise<string>((resolve, reject) => {
+        const closed = (): void => reject(new Error(`The view at ${request.url} closed.`));
+        view.on("destroyed", closed);
+        view.executeJavaScript(request.code, true).then(t => resolve(String(t)), reject).finally(() => view.removeListener("destroyed", closed));
+      });
     }, { url, code: script });
   }
 

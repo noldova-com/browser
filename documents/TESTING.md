@@ -220,6 +220,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
   - A forced device scale factor, only in the screenshot scale workflow.
 - An agent tool is called through the base's tool registry in the fixture host app, with the agent session that the call names.
 - A test reads each view's address, title and whether it is loading, and the addresses its view committed, from the main process with `e2e/fixtures/view-pages.ts`, and may run a fixture page's own script in its view; the page itself gets no test hook.
+  A script whose view closes under it, as a move between groups closes the page's old view, fails with "The view at … closed.", since Electron's own call never answers then.
   It reads each view's session, cookies and storage folder there too, and the cookies of the app's window and default sessions.
 - A test may give the window's page a size with `TestApp.resizeAsync`, as the person's drag of the window's edge does, and read from the main process whether the state a view's page last committed to its history holds a text, with `ViewPages.holdsPageStateAsync`.
 - A test may restart the app on the same data and device folders; the requests recorded before the restart stay in the record the loopback guard reads at the test's end.
