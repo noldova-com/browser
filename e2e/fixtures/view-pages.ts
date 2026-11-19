@@ -63,7 +63,7 @@ interface IViewPageContents {
   isLoading(): boolean;
   readonly navigationHistory: { canGoBack(): boolean };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
-  forcefullyCrashRenderer(): void;
+  getOSProcessId(): number;
   sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
@@ -323,14 +323,15 @@ export class ViewPages {
     }, { url, keyCode, modifiers });
   }
 
-  // Ends the renderer of the one view at the URL, as a crash of its page would.
+  // Ends the renderer of the one view at the URL, as a crash of its page would, by killing its process: on Linux,
+  // Electron's `forcefullyCrashRenderer` only asks the renderer to crash, and a busy one was seen to keep running.
   public async crashAtAsync(url: string): Promise<void> {
     await this.application.evaluate(({ webContents }, pageUrl: string): void => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
       const [view] = views;
       if (views.length !== 1 || view === undefined)
         throw new Error(`The app has ${views.length} views at ${pageUrl}, not one.`);
-      view.forcefullyCrashRenderer();
+      process.kill(view.getOSProcessId(), "SIGKILL");
     }, url);
   }
 
