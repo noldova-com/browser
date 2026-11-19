@@ -252,10 +252,11 @@ export class Resources {
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
           ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
-          : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
-            status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
-              ? "This address isn't among the sites this workspace allows. Type it in the address field to open it."
-              : "Its address isn't one Browser opens.");
+          : status.isPageRefusal && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
+            ? new PageStateText("block", `This workspace doesn't allow ${status.refusedOrigin}`,
+              "This address isn't among the sites this workspace allows. Type it in the address field to open it.")
+            : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
+              "Its address isn't one Browser opens.");
       case PaneState.Crashed:
         return new PageStateText("sentiment_dissatisfied", "This page stopped working", "Its content process ended. Reload to open it again; anything typed into it is lost.");
       default:

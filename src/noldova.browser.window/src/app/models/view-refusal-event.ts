@@ -28,7 +28,7 @@ export class ViewRefusalEvent extends ViewEvent {
 
   public applyTo(status: PaneStatus): PaneStatus {
     const isBeforeItsLoad: boolean = status.state !== PaneState.Loading;
-    return status.refuse(this.origin, isBeforeItsLoad, this.address);
+    return status.refuse(this.origin, isBeforeItsLoad, this.address, true);
   }
 
   public followIn(hearing: PaneHearing): void {

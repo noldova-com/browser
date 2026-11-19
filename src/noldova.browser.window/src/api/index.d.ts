@@ -1056,6 +1056,12 @@ export declare class PaneStatus {
    */
   public readonly popup: PopupOffer | null;
 
+  /**
+   * Whether the refusal is of the page's own navigation, such as a link the person clicked, which Noldova Desktop reports as an event,
+   * while the state is `Refused`; `false` for a refusal in the answer to a call, such as navigate, back, forward or reload, and otherwise.
+   */
+  public readonly isPageRefusal: boolean;
+
   private constructor();
 
   /**
@@ -1128,8 +1134,10 @@ export declare class PaneStatus {
    * @param holdsRefusedLoad Whether the refusal holds the page's load that the view may still report after it, at the page's address, so that load
    * shows the refusal until the view's next state; `false`, the default, for a refusal that answers a navigation, which has no load to hold.
    * @param address The refused address, which the status names in place of an opaque origin, `"null"`; `null`, the default, names the origin as given.
-   * @returns The new status, with no refused address; this same status when it was already refused for that origin, had no refused address
-   * and held the same load.
+   * @param isPageRefusal Whether the page's own navigation was refused, as {@link PaneStatus.isPageRefusal} says; `false`, the default, for a
+   * refusal in a call's answer.
+   * @returns The new status, with no refused address; this same status when it was already refused for that origin, had no refused address,
+   * held the same load and was refused the same way.
    * @example
    * ```ts
    * import { PaneStatus } from "@noldova/browser.window";
@@ -1139,7 +1147,7 @@ export declare class PaneStatus {
    * const srcdoc: PaneStatus = PaneStatus.empty.refuse("null", true, "about:srcdoc");
    * ```
    */
-  public refuse(origin: string, holdsRefusedLoad?: boolean, address?: string | null): PaneStatus;
+  public refuse(origin: string, holdsRefusedLoad?: boolean, address?: string | null, isPageRefusal?: boolean): PaneStatus;
 
   /**
    * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads and a refused request's notice goes.
