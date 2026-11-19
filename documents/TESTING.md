@@ -365,7 +365,7 @@ Each test asserts that the view refuses with no prompt and no file written; a do
   Since the runner has no devices, the page's refusal alone would pass without the base's denial: the main process records each USB, serial and HID chooser the view's session offers, and every test asserts it offered none.
   Noldova Desktop turns Web Bluetooth off in every window, so the Bluetooth test asserts the page has no `navigator.bluetooth` on every system.
   Since the runner has no Bluetooth device either, the test also offers the view a device choice from the main process, as the engine does when a page asks for one, and asserts the view takes it and chooses no device.
-  Electron itself cancels a choice that no other handler takes, and the base's handler cancels it too, so this check fails when a handler chooses a device, not when the base's handler is missing.
+  Electron itself cancels a choice that no other handler takes, and the base's handler cancels it too, so this check fails when a handler chooses a device, or lets the choice through without `preventDefault()`, the one case where Electron chooses the first device itself, but not when the base's handler is missing.
   A certificate error reports a refusal and then fails the load, so the pane shows the failed load and the certificate's notice, and the fixture server receives no request.
 - An embedded `<webview>` element stays an unknown element in the page, since the view has no `<webview>` support, and asks for nothing.
 - A download is tried from a freshly loaded page each time, since a page load clears the pane's notice; the test then finds no file with its name under the downloads folder or the app's folders.
