@@ -4,6 +4,22 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.4
+
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.8 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` pins Noldova Desktop's protocol and window packages at 0.0.8 (#71, #80, #82, #94, #101) and `@noldova/ui.components.angular` at 0.0.17 (#73, #109).
+- A typed address whose host holds a star, written, full-width or percent-encoded, is refused as not an address, and an origin that an earlier version kept that way is dropped when the module updates.
+- `browser_snapshot` takes `interactive`, the elements an agent acts on and the headings, `depth`, 1 to 100 levels, and `part`, one element's subtree by a reference an earlier snapshot gave; its answer is bounded at 128 KiB, cut at a line's end with a note on how to read more (#78).
+  A reference no snapshot gave fails as `Refused` with the new code `browser.unknownReference`, and one whose element left the page as `Refused` with `browser.staleReference`.
+  The snapshot comes from one in-page function pinned in `webViews.json`, which no longer declares `Accessibility.getRootAXNode` or `Accessibility.getPartialAXTree` with its relatives.
+- A snapshot under a node whose children pass one reply reads them one element at a time, with `DOM.describeNode` at depth 1, which `webViews.json` now allows, and the walk sends its next reads together, so a page of thousands of rows under one element is read within the call's time (#69).
+- Click, type and press-key read the element they act on for their risk check with one pinned function, `ElementFactsScript`, which `@noldova/browser.protocol` exports, instead of the whole document, so they work on a page whose document passes one reply; `webViews.json` adds `DOM.resolveNode` and `Runtime.releaseObject` for it and allows `DOM.getDocument` at depth 0 only (#66).
+- A click presses an element that shows at its centre where it is, without scrolling the page; any other element is scrolled to first, and pressed once the page rests (#85).
+- Typing into a field that replaces itself when it takes the focus, as some sites' search boxes do, fails as a changed page, `Stale`, which asks for a new snapshot, instead of an uncertain outcome (#103).
+- A page's own refused navigation to a public site that isn't among the workspace's sites is headed "This workspace doesn't allow" and the origin, and says the address isn't among the sites the workspace allows; `@noldova/browser.protocol` exports `AddressLimits` (#98).
+- Reload on a crashed page loads its address again (#105).
+- Tests and CI: the end-to-end workflows for the page's placement and states (#106), each agent tool on a real page (#89), a crash's pending calls (#90), Bluetooth on every system (#102) and a person's refused link click (#112); the test app's start, close and downloads folder (#65, #87, #97), a failed test's attachments (#64) and click-in-view's placement (#111); and the workflows at `.github`'s v2.40.0 (#75, #96, #114).
+  The packages are unchanged by these.
+
 ## 0.0.3
 
 - `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.3 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` takes Noldova Desktop's protocol and window packages as peers at `>=0.0.3 <0.1.0` (#20, #58).
