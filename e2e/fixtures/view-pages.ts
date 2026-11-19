@@ -35,6 +35,9 @@ interface IViewDebugger {
   sendCommand(method: "Target.attachToTarget", params: { targetId: string; flatten: boolean }): Promise<{ sessionId: string }>;
   sendCommand(method: "Target.detachFromTarget", params: { sessionId: string }): Promise<unknown>;
   sendCommand(method: "Runtime.evaluate", params: { expression: string; returnByValue: boolean }, sessionId: string): Promise<{ result: { value?: unknown } }>;
+  sendCommand(method: string, ...rest: unknown[]): Promise<unknown>;
+  // The commands sent since `watchCommandsAtAsync` that have no answer yet, by the number of each in the order sent.
+  pendingCommands?: Map<number, string>;
 }
 
 interface IViewSession {
@@ -64,6 +67,7 @@ interface IViewPageContents {
   readonly navigationHistory: { canGoBack(): boolean };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
   getOSProcessId(): number;
+  isCrashed(): boolean;
   sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
@@ -323,15 +327,60 @@ export class ViewPages {
     }, { url, keyCode, modifiers });
   }
 
+  // From now on, keeps each command the base sends the one view at the URL until its answer comes, so a test can see
+  // which calls wait on the page.
+  public async watchCommandsAtAsync(url: string): Promise<void> {
+    await this.application.evaluate(({ webContents }, pageUrl: string): void => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${pageUrl}, not one.`);
+      const pending: Map<number, string> = new Map();
+      const send = view.debugger.sendCommand.bind(view.debugger);
+      let sent = 0;
+      Object.defineProperty(view.debugger, "sendCommand", {
+        configurable: true,
+        value: (method: string, ...rest: unknown[]): Promise<unknown> => {
+          sent += 1;
+          const number: number = sent;
+          pending.set(number, method);
+          return send(method, ...rest).finally(() => pending.delete(number));
+        }
+      });
+      view.debugger.pendingCommands = pending;
+    }, url);
+  }
+
+  // The commands the base sent the one view at the URL since `watchCommandsAtAsync` that have no answer yet, each as its
+  // number in the order sent and its method, such as "3 Page.captureScreenshot".
+  public async pendingCommandsAtAsync(url: string): Promise<readonly string[]> {
+    return this.application.evaluate(({ webContents }, pageUrl: string): string[] => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
+      const [view] = views;
+      if (views.length !== 1 || view === undefined)
+        throw new Error(`The app has ${views.length} views at ${pageUrl}, not one.`);
+      const pending: Map<number, string> | undefined = view.debugger.pendingCommands;
+      if (pending === undefined)
+        throw new Error(`The commands to the view at ${pageUrl} aren't watched.`);
+      return [...pending].map(([number, method]) => `${number} ${method}`);
+    }, url);
+  }
+
   // Ends the renderer of the one view at the URL, as a crash of its page would, by killing its process: on Linux,
   // Electron's `forcefullyCrashRenderer` only asks the renderer to crash, and a busy one was seen to keep running.
+  // It kills only a live renderer's own process, never the app's or, through 0 or a negative number, a process group.
   public async crashAtAsync(url: string): Promise<void> {
     await this.application.evaluate(({ webContents }, pageUrl: string): void => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
       const [view] = views;
       if (views.length !== 1 || view === undefined)
         throw new Error(`The app has ${views.length} views at ${pageUrl}, not one.`);
-      process.kill(view.getOSProcessId(), "SIGKILL");
+      if (view.isCrashed())
+        throw new Error(`The view at ${pageUrl} has already crashed.`);
+      const pid: number = view.getOSProcessId();
+      if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid)
+        throw new Error(`The view at ${pageUrl} has no renderer process of its own to end: ${pid}.`);
+      process.kill(pid, "SIGKILL");
     }, url);
   }
 

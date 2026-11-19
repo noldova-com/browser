@@ -268,7 +268,7 @@ The redirect row also asserts that the allowed server received each first hop, a
 | `denials.spec.ts` | Each default denial. |
 | `permissions.spec.ts` | A refused origin, once the person allows it through the permission contract, loads; a denied or expired request leaves it refused. |
 | `agent-tools.spec.ts` | Each tool acts on a real page: navigate, snapshot, click by reference, type, screenshot and console reading, each checked by what the fixture page records. A covered element is reported, not clicked. |
-| `crash.spec.ts` | A crashed view ends every pending call with an error within its time limit. |
+| `crash.spec.ts` | A crashed view ends every pending call with an error within its time limit: a snapshot, a screenshot or a wait whose own command waits on the page, and the calls the module holds behind it, since it runs a page's calls one at a time. |
 | `screenshot-scale.spec.ts` | A capture's decoded image is the view's size in CSS pixels times the device scale factor, scaled by `min(1, 1600 / its longer side in device pixels)` with the aspect ratio kept, for a view under the cap and one over it, at 1 and at a forced 2. |
 | `focus.spec.ts` | Focus moves into the page on a click and back to the pane's own controls. |
 | `new-page.spec.ts` | The tab row's New page button sits flush before the group's own buttons at their size, is named "New page" and shows its key in its tooltip, and opens an empty page at the row's end on the page's workspace with its address field focused; Ctrl+T, or Cmd+T on macOS, opens one from the toolbar and from inside the page, and reaches the part that has the focus in the window's own elements outside every page. |
