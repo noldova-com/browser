@@ -51,6 +51,7 @@ export class Resources {
   public static readonly answerRootPath: string = "$";
   public static readonly paneUnavailable: string = "The pane has no embedded view, or the host closed it.";
   public static readonly recentInputMilliseconds: number = 5_000;
+  public static readonly backgroundTabDisposition: string = "background-tab";
   public static readonly redirectLimit: number = 10;
   public static readonly readyPageLimitMilliseconds: number = 5_000;
   public static readonly notReadyInTime: string =

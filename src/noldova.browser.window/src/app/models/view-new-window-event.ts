@@ -16,13 +16,15 @@ export class ViewNewWindowEvent extends ViewEvent {
   public readonly address: string;
   public readonly hadRecentInput: boolean;
   public readonly origin: string | null;
+  public readonly isBackgroundTab: boolean;
 
-  public constructor(address: string, hadRecentInput: boolean, origin: string | null) {
+  public constructor(address: string, hadRecentInput: boolean, origin: string | null, isBackgroundTab: boolean = false) {
     super();
     this.kind = ViewEventKind.NewWindowRequested;
     this.address = address;
     this.hadRecentInput = hadRecentInput;
     this.origin = origin;
+    this.isBackgroundTab = isBackgroundTab;
   }
 
   public applyTo(status: PaneStatus): PaneStatus {

@@ -73,6 +73,18 @@ describe("WebViewEventReader", () => {
       .toStrictEqual(new ViewNewWindowEvent("https://two.example/", false, null));
   });
 
+  it("reads a new window's disposition as whether the engine asked for a background tab", () => {
+    const read = (disposition: string): unknown =>
+      WebViewEventReader.read(event(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, disposition }));
+
+    expect(["background-tab", "foreground-tab", "new-window", "default"].map(read)).toStrictEqual([
+      new ViewNewWindowEvent("https://two.example/", true, null, true),
+      new ViewNewWindowEvent("https://two.example/", true, null, false),
+      new ViewNewWindowEvent("https://two.example/", true, null, false),
+      new ViewNewWindowEvent("https://two.example/", true, null, false)
+    ]);
+  });
+
   it("reads the name of the pane's key the person pressed in the page", () => {
     expect(WebViewEventReader.read(event(WebViewEventKind.Key, { name: "reload" }))).toStrictEqual(new ViewKeyEvent("reload"));
   });
@@ -101,8 +113,9 @@ describe("WebViewEventReader", () => {
       malformed(WebViewEventKind.NewWindowRequested, { address: 1, hadRecentInput: true, origin: null }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: "yes", origin: null }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: 1 }),
+      malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, disposition: 1 }),
       malformed(WebViewEventKind.Key, { name: 1 }),
       malformed(WebViewEventKind.Zoom, { factor: "125%" })
-    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null]);
+    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null, null]);
   });
 });

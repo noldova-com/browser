@@ -530,11 +530,18 @@ export declare class ViewNewWindowEvent extends ViewEvent {
   public readonly origin: string | null;
 
   /**
+   * Whether the engine asked for a background tab, its disposition `background-tab`, as for a middle or Ctrl click on a link, or Cmd
+   * click on macOS; false for a script's `window.open`, a link's `target="_blank"` and an event without a disposition.
+   */
+  public readonly isBackgroundTab: boolean;
+
+  /**
    * Makes the event.
    *
    * @param address The address the page asked for.
    * @param hadRecentInput Whether the person's own input reached the view in the last 5 seconds.
    * @param origin The origin of the referrer, or `null`.
+   * @param isBackgroundTab Whether the engine asked for a background tab; false when left out.
    * @example
    * ```ts
    * import { ViewNewWindowEvent } from "@noldova/browser.window";
@@ -542,7 +549,7 @@ export declare class ViewNewWindowEvent extends ViewEvent {
    * const asked: ViewNewWindowEvent = new ViewNewWindowEvent("https://www.example.com/", true, "https://docs.example.com");
    * ```
    */
-  public constructor(address: string, hadRecentInput: boolean, origin: string | null);
+  public constructor(address: string, hadRecentInput: boolean, origin: string | null, isBackgroundTab?: boolean);
 
   /**
    * Gives the status unchanged: the pane offers a new window only through {@link PaneController.offerPopup}.

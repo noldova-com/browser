@@ -22,6 +22,8 @@ interface IOpenedDocument {
   readonly title: string;
   readonly after: string | null;
   readonly marker: IDocumentMarker | null;
+  // Only what the call gave, so a record of an open that didn't set it equals one written without it.
+  readonly activate: boolean | undefined;
 }
 
 export class WindowContext extends FakeWindowPartContext {
@@ -97,7 +99,8 @@ export class WindowContext extends FakeWindowPartContext {
       return item;
     });
     this.answer("openDocument", (name, instance, title, options) =>
-      void this.opened.push({ name, instance, title, after: options?.after ?? null, marker: options?.marker ?? null }));
+      void this.opened.push({ name, instance, title, after: options?.after ?? null, marker: options?.marker ?? null,
+        activate: options?.activate }));
     this.answer("closeDocument", (_name, instance) => void this.closed.push(instance));
     this.answer("updateDocument", (_name, instance, update) => void this.titles.push({ instance, update }));
     this.answer("listOpenDocumentsAsync", () => this.openDocuments instanceof Error ? Promise.reject(this.openDocuments) : Promise.resolve(this.openDocuments));

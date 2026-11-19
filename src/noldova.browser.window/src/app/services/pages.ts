@@ -10,7 +10,7 @@ import { type Signal, type WritableSignal, signal } from "@angular/core";
 import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { QualifiedName, WebViewPane } from "@noldova/desktop.protocol";
-import { DocumentTone, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
+import { DocumentTone, type IDocumentMarker, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
 import type { JsonValue } from "@noldova/context.json";
 
 import { Resources } from "../../resources.ts";
@@ -148,7 +148,7 @@ export class Pages {
     this.open(Resources.linkProfile, url);
   }
 
-  public open(profileKey: string, url: string | null, picked: string | null = null, opener: PaneTab | null = null): string {
+  public open(profileKey: string, url: string | null, picked: string | null = null, opener: PaneTab | null = null, isBehind: boolean = false): string {
     const instance: string = picked ?? crypto.randomUUID();
     const shown: [PaneTab, { readonly place: PagePlace }] | undefined = [...this.shown.entries()].find(t => t[0].id === instance);
     const place: PagePlace | undefined = shown === undefined ? this.pending.get(instance) : shown[1].place;
@@ -160,7 +160,7 @@ export class Pages {
     }
     this.pending.set(instance, { profileKey, url: url === null ? "" : url });
     try {
-      this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(opener));
+      this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(opener, isBehind));
     }
     catch (error) {
       this.pending.delete(instance);
@@ -372,10 +372,13 @@ export class Pages {
     return [...document.querySelectorAll(Resources.pageSelector)].find(t => t.contains(document.activeElement))?.getAttribute(Resources.pageInstanceAttribute) ?? null;
   }
 
-  private documentOptions(opener: PaneTab | null): IDocumentOptions {
+  private documentOptions(opener: PaneTab | null, isBehind: boolean): IDocumentOptions {
     if (opener !== null) {
       const last: string | undefined = this.lastAsked.get(opener.id);
-      return { after: last !== undefined && this.holds(last) ? last : opener.id, marker: { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) } };
+      const after: string = last !== undefined && this.holds(last) ? last : opener.id;
+      const marker: IDocumentMarker = { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) };
+      // A background tab opens behind the page that asked, as a browser opens a middle-clicked link, so the focus stays there.
+      return isBehind ? { after, marker, activate: false } : { after, marker };
     }
     return {};
   }
@@ -593,9 +596,10 @@ export class Pages {
       }
     });
     const stopWindows: () => void = tab.controller.onNewWindow((event: ViewNewWindowEvent) => {
-      if (event.hadRecentInput && Date.now() - openedAt >= Resources.recentInputMilliseconds) {
+      // The person's middle or Ctrl click on a link opens its tab every time; any other request opens one page per recent input.
+      if (event.hadRecentInput && (event.isBackgroundTab || Date.now() - openedAt >= Resources.recentInputMilliseconds)) {
         try {
-          this.open(place.profileKey, event.address, null, tab);
+          this.open(place.profileKey, event.address, null, tab, event.isBackgroundTab);
           openedAt = Date.now();
         }
         catch (error) {

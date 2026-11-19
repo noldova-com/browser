@@ -19,7 +19,12 @@ describe("ViewNewWindowEvent", () => {
     const event: ViewNewWindowEvent = new ViewNewWindowEvent("https://two.example/", true, "https://one.example");
 
     expect(event).toBeInstanceOf(ViewEvent);
-    expect([event.kind, event.address, event.hadRecentInput, event.origin]).toEqual([ViewEventKind.NewWindowRequested, "https://two.example/", true, "https://one.example"]);
+    expect([event.kind, event.address, event.hadRecentInput, event.origin, event.isBackgroundTab])
+      .toEqual([ViewEventKind.NewWindowRequested, "https://two.example/", true, "https://one.example", false]);
+  });
+
+  it("keeps whether the engine asked for a background tab, as for a middle or Ctrl click on a link", () => {
+    expect(new ViewNewWindowEvent("https://two.example/", true, null, true).isBackgroundTab).toBe(true);
   });
 
   it("changes nothing shown, and tells the hearing's new-window listeners of the request", () => {
