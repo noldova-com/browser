@@ -23,6 +23,10 @@ import { TestAppLayout } from "./test-app-layout.ts";
 import { ViewPages } from "./view-pages.ts";
 import { type ViewRequest, ViewRequests } from "./view-requests.ts";
 
+interface IDownloadSession {
+  setDownloadPath(path: string): void;
+}
+
 class AppRun {
   public readonly application: ElectronApplication;
   // Taken at launch: once the app has quit, Playwright drops its record of the app, and asking for the process then fails.
@@ -41,6 +45,7 @@ class AppRun {
     this.viewPages = viewPages;
   }
 }
+
 
 export class TestApp {
   private static readonly PROFILE_KEY: string = "e2e";
@@ -104,8 +109,21 @@ export class TestApp {
       args: [TestAppLayout.DEVELOPMENT_PACKAGE, `--data-dir=${dataDirectory}`, `--device-dir=${deviceDirectory}`, ...settings.flatMap(t => t.arguments)],
       cwd: TestAppLayout.APP_FOLDER
     });
-    // Before any page opens, since Electron gives a session its downloads folder when the session is made.
-    await application.evaluate(({ app }, folder: string): void => app.setPath("downloads", folder), path.join(path.dirname(dataDirectory), TestApp.DOWNLOADS_FOLDER));
+    // Electron gives a session its downloads folder when the session is made, and a restart may restore a page, and make its session,
+    // before this runs, so every session there is gets the folder, and every one made after.
+    await application.evaluate(({ app, session, webContents }, folder: string): void => {
+      const sessions = new Set<object>();
+      const own = (made: IDownloadSession): void => {
+        made.setDownloadPath(folder);
+        sessions.add(made);
+      };
+      app.setPath("downloads", folder);
+      globalThis.noldovaDownloadSessions = sessions;
+      app.on("session-created", own);
+      const made: IDownloadSession[] = [session.defaultSession, ...webContents.getAllWebContents().map((t: { readonly session: IDownloadSession }) => t.session)];
+      for (const each of made)
+        own(each);
+    }, path.join(path.dirname(dataDirectory), TestApp.DOWNLOADS_FOLDER));
     const viewRequests = await ViewRequests.watchAsync(application, carried);
     const viewPages = await ViewPages.watchAsync(application);
     return new AppRun(application, await application.firstWindow(), viewRequests, viewPages);

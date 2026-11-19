@@ -245,6 +245,12 @@ export class ViewPages {
     return this.application.evaluate(({ app }): string => app.getPath("downloads"));
   }
 
+  public async downloadSessionsAsync(): Promise<readonly (readonly [string, boolean])[]> {
+    return this.application.evaluate(({ webContents }): [string, boolean][] => webContents.getAllWebContents()
+      .filter((t: IViewPageContents) => t.getType() === "webview")
+      .map((t: IViewPageContents): [string, boolean] => [t.getURL(), globalThis.noldovaDownloadSessions?.has(t.session) === true]));
+  }
+
   public async takeChoosersAsync(): Promise<readonly string[]> {
     return this.application.evaluate(() => globalThis.noldovaViewChoosers?.splice(0) ?? []);
   }
