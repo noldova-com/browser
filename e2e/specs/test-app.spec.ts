@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import path from "node:path";
+
 import { expect, test } from "../fixtures/app-test.ts";
 import { LaunchSettings } from "../fixtures/launch-settings.ts";
 import { TestApp } from "../fixtures/test-app.ts";
@@ -21,5 +23,13 @@ test.describe("the test app", () => {
     const failure: unknown = await app.quitAsync().then(() => null, (error: unknown) => error);
 
     expect(failure, "The second quit asked Playwright for the app it had already closed.").not.toBeInstanceOf(TypeError);
+  });
+
+  test("the app's downloads folder is its own, beside its data folder, after a restart too", async ({ app }) => {
+    const own: string = path.join(path.dirname(app.dataDirectory), "downloads");
+
+    expect(await app.viewPages.downloadsFolderAsync(), "The app's downloads folder isn't its own.").toBe(own);
+    await app.restartAsync();
+    expect(await app.viewPages.downloadsFolderAsync(), "The restarted app's downloads folder isn't its own.").toBe(own);
   });
 });

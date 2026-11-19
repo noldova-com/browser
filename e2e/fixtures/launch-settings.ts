@@ -17,6 +17,9 @@ export class LaunchSetting {
 }
 
 export class LaunchSettings {
+  // The one setting that no argument makes: the test sets it in the main process right after each launch.
+  public static readonly DOWNLOADS_FOLDER_REASON: string = "A downloads folder of the app's own, beside its data and device folders, so a check that "
+    + "a refused download writes nothing reads a new folder and never the account's own Downloads, which macOS lets a process read only once the person grants it.";
   public static readonly HOST_RESOLVER_RULES: string = "MAP *.test 127.0.0.1, EXCLUDE localhost, EXCLUDE *.localhost, EXCLUDE 127.0.0.1, MAP * ~NOTFOUND";
 
   public static forRun(proxy: string): readonly LaunchSetting[] {
