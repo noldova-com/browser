@@ -253,13 +253,13 @@ describe("PageStateComponent", () => {
     ]);
   });
 
-  it("says a page stopped working, and reloads it", async () => {
+  it("says a page stopped working, and loads its address again", async () => {
     await showAsync(state(false), new ViewCrashEvent());
 
     expect(shown()).toEqual(["sentiment_dissatisfied", "This page stopped working", ["Its content process ended. Reload to open it again; anything typed into it is lost."], ["Reload"]]);
     button().click();
 
-    await vi.waitFor(() => expect(view.calls).toEqual(["reload"]));
+    await vi.waitFor(() => expect(view.calls).toEqual(["navigate https://one.example/"]));
     expect(fixture.componentInstance.leaves).toBe(1);
   });
 
