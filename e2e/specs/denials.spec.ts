@@ -71,7 +71,7 @@ const PAGE_SCRIPT = `
 
 const POSITION = `new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, error => reject({ name: "PositionError " + error.code })))`;
 
-const BLUETOOTH = `navigator.bluetooth === undefined ? Promise.reject({ name: "Absent" }) : navigator.bluetooth.requestDevice({ acceptAllDevices: true })`;
+const BLUETOOTH = `"bluetooth" in navigator ? navigator.bluetooth.requestDevice({ acceptAllDevices: true }) : Promise.reject({ name: "Absent" })`;
 
 const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "the camera", attempt: "navigator.mediaDevices.getUserMedia({ video: true })", outcome: NOT_ALLOWED, query: `{ name: "camera" }`, isNoticed: true },
@@ -82,13 +82,12 @@ const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "USB devices", attempt: "navigator.usb.requestDevice({ filters: [] })", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "serial ports", attempt: "navigator.serial.requestPort()", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "HID devices", attempt: "navigator.hid.requestDevice({ filters: [] }).then(t => t.length)", outcome: "resolved 0", query: null, isNoticed: false },
-  { title: "Bluetooth devices", attempt: BLUETOOTH, outcome: "rejected Absent", query: null, isNoticed: false },
   { title: "every other permission the engine can ask for", attempt: "navigator.requestMIDIAccess({ sysex: true })", outcome: NOT_ALLOWED, query: `{ name: "midi", sysex: true }`,
     isNoticed: true },
   { title: "screen capture", attempt: "navigator.mediaDevices.getDisplayMedia({ video: true })", outcome: NOT_ALLOWED, query: null, isNoticed: true }
 ];
 
-const OWN_TESTS: readonly string[] = ["downloads", "new windows and pop-ups", "file choosers", "authentication prompts", "certificate errors", "embedded <webview> elements"];
+const OWN_TESTS: readonly string[] = ["Bluetooth devices", "downloads", "new windows and pop-ups", "file choosers", "authentication prompts", "certificate errors", "embedded <webview> elements"];
 
 function documentedItems(): readonly string[] {
   const text = readFileSync(SECURITY_MODEL, "utf8");
@@ -155,6 +154,15 @@ test.describe("denied by default", () => {
         await expect(app.window.locator(NOTICE_MESSAGE), `The pane never said it refused ${ask.title}.`).toHaveText(PERMISSION_NOTICE);
       await expectNothingOpenedAsync(app, before, ask.title);
     });
+
+  test("Bluetooth devices", async ({ app, servers }) => {
+    const allowed = await openAsync(app, servers);
+    const before = await beforeAsync(app);
+
+    expect(await app.viewPages.runAsync(`window.outcomeAsync(() => ${BLUETOOTH})`), "The page has Web Bluetooth.").toBe("rejected Absent");
+    expect(await app.viewPages.bluetoothChoicesAsync(), "The view didn't cancel a Bluetooth device choice.").toEqual([[allowed.url("/"), true, [""]]]);
+    await expectNothingOpenedAsync(app, before, "Bluetooth devices");
+  });
 
   test("downloads", async ({ app, servers }) => {
     const allowed = await openAsync(app, servers);

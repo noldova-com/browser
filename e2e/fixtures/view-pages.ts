@@ -73,6 +73,12 @@ interface IViewPageContents {
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
   on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
   on(event: "destroyed", listener: () => void): void;
+  emit(event: "select-bluetooth-device", details: { preventDefault(): void }, devices: readonly IBluetoothDevice[], choose: (deviceId: string) => void): boolean;
+}
+
+interface IBluetoothDevice {
+  readonly deviceId: string;
+  readonly deviceName: string;
 }
 
 interface IViewPageRecord {
@@ -243,6 +249,20 @@ export class ViewPages {
 
   public async downloadsFolderAsync(): Promise<string> {
     return this.application.evaluate(({ app }): string => app.getPath("downloads"));
+  }
+
+  // Offers each view a Bluetooth device, as the engine does when a page asks for one, and gives each view's address, whether its contents
+  // took the choice from the engine, and the device ids it chose.
+  public async bluetoothChoicesAsync(): Promise<readonly (readonly [string, boolean, readonly string[]])[]> {
+    return this.application.evaluate(({ webContents }): [string, boolean, string[]][] => webContents.getAllWebContents()
+      .filter((t: IViewPageContents) => t.getType() === "webview")
+      .map((t: IViewPageContents): [string, boolean, string[]] => {
+        const chosen: string[] = [];
+        let isTaken = false;
+        t.emit("select-bluetooth-device", { preventDefault: (): void => { isTaken = true; } }, [{ deviceId: "AA:BB:CC:DD:EE:FF", deviceName: "Headphones" }],
+          (deviceId: string) => chosen.push(deviceId));
+        return [t.getURL(), isTaken, chosen];
+      }));
   }
 
   public async downloadSessionsAsync(): Promise<readonly (readonly [string, boolean])[]> {

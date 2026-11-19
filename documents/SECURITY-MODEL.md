@@ -47,7 +47,7 @@ The base refuses these for a page's session:
 - USB devices;
 - serial ports;
 - HID devices;
-- Bluetooth devices;
+- Bluetooth devices, which it turns off in every window, so a page has no `navigator.bluetooth`, and whose device choice it cancels in every web contents;
 - every other permission the engine can ask for;
 - screen capture;
 - downloads;
