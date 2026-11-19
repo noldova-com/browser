@@ -18,10 +18,14 @@ import { JsonReader, type JsonValue } from "@noldova/context.json";
 import { type ElectronApplication, type Page, type TestInfo, _electron, expect } from "playwright/test";
 
 import { HangLimits } from "./hang-limits.ts";
-import type { LaunchSetting } from "./launch-settings.ts";
+import { type LaunchSetting, LaunchSettings } from "./launch-settings.ts";
 import { TestAppLayout } from "./test-app-layout.ts";
 import { ViewPages } from "./view-pages.ts";
 import { type ViewRequest, ViewRequests } from "./view-requests.ts";
+
+interface IDownloadSession {
+  setDownloadPath(path: string): void;
+}
 
 class AppRun {
   public readonly application: ElectronApplication;
@@ -46,6 +50,7 @@ export class TestApp {
   private static readonly PROFILE_KEY: string = "e2e";
   private static readonly DISCONNECTED: string = "Disconnected";
   private static readonly FOLDER_PREFIX: string = "browser-e2e-";
+  private static readonly DOWNLOADS_FOLDER: string = "downloads";
   private static readonly LOGS_FOLDER: string = "logs";
   private static readonly OUTPUT_NAME: string = "main-process-output.txt";
   private static readonly VIEW_LOG_NAME: string = "views.log";
@@ -87,11 +92,13 @@ export class TestApp {
     const deviceDirectory = path.join(root, "device");
     await mkdir(dataDirectory);
     await mkdir(deviceDirectory);
+    await mkdir(path.join(root, TestApp.DOWNLOADS_FOLDER));
     for (const [name, text] of Object.entries(dataFiles))
       await writeFile(path.join(dataDirectory, name), text);
     testInfo.annotations.push({ type: "app folders", description: root });
     for (const setting of settings)
       testInfo.annotations.push({ type: "launch setting", description: `${setting.arguments.join(" ")}: ${setting.reason}` });
+    testInfo.annotations.push({ type: "launch setting", description: `app.setPath("downloads", ${TestApp.DOWNLOADS_FOLDER}): ${LaunchSettings.DOWNLOADS_FOLDER_REASON}` });
     return new TestApp(await TestApp.startAsync(dataDirectory, deviceDirectory, settings, []), dataDirectory, deviceDirectory, settings, testInfo);
   }
 
@@ -101,6 +108,23 @@ export class TestApp {
       args: [TestAppLayout.DEVELOPMENT_PACKAGE, `--data-dir=${dataDirectory}`, `--device-dir=${deviceDirectory}`, ...settings.flatMap(t => t.arguments)],
       cwd: TestAppLayout.APP_FOLDER
     });
+    // Electron gives a session its downloads folder when the session is made, and a restart may restore a page, and make its session,
+    // before this runs, even before its web contents exist; so every session there is gets the folder, every one made after, and the
+    // session of every web contents made after.
+    await application.evaluate(({ app, session, webContents }, folder: string): void => {
+      const sessions = new Set<object>();
+      const own = (made: IDownloadSession): void => {
+        made.setDownloadPath(folder);
+        sessions.add(made);
+      };
+      app.setPath("downloads", folder);
+      globalThis.noldovaDownloadSessions = sessions;
+      app.on("session-created", own);
+      app.on("web-contents-created", (_event: unknown, contents: { readonly session: IDownloadSession }) => own(contents.session));
+      const made: IDownloadSession[] = [session.defaultSession, ...webContents.getAllWebContents().map((t: { readonly session: IDownloadSession }) => t.session)];
+      for (const each of made)
+        own(each);
+    }, path.join(path.dirname(dataDirectory), TestApp.DOWNLOADS_FOLDER));
     const viewRequests = await ViewRequests.watchAsync(application, carried);
     const viewPages = await ViewPages.watchAsync(application);
     return new AppRun(application, await application.firstWindow(), viewRequests, viewPages);
