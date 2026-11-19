@@ -89,6 +89,15 @@ describe("PaneToolbarComponent", () => {
     return shown;
   }
 
+  // Loads the address through the view, mounted as a view loads only once it is, so its history holds the page and a reload finds it, as in
+  // Noldova Desktop.
+  async function commitAsync(url: string): Promise<void> {
+    view.mount(document.createElement("div"));
+    await controller.navigateAsync(url);
+    await fixture.whenStable();
+    view.calls.length = 0;
+  }
+
   async function showAsync(event: ViewEvent): Promise<void> {
     view.emit(event);
     await fixture.whenStable();
@@ -254,6 +263,7 @@ describe("PaneToolbarComponent", () => {
   });
 
   it("turns Reload into Stop in the same place while the page loads, with the progress bar under the row", async () => {
+    await commitAsync("https://one.example/");
     const reload = button("Reload", "Stop");
     await showAsync(state("https://one.example/", true));
 
@@ -357,12 +367,22 @@ describe("PaneToolbarComponent", () => {
     expect([said, button("Reload", "Stop").getAttribute("aria-label")]).toEqual([[], "Stop"]);
   });
 
-  it("reloads a page that failed, was refused or crashed", async () => {
+  it("reloads a page whose load failed", async () => {
+    await commitAsync("https://one.example/");
     await showAsync(new ViewLoadFailureEvent("https://one.example/", -105, "No answer"));
     button("Reload", "Stop").click();
     await fixture.whenStable();
 
     expect([button("Reload", "Stop").getAttribute("aria-disabled"), view.calls]).toEqual([null, ["reload"]]);
+  });
+
+  it("loads a crashed page's address again, which the view doesn't reload", async () => {
+    await showAsync(state("https://one.example/", false));
+    view.crash();
+    await fixture.whenStable();
+    button("Reload", "Stop").click();
+
+    await vi.waitFor(() => expect(view.calls).toEqual(["reload", "navigate https://one.example/"]));
   });
 
   it("hands a failed call to the error handler", async () => {

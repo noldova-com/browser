@@ -192,6 +192,21 @@ export function describeWebViewsContract(name: string, createHarness: () => IWeb
       expect(last(events)).toStrictEqual(new ViewCrashEvent());
     });
 
+    it("answers a crashed page's reload with noHistory, and a navigation brings the page back", async () => {
+      const harness: IWebViewsHarness = createHarness();
+      const { view, events } = await openFollowingAsync(harness);
+      await view.navigateAsync(harness.loadingUrl);
+      harness.crash(view);
+
+      expect(await view.reloadAsync()).toEqual(WebViewValues.noHistory);
+      expect(await view.navigateAsync(harness.refusedUrl)).toEqual(WebViewValues.refused(new URL(harness.refusedUrl).origin));
+      expect(await view.reloadAsync()).toEqual(WebViewValues.noHistory);
+      expect(await view.navigateAsync(harness.loadingUrl)).toEqual(WebViewValues.started);
+      expect(await view.reloadAsync()).toEqual(WebViewValues.started);
+
+      expect(last(events)).toMatchObject({ kind: ViewEventKind.State, address: harness.loadingUrl, isLoading: false });
+    });
+
     it("gives the handle its id, pane and profile key, and marks it closed once closed", async () => {
       const harness: IWebViewsHarness = createHarness();
       const view: IWebViewHandle = await harness.surface.openAsync(PANE, "contract-profile");
