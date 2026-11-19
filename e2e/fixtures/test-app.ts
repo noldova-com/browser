@@ -46,7 +46,6 @@ class AppRun {
   }
 }
 
-
 export class TestApp {
   private static readonly PROFILE_KEY: string = "e2e";
   private static readonly DISCONNECTED: string = "Disconnected";
@@ -110,7 +109,8 @@ export class TestApp {
       cwd: TestAppLayout.APP_FOLDER
     });
     // Electron gives a session its downloads folder when the session is made, and a restart may restore a page, and make its session,
-    // before this runs, so every session there is gets the folder, and every one made after.
+    // before this runs, even before its web contents exist; so every session there is gets the folder, every one made after, and the
+    // session of every web contents made after.
     await application.evaluate(({ app, session, webContents }, folder: string): void => {
       const sessions = new Set<object>();
       const own = (made: IDownloadSession): void => {
@@ -120,6 +120,7 @@ export class TestApp {
       app.setPath("downloads", folder);
       globalThis.noldovaDownloadSessions = sessions;
       app.on("session-created", own);
+      app.on("web-contents-created", (_event: unknown, contents: { readonly session: IDownloadSession }) => own(contents.session));
       const made: IDownloadSession[] = [session.defaultSession, ...webContents.getAllWebContents().map((t: { readonly session: IDownloadSession }) => t.session)];
       for (const each of made)
         own(each);
