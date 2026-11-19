@@ -191,7 +191,8 @@ describe("PageStateComponent", () => {
   it("names the origin Browser refused, and goes back only while the tab has history", async () => {
     await showAsync(state(false), new ViewRefusalEvent("https://blocked.example/page", "https://blocked.example", false));
 
-    expect(shown()).toEqual(["block", "Browser doesn't open https://blocked.example", ["Its address isn't one Browser opens."], []]);
+    expect(shown()).toEqual(["block", "Browser doesn't open https://blocked.example",
+      ["This address isn't among the sites this workspace allows. Type it in the address field to open it."], []]);
     await showAsync(state(true), new ViewRefusalEvent("https://other.example/", "https://other.example", false));
 
     expect(shown()[3]).toEqual(["Back"]);
@@ -210,6 +211,20 @@ describe("PageStateComponent", () => {
     await fixture.whenStable();
 
     expect([named, shown()[1]]).toEqual(["Browser doesn't open about:srcdoc", "Browser doesn't open this page"]);
+  });
+
+  it("says an address of a kind Browser never opens is one it doesn't open, whatever the workspace's sites", async () => {
+    const texts: (string | undefined)[] = [];
+    const refusals: readonly (readonly [string, string])[] = [["http://127.0.0.1:4173/", "http://127.0.0.1:4173"], ["http://192.168.1.1/", "http://192.168.1.1"],
+      ["about:srcdoc", "null"], ["data:text/html,x", "null"]];
+    for (const [address, origin] of refusals) {
+      await showAsync(state(false), new ViewRefusalEvent(address, origin, false));
+      texts.push(...shown()[2]);
+    }
+    fixture.componentInstance.controller()?.refuseNavigation("null");
+    await fixture.whenStable();
+
+    expect([...texts, ...shown()[2]]).toEqual(new Array<string>(5).fill("Its address isn't one Browser opens."));
   });
 
   it("says a page stopped working, and reloads it", async () => {
