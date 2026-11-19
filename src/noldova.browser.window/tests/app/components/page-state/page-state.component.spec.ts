@@ -45,6 +45,7 @@ describe("PageStateComponent", () => {
   const CANT_REACH: string = "The address may be mistyped, or the site is down.";
   let fixture: ComponentFixture<HostComponent>;
   let element: HTMLElement;
+  let views: FakeWebViews;
   let view: FakeWebView;
   let errors: unknown[];
   let checkedErrors: number;
@@ -115,7 +116,8 @@ describe("PageStateComponent", () => {
       said.push([message, politeness]);
       announce(message, politeness, options);
     });
-    view = new FakeWebViews().open("workspace-1");
+    views = new FakeWebViews();
+    view = views.open("workspace-1");
     fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.controller.set(new PaneController(view));
     fixture.autoDetectChanges();
@@ -191,7 +193,8 @@ describe("PageStateComponent", () => {
   it("names the origin Browser refused, and goes back only while the tab has history", async () => {
     await showAsync(state(false), new ViewRefusalEvent("https://blocked.example/page", "https://blocked.example", false));
 
-    expect(shown()).toEqual(["block", "Browser doesn't open https://blocked.example", ["Its address isn't one Browser opens."], []]);
+    expect(shown()).toEqual(["block", "This workspace doesn't allow https://blocked.example",
+      ["This address isn't among the sites this workspace allows. Type it in the address field to open it."], []]);
     await showAsync(state(true), new ViewRefusalEvent("https://other.example/", "https://other.example", false));
 
     expect(shown()[3]).toEqual(["Back"]);
@@ -210,6 +213,44 @@ describe("PageStateComponent", () => {
     await fixture.whenStable();
 
     expect([named, shown()[1]]).toEqual(["Browser doesn't open about:srcdoc", "Browser doesn't open this page"]);
+  });
+
+  it("says an address of a kind Browser never opens is one it doesn't open, whatever the workspace's sites", async () => {
+    const texts: (string | undefined)[] = [];
+    const refusals: readonly (readonly [string, string])[] = [["http://127.0.0.1:4173/", "http://127.0.0.1:4173"], ["http://192.168.1.1/", "http://192.168.1.1"],
+      ["about:srcdoc", "null"], ["data:text/html,x", "null"], ["ftp://example.org/", "ftp://example.org"], ["http://[fd00::1]/", "http://[fd00::1]"],
+      ["http://localhost:4173/", "http://localhost:4173"], ["https://user:secret@example.org/", "https://example.org"], ["https://:secret@example.org/", "https://example.org"],
+      ["https://user@example.org/", "https://example.org"],
+      [`https://example.org/${"a".repeat(32_768)}`, "https://example.org"], ["no address", "https://example.org"]];
+    for (const [address, origin] of refusals) {
+      await showAsync(state(false), new ViewRefusalEvent(address, origin, false));
+      texts.push(...shown()[2]);
+    }
+    fixture.componentInstance.controller()?.refuseNavigation("null");
+    await fixture.whenStable();
+
+    expect([...texts, ...shown()[2]]).toEqual(new Array<string>(13).fill("Its address isn't one Browser opens."));
+  });
+
+  it("says a public site the view's own navigate or Back refused isn't one Browser opens, since the answer doesn't say why", async () => {
+    const controller: PaneController | null = fixture.componentInstance.controller();
+    if (controller === null)
+      throw new Error("The page has no controller.");
+    view.mount(document.createElement("div"));
+    views.script("https://exampel.org/", { kind: "refuse" });
+    await controller.navigateAsync("https://exampel.org/");
+    await fixture.whenStable();
+    const typed: ReturnType<typeof shown> = shown();
+    await controller.navigateAsync("https://listed.example/");
+    await controller.navigateAsync("https://one.example/");
+    views.script("https://listed.example/", { kind: "refuse" });
+    await controller.goBackAsync();
+    await fixture.whenStable();
+
+    expect([typed, shown()]).toEqual([
+      ["block", "Browser doesn't open https://exampel.org", ["Its address isn't one Browser opens."], []],
+      ["block", "Browser doesn't open https://listed.example", ["Its address isn't one Browser opens."], ["Back"]]
+    ]);
   });
 
   it("says a page stopped working, and reloads it", async () => {

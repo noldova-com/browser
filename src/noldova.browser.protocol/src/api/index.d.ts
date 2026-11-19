@@ -1689,6 +1689,24 @@ export declare class AddressKinds {
 }
 
 /**
+ * The limits on addresses that the browser module's parts share.
+ */
+export declare class AddressLimits {
+  /**
+   * The most characters a URL may have, as Noldova Desktop limits an address a view opens: a tool's URL, a typed address, and a page's own
+   * refused navigation that the workspace's site list could explain.
+   *
+   * @example
+   * ```ts
+   * import { AddressLimits } from "@noldova/browser.protocol";
+   *
+   * const fits: boolean = "https://example.com/".length <= AddressLimits.maximumUrlLength;
+   * ```
+   */
+  public static readonly maximumUrlLength: number;
+}
+
+/**
  * The sites the setting Sites on this computer or network, `browser.localSites`, names, read from its text.
  * The runtime part allows their origins, and Settings refuses the entries it leaves out.
  */

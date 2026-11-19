@@ -825,7 +825,7 @@ describe("PageComponent", () => {
 
   it("puts a refused address's state for another origin in place of a refused navigation's, and Escape brings the navigation's back", async () => {
     await stateAsync(PaneState.Refused);
-    expect(heading()).toBe("Browser doesn't open https://blocked.example");
+    expect(heading()).toBe("This workspace doesn't allow https://blocked.example");
     refuseTyped("Local");
 
     await userEvent.clear(field());
@@ -833,7 +833,7 @@ describe("PageComponent", () => {
     await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
     await userEvent.keyboard("{Escape}");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open https://blocked.example"));
+    await vi.waitFor(() => expect(heading()).toBe("This workspace doesn't allow https://blocked.example"));
   });
 
   it("has the announcer's live region from its first render, so the page's first message is spoken into a region that was already there", async () => {

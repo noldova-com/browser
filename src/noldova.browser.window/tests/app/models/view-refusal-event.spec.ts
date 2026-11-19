@@ -23,7 +23,7 @@ describe("ViewRefusalEvent", () => {
     expect([event.kind, event.address, event.origin, event.isRedirect]).toEqual([ViewEventKind.NavigationRefused, "https://refused.example/", "https://refused.example", true]);
   });
 
-  it("refuses its origin, holding the page's load unless the pane is loading, and has the hearing change the status by it", () => {
+  it("refuses its origin as the page's own navigation, holding the page's load unless the pane is loading, and has the hearing change the status by it", () => {
     const event: ViewRefusalEvent = new ViewRefusalEvent("https://refused.example/", "https://refused.example", false);
     const loading: PaneStatus = PaneStatus.empty.apply(new ViewStateEvent("https://one.example/", "", true, false, false));
     const changes: ViewEvent[] = [];
@@ -31,8 +31,8 @@ describe("ViewRefusalEvent", () => {
 
     event.followIn(hearing);
 
-    expect([event.applyTo(PaneStatus.empty), event.applyTo(loading)]).toStrictEqual([PaneStatus.empty.refuse("https://refused.example", true),
-      loading.refuse("https://refused.example", false)]);
+    expect([event.applyTo(PaneStatus.empty), event.applyTo(loading)]).toStrictEqual([PaneStatus.empty.refuse("https://refused.example", true, null, true),
+      loading.refuse("https://refused.example", false, null, true)]);
     expect(changes).toStrictEqual([event]);
   });
 });
