@@ -267,6 +267,7 @@ describe("ViewCalls", () => {
     await calls.sendAsync("view", "Input.insertText", { text: "a" }, options({ progress: typing }));
 
     expect([focusing, scrolling, clicking, pressing, typing].map(t => t.isInputSent)).toEqual([true, true, true, true, true]);
+    expect([focusing, scrolling, clicking, pressing, typing].map(t => t.isOnlyFocusSent)).toEqual([true, false, false, false, false]);
   });
 
   it("doesn't mark progress when the call never goes out", async () => {

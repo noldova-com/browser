@@ -127,9 +127,16 @@ export class ToolFailures {
     return new InternalFailureException(cause);
   }
 
+  // Whether the call failed because its element or page changed when it had sent only the focus: a page can replace an element as it takes
+  // the focus, as some search fields do, and the action's own input never reached the page then.
+  public static isGoneOnFocus(cause: unknown, progress: ActionProgress): boolean {
+    const plain: CallFailureException = ToolFailures.toException(cause, false);
+    return progress.isOnlyFocusSent && (plain instanceof StaleReferenceException || plain instanceof PageChangedAfterGrantException);
+  }
+
   public static forCall(cause: unknown, progress: ActionProgress, isNonResumable: boolean): ToolFailure {
     const plain: CallFailureException = ToolFailures.toException(cause, false);
-    if (isNonResumable && progress.isInputSent)
+    if (isNonResumable && progress.isInputSent && !ToolFailures.isGoneOnFocus(cause, progress))
       return new OutcomeUncertainException(plain.moduleCode ?? plain.reason, cause).toFailure();
     if (progress.isGranted && plain instanceof StaleReferenceException)
       return new PageChangedAfterGrantException(cause).toFailure();
