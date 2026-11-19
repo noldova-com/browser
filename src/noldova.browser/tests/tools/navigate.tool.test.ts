@@ -143,6 +143,14 @@ describe("NavigateTool", () => {
     expect([bench.permissions.requests.map(t => [t.subject, t.risk]), bench.database.callsOf("transaction"), bench.surface.navigations.length]).toEqual([[["http://127.0.0.1:4173", ToolRisk.Low]], [], 1]);
   });
 
+  it("refuses an address whose host holds a star before it asks, and keeps and loads nothing", async () => {
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://*.com/" })), AddressRefusedException, {
+      reason: "Refused", moduleCode: "browser.originRefused", message: "The text isn't a web address, so the browser never opens it."
+    });
+
+    expect([bench.permissions.requests, bench.database.callsOf("transaction"), bench.surface.navigations]).toEqual([[], [], []]);
+  });
+
   it.each<[string, WebViewAction, string]>([
     ["back", WebViewAction.Back, "https://docs.example"],
     ["forward", WebViewAction.Forward, "https://other.example"]

@@ -14,6 +14,7 @@ export class DatabaseOriginStore {
   public static readonly migrations: readonly Migration[] = [
     { id: Resources.originsMigrationId, statements: [Resources.createOriginsTable] }
   ];
+  public static readonly dropStarredMigration: Migration = { id: Resources.dropStarredOriginsMigrationId, statements: [Resources.dropStarredOrigins] };
 
   private readonly database: IModuleDatabase;
 

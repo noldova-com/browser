@@ -92,6 +92,7 @@ describe("WorkspaceOrigins", () => {
   it("refuses an address the policy refuses, and keeps and gives nothing", async () => {
     expect(await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "http://192.168.1.2/"))).toEqual({ kind: "Refused", reason: "Local" });
     expect(await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "file:///etc/hosts"))).toEqual({ kind: "Refused", reason: "NotWeb" });
+    expect(await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://*.com/"))).toEqual({ kind: "Refused", reason: "NotAnAddress" });
 
     expect([reads(), writes(), surface.allowedOrigins.size]).toEqual([0, 0, 0]);
   });
@@ -235,6 +236,7 @@ describe("WorkspaceOrigins", () => {
     surface.instances.set("view-3", "page-3");
 
     expect(await origins.passTypedAsync(new TypedRedirectRequest("page-3", "workspace-2", "http://192.168.1.2/"))).toEqual({ kind: "Refused", reason: "Local" });
+    expect(await origins.passTypedAsync(new TypedRedirectRequest("page-3", "workspace-2", "https://*.com/"))).toEqual({ kind: "Refused", reason: "NotAnAddress" });
     await expect(origins.passTypedAsync(new TypedRedirectRequest("page-3", "workspace-1", "https://example.com/"))).rejects.toThrow(TypedRedirectPageNotOpenException);
     await expect(origins.passTypedAsync(new TypedRedirectRequest("page-9", "workspace-2", "https://example.com/"))).rejects.toThrow(TypedRedirectPageNotOpenException);
     expect([writes(), surface.allowedOrigins.size, origins.isPassing("view-3")]).toEqual([0, 0, false]);
@@ -274,6 +276,12 @@ describe("WorkspaceOrigins", () => {
     origins.forgetView("view-1");
 
     expect([origins.isPassing("view-1"), await pass()]).toEqual([false, { kind: "Allowed", origin: "https://www.example.com" }]);
+  });
+
+  it("refuses a link to a host that holds a star, and keeps and gives nothing", async () => {
+    expect(await origins.allowTypedAsync(new TypedAddressRequest("links", "https://*.com/"))).toEqual({ kind: "Refused", reason: "NotAnAddress" });
+
+    expect([keptOrigins("links"), writes(), surface.allowedOrigins.size]).toEqual([[], 0, 0]);
   });
 
   it("allows an origin in a workspace that no open view has yet, as a link's first page needs, and gives it to that workspace's first view", async () => {
