@@ -264,7 +264,7 @@ The redirect row also asserts that the allowed server received each first hop, a
 
 | Workflow | What it proves |
 |---|---|
-| `page.spec.ts` | The page's view follows its document through resizes and moves between groups and, in [#107](https://github.com/noldova-com/browser/issues/107), windows; a menu or dialog lies over the live view; the pane shows loading, a failed load, a refused navigation, a crashed page with a way to reload, and a page the base gave no view as unavailable. |
+| `page.spec.ts` | The page's view follows its document through resizes and moves between groups and, in [#107](https://github.com/noldova-com/browser/issues/107), windows; a menu or dialog lies over the live view; the pane shows loading, a failed load, a refused navigation, a person's link click to a local or a public site outside the workspace's list as refused, a crashed page with a way to reload, and a page the base gave no view as unavailable. |
 | `navigation.spec.ts` | Allowed origins load; the bridge's navigate, back, forward and reload check the allow list before loading, including a history entry whose origin has since left the list. |
 | `blocked-origins.spec.ts` | Each navigation row of the [blocked-origin table](#blocked-origins). |
 | `schemes.spec.ts` | A navigation loads only `https:`, `http:` and `about:blank`. |
