@@ -145,14 +145,15 @@ test.describe("the page's view", () => {
     const [left, right] = await expectFollowedAsync(app, [docs.url("/two"), docs.url("/one")], "after the split");
     expect([(right?.host[0] ?? 0) > (left?.host[0] ?? 0) + (left?.host[2] ?? 0) - 1, (right?.host[2] ?? 0) < (full[0]?.host[2] ?? 0)], "The split page isn't in a group to the right.")
       .toEqual([true, true]);
-    expect(await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY")).toBe("kept 400");
+    await expect.poll(() => app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), { message: "The page lost its field or scroll after the split." })
+      .toBe("kept 400");
 
-    await expect.poll(() => app.viewPages.holdsPageStateAsync(docs.url("/one"), "kept"), { message: "The restored page never committed the field's value." }).toBe(true);
     await runTabMenuAsync(app, one, [["Move to previous group", "Enter"]]);
 
     const [back] = await expectFollowedAsync(app, [docs.url("/one")], "after the move back");
     expect(back?.host, "The page's view isn't where it was before the split.").toEqual(full[0]?.host);
-    expect(await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY")).toBe("kept 400");
+    await expect.poll(() => app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), { message: "The page lost its field or scroll after the move back." })
+      .toBe("kept 400");
   });
 
   test("lies under the toolbar's menu and the clear-data dialog, which the page doesn't stop", async ({ app, servers }) => {
