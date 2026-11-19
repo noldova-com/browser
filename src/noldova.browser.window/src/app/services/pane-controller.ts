@@ -10,7 +10,6 @@ import { WebViewNavigationKind, type WebViewNavigation } from "@noldova/desktop.
 import type { IWebViewFound, IWebViewHandle } from "@noldova/desktop.window";
 
 import type { AddressRefusal } from "../enums/address-refusal.ts";
-import { PaneState } from "../enums/pane-state.ts";
 import type { RefusedRequest } from "../enums/refused-request.ts";
 import { PaneUnavailableException } from "../exceptions/pane-unavailable.exception.ts";
 import { PaneStatus } from "../models/pane-status.ts";
@@ -89,13 +88,12 @@ export class PaneController {
     return this.followAnswer(await this.startNavigation().goForwardAsync(), null);
   }
 
-  // Noldova Desktop brings a crashed page back only by a navigation, and answers its reload with no history, so a crashed page loads its
-  // address again.
+  // Noldova Desktop brings a crashed page back only by a navigation, and answers its reload with no history, as it does after a refused
+  // navigation leaves the page crashed under the refusal; so a reload that finds no history loads the page's address again.
   public async reloadAsync(): Promise<WebViewNavigation> {
     const address: string = this.current.url;
-    if (this.current.state === PaneState.Crashed && address !== "")
-      return this.navigateAsync(address);
-    return this.followAnswer(await this.startNavigation().reloadAsync(), address);
+    const answer: WebViewNavigation = this.followAnswer(await this.startNavigation().reloadAsync(), address);
+    return answer.kind === WebViewNavigationKind.NoHistory && address !== "" ? this.navigateAsync(address) : answer;
   }
 
   public async stopAsync(): Promise<WebViewNavigation> {
