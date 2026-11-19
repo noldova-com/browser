@@ -21,6 +21,9 @@ const TAB_MENU = ".cdk-overlay-container nol-menu[data-place='desktop.tab']";
 const SIZES: readonly (readonly [number, number])[] = [[1000, 760], [720, 540]];
 
 // A page with a field and a counter its own timer moves, so a test sees that the page kept its state and kept running.
+// A page whose link fills its top left and that records each mousedown that reaches it.
+const LINK_PAGE = (href: string): string => `<!doctype html><title>One</title><body style="margin:0"><a href="${href}" style="display:block;width:200px;height:40px">Out</a>`
+  + "<script>window.downs = 0; addEventListener('mousedown', () => downs++, true);</script>";
 const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:3000px">`
   + "<input id=\"field\" aria-label=\"Field\"><script>window.ticks = 0; setInterval(() => ticks++, 20);</script>";
 
@@ -241,6 +244,27 @@ test.describe("the pane", () => {
     await expect(app.window.locator(STATE_HEADING)).toHaveText(`Browser doesn't open ${other.origin}`);
     expect([await shownViewsAsync(app.window), other.requests], "The refused page's view is shown, or its site got a request.").toEqual([[], []]);
   });
+
+  for (const site of [{ name: "local", isLocal: true }, { name: "public", isLocal: false }])
+    test(`shows a person's link click to a ${site.name} site outside the workspace's list as refused, naming its origin, and no view`, async ({ app, servers }) => {
+      const other = await servers.startAsync("other.localhost", { "/": PAGE("Other") });
+      const target = site.isLocal ? other.url("/") : "https://www.example.com/";
+      const docs = await servers.startAsync("docs.localhost", { "/": LINK_PAGE(target) });
+      await app.allowLocalSitesAsync([docs.origin]);
+      await openAsync(app, docs, "/", "One");
+      const [view] = await expectFollowedAsync(app, [docs.url("/")], "before the click");
+
+      // A click right after a page opens at times never reaches it (desktop#305), so the click comes again only while the page has had none.
+      await expect.poll(async () => {
+        const shown = await app.window.locator(STATE_HEADING).allTextContents();
+        if (shown.length === 0 && await app.viewPages.runAtAsync(docs.url("/"), "String(downs)") === "0")
+          await app.window.mouse.click((view?.host[0] ?? 0) + 20, (view?.host[1] ?? 0) + 20);
+        return shown;
+      }, { message: "The pane never showed the refusal." })
+        .toEqual([site.isLocal ? `Browser doesn't open ${other.origin}` : "This workspace doesn't allow https://www.example.com"]);
+      const requests = (await app.viewRequests.peekAsync()).filter(t => t.url === target && t.error !== "net::ERR_BLOCKED_BY_CLIENT");
+      expect([await shownViewsAsync(app.window), other.requests, requests], "The refused page's view is shown, or its site got a request.").toEqual([[], [], []]);
+    });
 
   test("shows a crashed page, with no view, and its Reload opens the page again", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": PAGE("One") });
