@@ -143,8 +143,8 @@ test.describe("the page's view", () => {
     await openAsync(app, docs, "/two", "Two");
     const one = await openAsync(app, docs, "/one", "One");
     const full = await expectFollowedAsync(app, [docs.url("/one")], "before the split");
-    // A click into the view at times doesn't give its field the focus, about once in forty runs, so the text goes in through the page's
-    // own editing, as typing does.
+    // A click into the view at times doesn't give its field the focus, about once in forty runs (#110), so the text goes in through the
+    // page's own editing, as typing does.
     await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').focus(); document.execCommand('insertText', false, 'kept')");
     await app.viewPages.runAtAsync(docs.url("/one"), "scrollTo(0, 400); true");
     expect(await app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), "The typed text didn't reach the field.").toBe("kept 400");
