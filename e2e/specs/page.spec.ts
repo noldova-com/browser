@@ -12,6 +12,7 @@ import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
+import { ViewRequest } from "../fixtures/view-requests.ts";
 
 const VIEW = ".nol-browser-page-view";
 const PAGE_AREA = ".nol-browser-page-area";
@@ -21,11 +22,12 @@ const TAB_MENU = ".cdk-overlay-container nol-menu[data-place='desktop.tab']";
 const SIZES: readonly (readonly [number, number])[] = [[1000, 760], [720, 540]];
 
 // A page with a field and a counter its own timer moves, so a test sees that the page kept its state and kept running.
+const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:3000px">`
+  + "<input id=\"field\" aria-label=\"Field\"><script>window.ticks = 0; setInterval(() => ticks++, 20);</script>";
+
 // A page whose link fills its top left and that records each mousedown that reaches it.
 const LINK_PAGE = (href: string): string => `<!doctype html><title>One</title><body style="margin:0"><a href="${href}" style="display:block;width:200px;height:40px">Out</a>`
   + "<script>window.downs = 0; addEventListener('mousedown', () => downs++, true);</script>";
-const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:3000px">`
-  + "<input id=\"field\" aria-label=\"Field\"><script>window.ticks = 0; setInterval(() => ticks++, 20);</script>";
 
 // Each shown view's address, the box of the element that holds it and the box of its page, in the window's CSS pixels; a view the pane
 // hides, as it does under a failed load or a crash, stays in its element, hidden.
@@ -262,7 +264,11 @@ test.describe("the pane", () => {
         return shown;
       }, { message: "The pane never showed the refusal." })
         .toEqual([site.isLocal ? `Browser doesn't open ${other.origin}` : "This workspace doesn't allow https://www.example.com"]);
-      const requests = (await app.viewRequests.peekAsync()).filter(t => t.url === target && t.error !== "net::ERR_BLOCKED_BY_CLIENT");
+      // The record holds only ended requests, so it is read once none is in flight.
+      await expect.poll(() => app.viewRequests.inFlightAsync(), { message: "A request of the view never ended." }).toEqual([]);
+      const records = await app.viewRequests.peekAsync();
+      expect(records, "The main process's record doesn't show the page loaded, so it can't show the refused site's absence.").toContainEqual(new ViewRequest(docs.url("/"), null));
+      const requests = records.filter(t => t.url === target && t.error !== "net::ERR_BLOCKED_BY_CLIENT");
       expect([await shownViewsAsync(app.window), other.requests, requests], "The refused page's view is shown, or its site got a request.").toEqual([[], [], []]);
     });
 
