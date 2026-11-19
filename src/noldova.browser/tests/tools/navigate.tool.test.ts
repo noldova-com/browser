@@ -229,6 +229,21 @@ describe("NavigateTool", () => {
     expect([result.content[2]?.value, result.content[2]?.origin]).toEqual(["The page is still loading; wait for it with browser_wait_for before you act on it.", null]);
   });
 
+  it.each<[string, JsonObject]>([
+    ["back to an entry the page pushed", { action: "back" }],
+    ["to a fragment of the page", { url: "https://docs.example/guide#setup" }]
+  ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/start" });
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input, new AbortController(), ToolBench.SESSION, 60_000));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+  });
+
   it("ends the wait for the load by the call's abort, and listens no more", async () => {
     const controller: AbortController = new AbortController();
     bench.surface.afterNavigation = () => controller.abort("Cancelled");

@@ -136,6 +136,23 @@ test.describe("the agent tools on a real page", () => {
     expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/", "/next"]);
   });
 
+  test("navigate answers at once a move back to an entry the page pushed and a move to a fragment, which fire no load", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": START });
+    const bindings = await openAsync(app, docs);
+    await app.viewPages.runAtAsync(docs.url("/"), "history.pushState({}, '', '/pushed'), location.href");
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/pushed"), START_TITLE)]);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
+
+    const back = textsOf(await callAsync(app, bindings, "browser_navigate", { action: "back" }));
+    const fragment = textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/#setup") }));
+
+    expect(back.join("\n")).toContain(`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`);
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/#setup"), START_TITLE)]);
+    expect([...back, ...fragment].filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+    expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/"]);
+  });
+
   test("a snapshot gives the page's controls with references, and a click and typing by them reach the page", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);

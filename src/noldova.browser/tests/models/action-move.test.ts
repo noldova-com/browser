@@ -21,7 +21,7 @@ import type { JsonObject } from "../../src/types/json-value.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
 describe("ActionMove", () => {
-  const FRAME: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1");
+  const FRAME: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1");
   const HISTORY: JsonObject = { currentIndex: 1, entries: [{ url: "https://docs.example/" }, { url: "https://docs.example/guide" }, { url: "https://docs.example/next" }] };
   let bench: ToolBench;
 
