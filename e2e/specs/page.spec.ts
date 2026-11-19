@@ -147,6 +147,8 @@ test.describe("the page's view", () => {
       .toEqual([true, true]);
     await expect.poll(() => app.viewPages.runAtAsync(docs.url("/one"), "document.getElementById('field').value + ' ' + scrollY"), { message: "The page lost its field or scroll after the split." })
       .toBe("kept 400");
+    // The restored page's history holds no field value until the page commits again, about a second after the restore.
+    await expect.poll(() => app.viewPages.holdsPageStateAsync(docs.url("/one"), "kept"), { message: "The restored page never committed the field's value." }).toBe(true);
 
     await runTabMenuAsync(app, one, [["Move to previous group", "Enter"]]);
 
