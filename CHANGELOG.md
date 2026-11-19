@@ -6,7 +6,7 @@ Each version's section is written by the pull request that changes the version, 
 
 ## 0.0.4
 
-- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.8 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` pins Noldova Desktop's protocol and window packages at 0.0.8 (#71, #80, #82, #94, #101) and `@noldova/ui.components.angular` at 0.0.17 (#73, #109).
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.8 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` takes Noldova Desktop's protocol and window packages as peers at `>=0.0.8 <0.1.0` (#71, #80, #82, #94, #101) and `@noldova/ui.components.angular` at `>=0.0.17 <0.1.0` (#73, #109).
 - A typed address whose host holds a star, written, full-width or percent-encoded, is refused as not an address, and an origin that an earlier version kept that way is dropped when the module updates.
 - `browser_snapshot` takes `interactive`, the elements an agent acts on and the headings, `depth`, 1 to 100 levels, and `part`, one element's subtree by a reference an earlier snapshot gave; its answer is bounded at 128 KiB, cut at a line's end with a note on how to read more (#78).
   A reference no snapshot gave fails as `Refused` with the new code `browser.unknownReference`, and one whose element left the page as `Refused` with `browser.staleReference`.
