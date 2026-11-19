@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AddressLimits } from "@noldova/browser.protocol";
+
 import { PaneState } from "../enums/pane-state.ts";
 import { ViewEventKind } from "../enums/view-event-kind.ts";
 import type { PaneHearing } from "../services/pane-hearing.ts";
@@ -28,10 +30,16 @@ export class ViewRefusalEvent extends ViewEvent {
 
   public applyTo(status: PaneStatus): PaneStatus {
     const isBeforeItsLoad: boolean = status.state !== PaneState.Loading;
-    return status.refuse(this.origin, isBeforeItsLoad, this.address);
+    return status.refuse(this.origin, isBeforeItsLoad, this.address, this.mayBeUnlisted());
   }
 
   public followIn(hearing: PaneHearing): void {
     hearing.refuse(this);
+  }
+
+  // Noldova Desktop also refuses a page's address with a username or password, or past the address limit, whatever the site list says.
+  private mayBeUnlisted(): boolean {
+    const parsed: URL | null = URL.parse(this.address);
+    return this.address.length <= AddressLimits.maximumUrlLength && parsed !== null && parsed.username === "" && parsed.password === "";
   }
 }
