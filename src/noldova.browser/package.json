@@ -1,6 +1,6 @@
 {
   "name": "@noldova/browser",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "The browser module for apps on Noldova Desktop: web pages in the window, and agent tools that read and act on them through permission requests.",
   "type": "module",
   "license": "MIT",
@@ -31,8 +31,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@noldova/browser.protocol": "0.0.3",
-    "@noldova/browser.window": "0.0.3"
+    "@noldova/browser.protocol": "0.0.4",
+    "@noldova/browser.window": "0.0.4"
   },
   "peerDependencies": {
     "@noldova/desktop.protocol": ">=0.0.8 <0.1.0",
