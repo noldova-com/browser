@@ -65,7 +65,7 @@ export class ViewCalls {
       throw new PageAnswerTimedOutException();
 
     if (Resources.stateChanging.includes(method))
-      options.progress.markInputSent();
+      options.progress.markInputSent(method === Resources.focusMethod);
     return remaining;
   }
 

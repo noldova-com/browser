@@ -129,7 +129,9 @@ export class ToolFailures {
 
   public static forCall(cause: unknown, progress: ActionProgress, isNonResumable: boolean): ToolFailure {
     const plain: CallFailureException = ToolFailures.toException(cause, false);
-    if (isNonResumable && progress.isInputSent)
+    // A page can replace an element when it takes the focus, as some search fields do; the action's own input never reached it then.
+    const isGoneOnFocus: boolean = progress.isOnlyFocusSent && (plain instanceof StaleReferenceException || plain instanceof PageChangedAfterGrantException);
+    if (isNonResumable && progress.isInputSent && !isGoneOnFocus)
       return new OutcomeUncertainException(plain.moduleCode ?? plain.reason, cause).toFailure();
     if (progress.isGranted && plain instanceof StaleReferenceException)
       return new PageChangedAfterGrantException(cause).toFailure();
