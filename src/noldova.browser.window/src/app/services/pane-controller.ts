@@ -10,6 +10,7 @@ import { WebViewNavigationKind, type WebViewNavigation } from "@noldova/desktop.
 import type { IWebViewFound, IWebViewHandle } from "@noldova/desktop.window";
 
 import type { AddressRefusal } from "../enums/address-refusal.ts";
+import { PaneState } from "../enums/pane-state.ts";
 import type { RefusedRequest } from "../enums/refused-request.ts";
 import { PaneUnavailableException } from "../exceptions/pane-unavailable.exception.ts";
 import { PaneStatus } from "../models/pane-status.ts";
@@ -88,8 +89,12 @@ export class PaneController {
     return this.followAnswer(await this.startNavigation().goForwardAsync(), null);
   }
 
+  // Noldova Desktop brings a crashed page back only by a navigation, and answers its reload with no history, so a crashed page loads its
+  // address again.
   public async reloadAsync(): Promise<WebViewNavigation> {
     const address: string = this.current.url;
+    if (this.current.state === PaneState.Crashed && address !== "")
+      return this.navigateAsync(address);
     return this.followAnswer(await this.startNavigation().reloadAsync(), address);
   }
 

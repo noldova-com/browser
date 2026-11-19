@@ -96,6 +96,27 @@ describe("PaneController", () => {
     expect(controller.status.state).toBe(PaneState.Crashed);
   });
 
+  it("loads a crashed page's address again on reload, since the view answers a crashed page's reload with no history", async () => {
+    const { surface, view, controller } = open();
+    surface.script("https://one.example/", { kind: "load", title: "One" });
+    await controller.navigateAsync("https://one.example/");
+    view.crash();
+
+    expect(await controller.reloadAsync()).toEqual(WebViewValues.started);
+
+    expect([controller.status.state, controller.status.url, controller.status.title]).toEqual([PaneState.Loaded, "https://one.example/", "One"]);
+    expect(view.calls).toEqual(["navigate https://one.example/", "navigate https://one.example/"]);
+  });
+
+  it("reloads a crashed page with no address through the view, which has nothing to reload", async () => {
+    const { view, controller } = open();
+    view.crash();
+
+    expect(await controller.reloadAsync()).toEqual(WebViewValues.noHistory);
+
+    expect(view.calls).toEqual(["reload"]);
+  });
+
   it("keeps a page's own refused navigation shown through its load, and clears it for the person's reload, whose load starts before its answer", async () => {
     const { view, controller } = open();
     await controller.navigateAsync("https://one.example/");
