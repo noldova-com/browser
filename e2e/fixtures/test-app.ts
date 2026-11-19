@@ -167,6 +167,18 @@ export class TestApp {
     return instance;
   }
 
+  // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it.
+  public async resizeAsync(width: number, height: number): Promise<void> {
+    await this.run.application.evaluate(({ BrowserWindow }, size: { readonly width: number; readonly height: number }): void => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.unmaximize();
+        window.setContentSize(size.width, size.height);
+      }
+    }, { width, height });
+    await expect.poll(() => this.window.evaluate(() => [innerWidth, innerHeight]), { message: `The window never took the size ${String(width)} by ${String(height)}.` })
+      .toEqual([width, height]);
+  }
+
   public async requestAsync(method: string, payload: JsonValue): Promise<JsonValue> {
     return TestApp.payloadOf(method, await this.answerAsync(method, payload));
   }

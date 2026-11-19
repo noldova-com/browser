@@ -64,7 +64,7 @@ interface IViewPageContents {
   getURL(): string;
   getTitle(): string;
   isLoading(): boolean;
-  readonly navigationHistory: { canGoBack(): boolean };
+  readonly navigationHistory: { canGoBack(): boolean; getActiveIndex(): number; getAllEntries(): readonly { readonly pageState?: string }[] };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
   getOSProcessId(): number;
   isCrashed(): boolean;
@@ -291,6 +291,16 @@ export class ViewPages {
         throw new Error(`The app has ${views.length} views, not one.`);
       return view.navigationHistory.canGoBack();
     });
+  }
+
+  // Whether the state the view's page last committed to its history holds the text, as a form field's typed value, which the page
+  // commits about a second after the change; Noldova Desktop restores a moved view's page from that state.
+  public async holdsPageStateAsync(url: string, text: string): Promise<boolean> {
+    return this.application.evaluate(({ webContents }, [address, typed]): boolean => {
+      const view: IViewPageContents | undefined = webContents.getAllWebContents().find((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === address);
+      const state: string | undefined = view?.navigationHistory.getAllEntries()[view.navigationHistory.getActiveIndex()]?.pageState;
+      return state !== undefined && Buffer.from(state, "base64").includes(Buffer.from(typed, "utf16le"));
+    }, [url, text] as const);
   }
 
   public async attachChildAsync(url: string): Promise<ChildTarget> {
