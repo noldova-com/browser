@@ -34,7 +34,7 @@ export class PaneStatus {
   public readonly refusedTarget: string | null;
   public readonly refusedAddress: AddressRefusal | null;
   public readonly popup: PopupOffer | null;
-  public readonly isPageRefusal: boolean;
+  public readonly mayBeUnlisted: boolean;
 
   private constructor(
     state: PaneState,
@@ -50,7 +50,7 @@ export class PaneStatus {
     popup: PopupOffer | null,
     replaced: PaneStatus | null = null,
     holdsRefusedLoad: boolean = false,
-    isPageRefusal: boolean = false) {
+    mayBeUnlisted: boolean = false) {
     this.state = state;
     this.url = url;
     this.title = title;
@@ -64,7 +64,7 @@ export class PaneStatus {
     this.popup = popup;
     this.replaced = replaced;
     this.holdsRefusedLoad = holdsRefusedLoad;
-    this.isPageRefusal = isPageRefusal;
+    this.mayBeUnlisted = mayBeUnlisted;
   }
 
   public apply(event: ViewEvent): PaneStatus {
@@ -79,11 +79,11 @@ export class PaneStatus {
     const title: string = isBlank && state.title === state.address ? "" : state.title;
     if (state.isLoading && this.holdsRefusedLoad && address === this.url)
       return new PaneStatus(PaneState.Refused, this.url, this.title, state.canGoBack, state.canGoForward, null, this.refusedOrigin, this.refusedRequest, this.refusedTarget, null,
-        this.popup, null, false, this.isPageRefusal);
+        this.popup, null, false, this.mayBeUnlisted);
     if (state.isLoading)
       return new PaneStatus(PaneState.Loading, address, title, state.canGoBack, state.canGoForward, null, null, this.loadRequest(), this.loadTarget(), null, null);
     return new PaneStatus(this.state === PaneState.Loading ? PaneState.Loaded : this.state, address, title, state.canGoBack, state.canGoForward, this.failureReason,
-      this.refusedOrigin, this.refusedRequest, this.refusedTarget, this.refusedAddress, this.popup, this.replaced, false, this.isPageRefusal);
+      this.refusedOrigin, this.refusedRequest, this.refusedTarget, this.refusedAddress, this.popup, this.replaced, false, this.mayBeUnlisted);
   }
 
   public fail(failure: ViewLoadFailureEvent): PaneStatus {
@@ -95,19 +95,19 @@ export class PaneStatus {
   }
 
   // An opaque origin, such as about:srcdoc's, names nothing a person could recognize, so the refusal names the address instead.
-  public refuse(origin: string, holdsRefusedLoad: boolean = false, address: string | null = null, isPageRefusal: boolean = false): PaneStatus {
+  public refuse(origin: string, holdsRefusedLoad: boolean = false, address: string | null = null, mayBeUnlisted: boolean = false): PaneStatus {
     const named: string = origin === Resources.opaqueOrigin && address !== null ? address : origin;
     return this.state === PaneState.Refused && this.refusedOrigin === named && this.refusedAddress === null && this.holdsRefusedLoad === holdsRefusedLoad
-      && this.isPageRefusal === isPageRefusal
+      && this.mayBeUnlisted === mayBeUnlisted
       ? this
       : new PaneStatus(PaneState.Refused, this.url, this.title, this.canGoBack, this.canGoForward, null, named, this.refusedRequest, this.refusedTarget, null, this.popup,
-        null, holdsRefusedLoad, isPageRefusal);
+        null, holdsRefusedLoad, mayBeUnlisted);
   }
 
   public navigate(): PaneStatus {
     return this.holdsRefusedLoad || this.refusedRequest !== null
       ? new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, null, null, this.refusedAddress, this.popup,
-        this.replaced, false, this.isPageRefusal)
+        this.replaced, false, this.mayBeUnlisted)
       : this;
   }
 
@@ -119,14 +119,14 @@ export class PaneStatus {
     return this.refusedAddress === reason
       ? this
       : new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, null, null, reason, null,
-        this.replaced, false, this.isPageRefusal);
+        this.replaced, false, this.mayBeUnlisted);
   }
 
   public dismissRequest(): PaneStatus {
     return this.refusedRequest === null && this.popup === null
       ? this
       : new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, null, null, this.refusedAddress, null,
-        this.replaced, false, this.isPageRefusal);
+        this.replaced, false, this.mayBeUnlisted);
   }
 
   public dismissAddress(): PaneStatus {
@@ -135,7 +135,7 @@ export class PaneStatus {
     return this.refusedAddress === null
       ? this
       : new PaneStatus(this.state, this.url, this.title, this.canGoBack, this.canGoForward, this.failureReason, this.refusedOrigin, this.refusedRequest, this.refusedTarget, null,
-        this.popup, null, false, this.isPageRefusal);
+        this.popup, null, false, this.mayBeUnlisted);
   }
 
   public refuseRequest(request: RefusedRequest, target: string | null = null): PaneStatus {
@@ -143,13 +143,13 @@ export class PaneStatus {
     return this.refusedRequest === request && this.refusedTarget === target
       ? this
       : new PaneStatus(base.state, base.url, base.title, base.canGoBack, base.canGoForward, base.failureReason, base.refusedOrigin, request, target, null, null,
-        null, false, base.isPageRefusal);
+        null, false, base.mayBeUnlisted);
   }
 
   public offerPopup(popup: PopupOffer): PaneStatus {
     const base: PaneStatus = this.replaced ?? this;
     return new PaneStatus(base.state, base.url, base.title, base.canGoBack, base.canGoForward, base.failureReason, base.refusedOrigin, null, null, null, popup,
-      null, false, base.isPageRefusal);
+      null, false, base.mayBeUnlisted);
   }
 
   private loadRequest(): RefusedRequest | null {

@@ -219,7 +219,8 @@ describe("PageStateComponent", () => {
     const texts: (string | undefined)[] = [];
     const refusals: readonly (readonly [string, string])[] = [["http://127.0.0.1:4173/", "http://127.0.0.1:4173"], ["http://192.168.1.1/", "http://192.168.1.1"],
       ["about:srcdoc", "null"], ["data:text/html,x", "null"], ["ftp://example.org/", "ftp://example.org"], ["http://[fd00::1]/", "http://[fd00::1]"],
-      ["http://localhost:4173/", "http://localhost:4173"]];
+      ["http://localhost:4173/", "http://localhost:4173"], ["https://user:secret@example.org/", "https://example.org"], ["https://:secret@example.org/", "https://example.org"],
+      [`https://example.org/${"a".repeat(32_768)}`, "https://example.org"], ["no address", "https://example.org"]];
     for (const [address, origin] of refusals) {
       await showAsync(state(false), new ViewRefusalEvent(address, origin, false));
       texts.push(...shown()[2]);
@@ -227,7 +228,7 @@ describe("PageStateComponent", () => {
     fixture.componentInstance.controller()?.refuseNavigation("null");
     await fixture.whenStable();
 
-    expect([...texts, ...shown()[2]]).toEqual(new Array<string>(8).fill("Its address isn't one Browser opens."));
+    expect([...texts, ...shown()[2]]).toEqual(new Array<string>(12).fill("Its address isn't one Browser opens."));
   });
 
   it("says a public site the view's own navigate or Back refused isn't one Browser opens, since the answer doesn't say why", async () => {

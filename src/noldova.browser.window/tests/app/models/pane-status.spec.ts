@@ -147,8 +147,8 @@ describe("PaneStatus", () => {
       byEvent.apply(new ViewCrashEvent())
     ];
 
-    expect(kept.map(t => [t.state, t.isPageRefusal])).toEqual(new Array<[PaneState, boolean]>(kept.length).fill([PaneState.Refused, true]));
-    expect(ended.map(t => t.isPageRefusal)).toEqual([false, false, false, false]);
+    expect(kept.map(t => [t.state, t.mayBeUnlisted])).toEqual(new Array<[PaneState, boolean]>(kept.length).fill([PaneState.Refused, true]));
+    expect(ended.map(t => t.mayBeUnlisted)).toEqual([false, false, false, false]);
     expect(byEvent.refuse("https://refused.example", true, null, true)).toBe(byEvent);
   });
 

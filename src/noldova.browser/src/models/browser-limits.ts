@@ -6,8 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AddressLimits } from "@noldova/browser.protocol";
+
 export class BrowserLimits {
-  public static readonly maximumUrlLength: number = 32_768;
+  public static readonly maximumUrlLength: number = AddressLimits.maximumUrlLength;
   public static readonly maximumTypedTextLength: number = 10_000;
   public static readonly maximumReferenceLength: number = 64;
   public static readonly maximumWaitMilliseconds: number = 30_000;

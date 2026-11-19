@@ -252,7 +252,7 @@ export class Resources {
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
           ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
-          : status.isPageRefusal && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
+          : status.mayBeUnlisted && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
             ? new PageStateText("block", `This workspace doesn't allow ${status.refusedOrigin}`,
               "This address isn't among the sites this workspace allows. Type it in the address field to open it.")
             : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
