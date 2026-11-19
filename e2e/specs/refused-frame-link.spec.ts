@@ -1,0 +1,47 @@
+/**
+ * @license
+ * Copyright (c) Noldova.
+ *
+ * This source code is licensed under the license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import { expect, test } from "../fixtures/app-test.ts";
+import { ViewPage } from "../fixtures/view-pages.ts";
+
+const TITLE = "Links";
+const VIEW = ".nol-browser-page-view";
+const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
+const FRAME_BOX = "JSON.stringify(document.querySelector(\"iframe\").getBoundingClientRect())";
+// A frame of another site at the page's top left, whose one link is at the frame's top left, so the person's click lands on it.
+const PAGE = (frame: string): string => `<!doctype html><title>${TITLE}</title><body style="margin:0">`
+  + `<iframe src="${frame}" style="display:block;width:320px;height:160px;border:0"></iframe>`;
+const FRAME = (target: string): string => "<!doctype html><title>Frame</title><body style=\"margin:0\">"
+  + `<a id="a" href="${target}" style="display:inline-block;width:100px;height:40px">Out</a>`;
+
+test.describe("a refused link in a frame", () => {
+  test("the person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it", async ({ app, servers }) => {
+    const other = await servers.startAsync("other.localhost", { "/": "<!doctype html><title>Other</title>" });
+    const framed = await servers.startAsync("framed.localhost", { "/": FRAME(other.url("/")) });
+    const docs = await servers.startAsync("docs.localhost", { "/": PAGE(framed.url("/")) });
+    await app.allowLocalSitesAsync([docs.origin, framed.origin]);
+    await app.openPageAsync(docs.url("/"));
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), TITLE)]);
+    await expect.poll(() => app.viewPages.frameTextsAsync(docs.url("/")), { message: "The frame never showed its link." }).toEqual(["Out"]);
+    const frameBox = await app.viewPages.runAtAsync(docs.url("/"), FRAME_BOX);
+    const view = app.window.locator(VIEW).filter({ visible: true });
+    const box = await view.boundingBox();
+    if (box === null)
+      throw new Error("The page's view has no box.");
+
+    await app.window.mouse.click(box.x + 50, box.y + 20);
+
+    await expect.poll(() => app.viewPages.frameTextsAsync(docs.url("/")), { message: "The frame never showed the refusal, as the frames' texts." })
+      .toEqual([expect.stringContaining(`Browser doesn't open ${other.origin}`)]);
+    expect([await app.viewPages.frameTextsAsync(docs.url("/")), await app.viewPages.runAtAsync(docs.url("/"), FRAME_BOX)], "The frame's refusal lost its text or its box.")
+      .toEqual([[expect.stringContaining("Its address isn't one Browser opens.")], frameBox]);
+    expect([await app.window.locator(PAGE_STATE_HEADING).allTextContents(), (await app.viewPages.listAsync()).map(t => t.url)], "The pane left the page for the frame's refusal.")
+      .toEqual([[], [docs.url("/")]]);
+    expect(servers.requests.filter(t => t.host === `${other.name}:${other.port}`), "The refused site got a request.").toEqual([]);
+  });
+});

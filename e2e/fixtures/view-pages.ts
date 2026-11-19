@@ -56,8 +56,16 @@ interface IViewNavigationStart {
   readonly isSameDocument: boolean;
 }
 
+interface IViewFrame {
+  readonly url: string;
+  readonly parent: IViewFrame | null;
+  readonly framesInSubtree: IViewFrame[];
+  executeJavaScript(code: string): Promise<unknown>;
+}
+
 interface IViewPageContents {
   readonly id: number;
+  readonly mainFrame: IViewFrame;
   getType(): string;
   readonly session: IViewSession;
   readonly debugger: IViewDebugger;
@@ -302,6 +310,15 @@ export class ViewPages {
         throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
       return String(await view.executeJavaScript(request.code, true));
     }, { url, code: script });
+  }
+
+  // The text each frame inside the view at the URL shows, in the frames' order; a frame whose text can't be read gives its error.
+  public async frameTextsAsync(url: string): Promise<readonly string[]> {
+    return this.application.evaluate(async ({ webContents }, pageUrl: string): Promise<string[]> => {
+      const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
+      const frames: IViewFrame[] = views.flatMap(t => t.mainFrame.framesInSubtree).filter(t => t.parent !== null);
+      return Promise.all(frames.map(async t => String(await t.executeJavaScript("document.body?.innerText ?? \"\"").catch((error: unknown) => `unreadable: ${String(error)}`))));
+    }, url);
   }
 
   // The role and name of each node the engine's own accessibility tree of the view at the URL keeps, in its order.
