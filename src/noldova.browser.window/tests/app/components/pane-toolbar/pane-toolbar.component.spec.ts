@@ -357,12 +357,21 @@ describe("PaneToolbarComponent", () => {
     expect([said, button("Reload", "Stop").getAttribute("aria-label")]).toEqual([[], "Stop"]);
   });
 
-  it("reloads a page that failed, was refused or crashed", async () => {
+  it("reloads a page whose load failed", async () => {
     await showAsync(new ViewLoadFailureEvent("https://one.example/", -105, "No answer"));
     button("Reload", "Stop").click();
     await fixture.whenStable();
 
     expect([button("Reload", "Stop").getAttribute("aria-disabled"), view.calls]).toEqual([null, ["reload"]]);
+  });
+
+  it("loads a crashed page's address again, which the view doesn't reload", async () => {
+    await showAsync(state("https://one.example/", false));
+    view.crash();
+    await fixture.whenStable();
+    button("Reload", "Stop").click();
+
+    await vi.waitFor(() => expect(view.calls).toEqual(["reload", "navigate https://one.example/"]));
   });
 
   it("hands a failed call to the error handler", async () => {

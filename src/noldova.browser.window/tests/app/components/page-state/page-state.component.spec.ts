@@ -259,7 +259,7 @@ describe("PageStateComponent", () => {
     expect(shown()).toEqual(["sentiment_dissatisfied", "This page stopped working", ["Its content process ended. Reload to open it again; anything typed into it is lost."], ["Reload"]]);
     button().click();
 
-    await vi.waitFor(() => expect(view.calls).toEqual(["navigate https://one.example/"]));
+    await vi.waitFor(() => expect(view.calls).toEqual(["reload", "navigate https://one.example/"]));
     expect(fixture.componentInstance.leaves).toBe(1);
   });
 
