@@ -228,10 +228,13 @@ describe("PaneToolbarComponent", () => {
   afterEach(async () => {
     try {
       vi.restoreAllMocks();
+      // The pointer parks off the page at its true size and from its top, whatever zoom or scroll the test left.
+      await ZoomFixture.resetAsync();
+      window.scrollTo(0, 0);
       (await AppearanceFixture.parkPointerAsync()).remove();
-      fixture.destroy();
     }
     finally {
+      fixture.destroy();
       AppearanceFixture.reset();
       await Promise.all([ForcedColorsFixture.resetAsync(), ZoomFixture.resetAsync()]);
     }
