@@ -245,6 +245,9 @@ export class Resources {
   public static readonly dotReporter: string = "--reporter=dot";
   public static readonly skipFullCoverage: string = "--coverage.skipFull";
   public static readonly coverageMetrics: readonly string[] = ["statements", "branches", "functions", "lines"];
+  public static readonly ciVariable: string = "CI";
+  public static readonly debugVariable: string = "DEBUG";
+  public static readonly browserSessionDebug: string = "vitest:browser:pool,vitest:browser:playwright,vitest:browser:api";
   public static readonly vitestArguments: readonly string[] = [`${Resources.modulesFolder}/vitest/vitest.mjs`, "run", "--coverage"];
   public static readonly defaultReporter: string = "--reporter=default";
   public static readonly testTimesReport: string = "_build/test-times.json";
