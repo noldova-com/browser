@@ -303,6 +303,50 @@ describe("PageChanges", () => {
     expect(writtenTo(log)).toEqual([]);
   });
 
+  it("starts the hearing again in a frame that navigated, calls back once more when it has, and stops it with the others", async () => {
+    const stopHearing: () => void = await hearAsync();
+
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7", parentId: "F1" } });
+    await settleAsync();
+    const restarted: readonly string[] = switches(4);
+    const before: number = heard;
+    stopHearing();
+    await settleAsync();
+
+    expect([restarted, before]).toEqual([["view-1.5 on"], 2]);
+    expect(surface.calls.filter(t => t.method === "Page.createIsolatedWorld").at(-1)?.params["frameId"]).toBe("F7");
+    expect(switches(5)).toEqual(["view-1.1 off", "view-1.2 off", "view-1.3 off", "view-1.4 off", "view-1.5 off"]);
+  });
+
+  it("stops a function that a navigation started again once the hearing stopped, and calls back no more", async () => {
+    const stopHearing: () => void = await hearAsync();
+
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7", parentId: "F1" } });
+    stopHearing();
+    await settleAsync();
+
+    expect(heard).toBe(1);
+    expect(switches(4)).toEqual(["view-1.1 off", "view-1.2 off", "view-1.3 off", "view-1.4 off", "view-1.5 off", "view-1.5 on"]);
+  });
+
+  it("logs a start again that fails with a bug, and not one that fails as the view does, and starts none for a navigation without a frame or its id", async () => {
+    await hearAsync();
+    const bug: Error = new Error("The world broke.");
+    surface.answerWith("Page.createIsolatedWorld", () => {
+      throw bug;
+    });
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7" } });
+    await settleAsync();
+    surface.fail("Page.createIsolatedWorld", new WebViewFailure(WebViewFailureKind.ViewClosed));
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F8" } });
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: {} });
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", {});
+    await settleAsync();
+
+    expect([heard, surface.calls.filter(t => t.method === "Page.createIsolatedWorld").map(t => t.params["frameId"]).slice(4)]).toEqual([4, ["F7", "F8"]]);
+    expect(writtenTo(log)).toEqual([`The page changes of view view-1 weren't started again after a navigation: ${String(bug)}`]);
+  });
+
   it("logs a stop that fails other than as a call on the view does, and stops the other frames' functions all the same", async () => {
     const stopHearing: () => void = await hearAsync();
     const bug: Error = new Error("The stop broke.");

@@ -143,14 +143,50 @@ describe("WaitForTool", () => {
     expect([result.content[0]?.value, bench.methods.filter(t => t === "Accessibility.getFullAXTree").length]).toEqual(["The wait wasn't met in 300 ms.", 3]);
   });
 
-  it("reads a heard page that reports no change only as it starts hearing, and at its limit says the wait wasn't met and stops hearing", async () => {
+  it("reads a heard page that reports no change only as it starts hearing and once more at its limit, then says the wait wasn't met and stops hearing", async () => {
     vi.useFakeTimers(FAKED);
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
     const result: ToolResult = await waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), 300);
 
     expect(result.content[0]?.value).toBe("The wait wasn't met in 300 ms.");
-    expect([bench.methods.filter(t => t === "Accessibility.getFullAXTree").length, bench.methods.filter(t => t === "Runtime.callFunctionOn").length]).toEqual([3, 2]);
+    expect([bench.methods.filter(t => t === "Accessibility.getFullAXTree").length, bench.methods.filter(t => t === "Runtime.callFunctionOn").length]).toEqual([4, 2]);
+  });
+
+  it("is met at its limit by a text the page shows after its last reported change", async () => {
+    vi.useFakeTimers(FAKED);
+    const trees: JsonObject[] = [tree(["Loading"]), tree(["Loading"])];
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => params["depth"] === undefined ? trees.shift() ?? tree(["Order placed"]) : tree([]));
+
+    const result: ToolResult = await waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), 300);
+
+    expect(result.content[0]?.value).toBe("The wait was met.");
+  });
+
+  it("hears the page again in the new document after its main frame navigates, and is met by a text the new document reports", async () => {
+    vi.useFakeTimers(FAKED);
+    let reads: number = 0;
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
+      if (params["depth"] !== undefined)
+        return tree([]);
+      reads += 1;
+      if (reads === 2)
+        bench.surface.emitProtocolEvent(ToolBench.VIEW, "Page.frameNavigated", { frame: { id: "F1", url: "https://shop.test/done/" } });
+      return tree([reads <= 3 ? "Submit" : "Order confirmed"]);
+    });
+    const switchedOn = (): number => bench.surface.calls.filter(t => t.method === "Runtime.callFunctionOn" && JSON.stringify(t.params["arguments"]) === '[{"value":true}]').length;
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ text: "confirmed", timeoutMilliseconds: 5_000 }));
+    const answers: ToolResult[] = [];
+    void running.then(t => answers.push(t));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(500);
+    const restarted: [unknown[], number, number] = [bench.surface.calls.filter(t => t.method === "Page.createIsolatedWorld").map(t => t.params["frameId"]), switchedOn(), reads];
+    bench.surface.reportChange(ToolBench.VIEW);
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(restarted).toEqual([["F1", "F1"], 2, 3]);
+    expect([answers.map(t => t.content[0]?.value), reads]).toEqual([["The wait was met."], 4]);
   });
 
   it("ends a wait whose hearing the page never answers at the wait's limit, not the call's deadline", async () => {

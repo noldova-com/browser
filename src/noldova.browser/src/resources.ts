@@ -567,6 +567,10 @@ export class Resources {
     return `The sites on this computer or network weren't given to every open page: ${error}`;
   }
 
+  public static formatChangesNotRestarted(viewId: string, error: string): string {
+    return `The page changes of view ${viewId} weren't started again after a navigation: ${error}`;
+  }
+
   public static formatChangesNotStopped(viewId: string, error: string): string {
     return `The page changes of view ${viewId} weren't stopped: ${error}`;
   }

@@ -113,7 +113,8 @@ export class WaitForTool implements IBrowserTool {
         stopHearing();
       }
     }
-    return stopHearing === null && await isMetAsync();
+    // The last change before the limit may have come during a check, or while the hearing started again in a new document, so the wait reads once more.
+    return await isMetAsync();
   }
 
   // Reads the whole tree for the text until it is too large for one reply, then only the page's shown text, for the rest of the wait.

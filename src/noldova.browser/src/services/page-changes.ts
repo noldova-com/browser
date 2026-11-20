@@ -46,18 +46,42 @@ export class PageChanges {
     this.log = log;
   }
 
+  // A frame's navigation gives it a new document, which has neither the world nor its function, so the hearing starts again in that frame and
+  // calls back once more when it has, for what the new document shows by then.
   public async hearAsync(viewId: string, options: CallOptions, changed: () => void): Promise<() => void> {
     const contexts: string[] = [];
+    let isStopped: boolean = false;
     let release: () => void = () => undefined;
+    const restartAsync = async (frameId: string): Promise<void> => {
+      const started: string[] = [];
+      try {
+        await this.startAsync(viewId, frameId, options, started);
+      }
+      finally {
+        if (isStopped)
+          this.stopAll(viewId, started, options);
+        else
+          contexts.push(...started);
+      }
+      if (!isStopped)
+        changed();
+    };
     const stopEvents: () => void = this.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
-      if (event.method === Resources.frameNavigatedEvent || event.method === Resources.bindingCalledEvent && event.params[Resources.nameField] === PageChangeScript.bindingName)
+      if (event.method === Resources.frameNavigatedEvent) {
+        changed();
+        const frame: JsonValue | undefined = event.params[Resources.frameField];
+        const frameId: JsonValue | undefined = JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
+        if (typeof frameId === "string")
+          void restartAsync(frameId).catch((error: unknown) => this.logRestartFailure(viewId, error));
+      }
+      else if (event.method === Resources.bindingCalledEvent && event.params[Resources.nameField] === PageChangeScript.bindingName)
         changed();
     });
     const stop = (): void => {
+      isStopped = true;
       stopEvents();
       release();
-      for (const uniqueContextId of contexts)
-        void this.switchAsync(viewId, uniqueContextId, false, ViewCalls.releasing(options)).catch((error: unknown) => this.logStopFailure(viewId, error));
+      this.stopAll(viewId, contexts, options);
     };
     try {
       const { origin, mainId, childIds }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
@@ -251,6 +275,17 @@ export class PageChanges {
     }, options);
     const result: JsonValue | undefined = reply[Resources.resultField];
     return JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
+  }
+
+  private stopAll(viewId: string, contexts: readonly string[], options: CallOptions): void {
+    for (const uniqueContextId of contexts)
+      void this.switchAsync(viewId, uniqueContextId, false, ViewCalls.releasing(options)).catch((error: unknown) => this.logStopFailure(viewId, error));
+  }
+
+  // A frame that navigates again, or a view that closes, before the new document's world forms fails as the view does; anything else is a bug.
+  private logRestartFailure(viewId: string, error: unknown): void {
+    if (!(error instanceof BrowserRuntimeException))
+      this.log.write(Resources.formatChangesNotRestarted(viewId, String(error)));
   }
 
   private logStopFailure(viewId: string, error: unknown): void {
