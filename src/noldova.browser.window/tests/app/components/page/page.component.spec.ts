@@ -943,6 +943,15 @@ describe("PageComponent", () => {
     expect(acting.join("\n")).toContain("Scout");
   });
 
+  it("names the toolbar's Stop and the teammate's Stop teammate apart while a teammate acts on a loading page", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.emit(new ViewStateEvent("https://one.example/", "One", true, true, false));
+    await actAsync("Acting");
+
+    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
+      .toEqual(["Stop", "Stop teammate"]);
+  });
+
   it("puts the state's message in a heading, its detail in a paragraph and its actions in buttons, in the accessibility tree", async () => {
     await stateAsync(PaneState.Failed);
 
@@ -1313,14 +1322,6 @@ describe("PageComponent colors", () => {
       box: null, point: null, refusal: null, isHandedOver: false });
     await fixture?.whenStable();
   }
-
-  it("names the toolbar's Stop and the teammate's Stop teammate apart while a teammate acts on a loading page", async () => {
-    await loadingPageAsync();
-    await actAsync("Acting");
-
-    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
-      .toEqual(["Stop", "Stop teammate"]);
-  });
 
   async function failedPageAsync(): Promise<FakeWebView> {
     const view = await openAsync();

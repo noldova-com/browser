@@ -131,7 +131,7 @@ describe("AgentBarComponent", () => {
       .toEqual([["take over", "stop"], [["button", 0, false], ["button", 0, false]]]);
   });
 
-  it("takes over with Enter and stops with Space, Tab going from Take over to Stop", async () => {
+  it("takes over with Enter and stops with Space, Tab going from Take over to Stop teammate", async () => {
     const [takeOver, stop] = buttons();
     takeOver?.focus();
     await userEvent.keyboard("{Enter}");
