@@ -62,17 +62,20 @@ export class PageChanges {
     let release: () => void = () => undefined;
     const restartAsync = async (frameId: string): Promise<void> => {
       const started: string[] = [];
+      let isStarted: boolean = false;
       try {
         await this.startAsync(viewId, frameId, fresh(), started);
+        isStarted = true;
       }
       finally {
         if (isStopped)
           this.stopAll(viewId, started, options);
-        else
+        else {
           contexts.push(...started);
+          if (isStarted)
+            changed();
+        }
       }
-      if (!isStopped)
-        changed();
     };
     // A frame that navigated while the hearing started fails there as its old document goes; its restart hears the new one instead.
     const startAsync = (frameId: string): Promise<void> => this.startAsync(viewId, frameId, options, contexts).catch((error: unknown) => {

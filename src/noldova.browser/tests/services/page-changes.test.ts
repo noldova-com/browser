@@ -318,11 +318,15 @@ describe("PageChanges", () => {
     expect(switches(5)).toEqual(["view-1.1 off", "view-1.2 off", "view-1.3 off", "view-1.4 off", "view-1.5 off"]);
   });
 
-  it("stops a function that a navigation started again once the hearing stopped, and calls back no more", async () => {
+  it("stops a function that a navigation started again as the hearing stopped, and calls back no more", async () => {
     const stopHearing: () => void = await hearAsync();
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      if (params["uniqueContextId"] === "view-1.5" && JSON.stringify(params["arguments"]) === '[{"value":true}]')
+        stopHearing();
+      return { result: { type: "boolean", value: true } };
+    });
 
     surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7", parentId: "F1" } });
-    stopHearing();
     await settleAsync();
 
     expect(heard).toBe(1);
