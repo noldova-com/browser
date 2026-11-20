@@ -188,7 +188,7 @@ Its look follows the app's design, whose rules this section writes out.
   The agent's control starts with its first call on the page and goes on between its calls, until it closes the page, the person takes over or stops it, or its session ends, so the page area moves only as control starts and ends, never as a call ends.
   The bar alone says who is using the page: the page's tab shows no sign of the control, so the tab keeps its look, its opener marker and its status while the control comes and goes.
   When the runtime starts again, the window part reads the controls again with `browser.readActivities`, since the events sent meanwhile are lost, and applies the events that arrive while it waits over the answer, so no bar stays up for a control of the run that ended.
-  While the agent controls the page and no card asks, Take over and Stop end the control, with the request `browser.stopPage`, as [Agent tools](#7-agent-tools) says; while the card asks, the card is the person's answer, so the bar offers neither.
+  While the agent controls the page and no card asks, Take over and Stop teammate end the control, with the request `browser.stopPage`, as [Agent tools](#7-agent-tools) says; while the card asks, the card is the person's answer, so the bar offers neither.
   Its buttons take the Tab key after the toolbar, one stop each; when they go, because the card asks or the control ends, the focus they held moves first to the toolbar's Reload, or Stop in its place.
   At the pane's 10rem, and at 200% zoom, the glyph stays beside the text, the buttons wrap under it, whole, and nothing scrolls sideways.
 - **Teammate's mark:** while a click or typing aims at an element with a box, acting or asking, the window part draws over the live page, in the view's layer, a ring in the kit's primary button colour 0.25rem outside the element, a tag under it in the same colour with the action's glyph, such as "Scout · clicking" or "Scout · waiting for your answer", and for a click a pointer, white with a dark edge, with its tip where the click lands; under forced colours they take the system's highlight.
@@ -216,7 +216,7 @@ Its look follows the app's design, whose rules this section writes out.
 
 **Not yet:**
 - The page's favicon on its tab waits for the window part to read the web view's `Favicon` event, which Noldova Desktop has since 0.0.3 ([desktop#137](https://github.com/noldova-com/desktop/pull/137)).
-- Stop and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
+- Stop teammate and Take over end the agent's calls on the page, not its turn: ending one session's turn waits for Noldova Desktop to offer it.
   Until then the bar offers neither while the call's permission card asks, since Noldova Desktop withdraws a card only when the call itself is aborted.
 
 ### Geometry tokens
@@ -347,7 +347,7 @@ The runtime part registers eight tools by default, which `module.json` declares 
   A typed address's redirects and landing treat a page as acted on only while a call runs, not while the agent only keeps control of it.
   A control the person took over in a call ends with `isHandedOver`, and the window that shows the page brings its document forward, so the person types where the call stopped.
   A navigation the person denied the new origin of rests, or ends, with the address it didn't open and its origin, for the page's state above.
-- The person's Stop in a page's bar sends `browser.stopPage`, which aborts every call running on the page with the reason `Stopped`, so each fails as `Stopped`, or as `OutcomeUncertain` past its point of no return; a call that waits for the view's turn when the page is stopped ends as `Stopped` when its turn comes, and runs nothing.
+- The person's Stop teammate in a page's bar sends `browser.stopPage`, which aborts every call running on the page with the reason `Stopped`, so each fails as `Stopped`, or as `OutcomeUncertain` past its point of no return; a call that waits for the view's turn when the page is stopped ends as `Stopped` when its turn comes, and runs nothing.
   Take over does the same, and also refuses the later calls on the page of the session that last acted on it, as `Unavailable` with `browser.takenOver`, until that session ends; another session the app binds to the page acts on it.
   A stop that lands while the call's permission card asks ends the call as `Stopped` once the card is answered, and runs nothing.
 - A press and its release go out together: once a key or button press is handed to the page, its release is sent whatever the press's answer, with 2 seconds of its own, so neither a stop, a cancel, a failed press nor a deadline the press spent leaves anything held on the page; the press's failure stays the call's result.
@@ -492,7 +492,7 @@ A tool that fails rejects with Noldova Desktop's `ToolFailureException`, whose `
 | `Expired` | Nobody answered the permission request in time |
 | `Withdrawn` | The call was aborted while its permission request waited, for any reason: cancelled, its session ended, stopped, timed out or switched off |
 | `Cancelled` | The call was cancelled, or its session ended, before its point of no return and outside the permission wait |
-| `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop or Take over |
+| `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop teammate or Take over |
 | `Stale` | The page changed after the grant, so nothing ran; or a snapshot's page went to another document during each of its two reads; take a new snapshot |
 | `TimedOut` | The call's time limit passed before its point of no return |
 | `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus; the message keeps the reason it ended with |

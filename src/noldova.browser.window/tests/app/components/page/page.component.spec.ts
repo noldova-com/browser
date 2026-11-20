@@ -433,7 +433,7 @@ describe("PageComponent", () => {
     const bar: DOMRect = find("nol-browser-agent-bar").getBoundingClientRect();
     const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
     expect([tags(find("nol-browser-page")), [...find(".nol-browser-agent-bar-row").children].map(t => t.textContent?.trim())])
-      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop"]]);
+      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop teammate"]]);
     expect([Math.round(bar.top - find("nol-browser-toolbar").getBoundingClientRect().bottom), Math.round(area.top - bar.bottom)]).toEqual([0, 0]);
     await vi.waitFor(() => expect(boundsOf(view.element.getBoundingClientRect())).toEqual(boundsOf(area)));
   });
@@ -931,7 +931,7 @@ describe("PageComponent", () => {
     ]);
   });
 
-  it("names the teammate's bar and its Take over and Stop in the accessibility tree, and drops the buttons while the call asks", async () => {
+  it("names the teammate's bar and its Take over and Stop teammate in the accessibility tree, and drops the buttons while the call asks", async () => {
     await placeAsync();
     await actAsync("Acting");
     const acting: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
@@ -939,8 +939,17 @@ describe("PageComponent", () => {
     const asking: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
 
     expect([acting.at(0), acting.slice(-2), asking.at(0), asking.some(t => t.includes("button"))])
-      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop\""], "paragraph", false]);
+      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop teammate\""], "paragraph", false]);
     expect(acting.join("\n")).toContain("Scout");
+  });
+
+  it("names the toolbar's Stop and the teammate's Stop teammate apart while a teammate acts on a loading page", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.emit(new ViewStateEvent("https://one.example/", "One", true, true, false));
+    await actAsync("Acting");
+
+    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
+      .toEqual(["Stop", "Stop teammate"]);
   });
 
   it("puts the state's message in a heading, its detail in a paragraph and its actions in buttons, in the accessibility tree", async () => {
@@ -1401,7 +1410,7 @@ describe("PageComponent colors", () => {
         ["the bar's message", ContrastFixture.ofText(find(".nol-browser-agent-bar-message")), 4.5],
         ["the bar's name", ContrastFixture.ofText(find(".nol-browser-agent-bar-name")), 4.5]
       );
-      for (const [name, action] of [["Take over", 1], ["Stop", 2]] as const) {
+      for (const [name, action] of [["Take over", 1], ["Stop teammate", 2]] as const) {
         const target = (): HTMLElement => find(`.nol-browser-agent-bar-action:nth-of-type(${action})`);
         pairs.push([name, ContrastFixture.ofText(target()), 4.5]);
         await tabToAsync(target());

@@ -246,7 +246,7 @@ export declare class BrowserMethods {
   public static readonly readAppName: string;
 
   /**
-   * The request that ends the agent calls running on a page, from the person's Stop or Take over in the page's bar: each fails as stopped.
+   * The request that ends the agent calls running on a page, from the person's Stop teammate or Take over in the page's bar: each fails as stopped.
    * Take over also refuses the later calls on the page of the session that last acted on it, until that session ends.
    * It carries an {@link PageStopRequest} and is answered with null.
    *
@@ -319,7 +319,7 @@ export declare class BrowserMethods {
 }
 
 /**
- * The person's Stop or Take over on a page an agent acts on.
+ * The person's Stop teammate or Take over on a page an agent acts on.
  */
 export declare class PageStopRequest {
   /**
