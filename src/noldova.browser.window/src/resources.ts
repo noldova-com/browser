@@ -440,7 +440,7 @@ export class Resources {
 
   public static formatRefusedLocalSites(entries: readonly string[]): string {
     const named: string = entries.map(t => `"${t}"`).join(", ");
-    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with http:// or https:// and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.`;
+    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.`;
   }
 
   public static formatSubdomainSuffix(host: string): string {
