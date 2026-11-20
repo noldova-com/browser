@@ -931,7 +931,7 @@ describe("PageComponent", () => {
     ]);
   });
 
-  it("names the teammate's bar and its Take over and Stop in the accessibility tree, and drops the buttons while the call asks", async () => {
+  it("names the teammate's bar and its Take over and Stop teammate in the accessibility tree, and drops the buttons while the call asks", async () => {
     await placeAsync();
     await actAsync("Acting");
     const acting: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
@@ -939,7 +939,7 @@ describe("PageComponent", () => {
     const asking: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
 
     expect([acting.at(0), acting.slice(-2), asking.at(0), asking.some(t => t.includes("button"))])
-      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop\""], "paragraph", false]);
+      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop teammate\""], "paragraph", false]);
     expect(acting.join("\n")).toContain("Scout");
   });
 
