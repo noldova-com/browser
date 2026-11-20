@@ -126,14 +126,18 @@ describe("PageChangeScript", () => {
     const tall: HTMLElement = document.createElement("div");
     tall.style.height = "4000px";
     document.body.append(tall);
-    await scriptFrameAsync();
-    hear(true);
-    const reporting: Promise<void> = reportAsync();
-    window.scrollTo(0, 200);
-    await reporting;
-    hear(false);
-    window.scrollTo(0, 0);
-    tall.remove();
+    try {
+      await scriptFrameAsync();
+      hear(true);
+      const reporting: Promise<void> = reportAsync();
+      window.scrollTo(0, 200);
+      await reporting;
+    }
+    finally {
+      hear(false);
+      window.scrollTo(0, 0);
+      tall.remove();
+    }
 
     expect(payloads).toEqual([""]);
   });

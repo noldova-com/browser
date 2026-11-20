@@ -229,9 +229,11 @@ describe("PaneToolbarComponent", () => {
     try {
       vi.restoreAllMocks();
       (await AppearanceFixture.parkPointerAsync()).remove();
-      fixture.destroy();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
+      fixture.destroy();
+      TestBed.resetTestingModule();
       AppearanceFixture.reset();
       await Promise.all([ForcedColorsFixture.resetAsync(), ZoomFixture.resetAsync()]);
     }

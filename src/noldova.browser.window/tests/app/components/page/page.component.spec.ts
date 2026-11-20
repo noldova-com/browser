@@ -213,7 +213,9 @@ describe("PageComponent", () => {
       (await AppearanceFixture.parkPointerAsync()).remove();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
       fixture?.destroy();
+      TestBed.resetTestingModule();
       pages.close();
       AppearanceFixture.reset();
     }
@@ -1349,7 +1351,9 @@ describe("PageComponent colors", () => {
       (await AppearanceFixture.parkPointerAsync()).remove();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
       fixture?.destroy();
+      TestBed.resetTestingModule();
       pages.close();
       AppearanceFixture.reset();
       await EmulatedMediaFixture.resetAsync();
