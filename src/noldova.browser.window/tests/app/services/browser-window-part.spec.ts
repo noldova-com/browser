@@ -85,11 +85,11 @@ describe("BrowserWindowPart", () => {
     const check = context.settingChecks.get("browser.localSites");
 
     expect([check?.(""), check?.("http://127.0.0.1:4173, https://192.168.1.20:8443/, HTTP://LOCALHOST:3000, http://[::1]:5000")]).toEqual([null, null]);
-    expect(check?.("http://127.0.0.1:4173/form")).toBe("\"http://127.0.0.1:4173/form\" isn't a site's address on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.");
+    expect(check?.("http://127.0.0.1:4173/form")).toBe("\"http://127.0.0.1:4173/form\" isn't a site's address on this computer or network. Enter addresses with http:// or https:// and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.");
     expect(check?.("127.0.0.1:4173, http://127.0.0.1:4173, http://user:secret@127.0.0.1, ftp://127.0.0.1"))
-      .toBe("\"127.0.0.1:4173\", \"http://user:secret@127.0.0.1\", \"ftp://127.0.0.1\" aren't sites' addresses on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.");
+      .toBe("\"127.0.0.1:4173\", \"http://user:secret@127.0.0.1\", \"ftp://127.0.0.1\" aren't sites' addresses on this computer or network. Enter addresses with http:// or https:// and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.");
     expect(check?.("http://0.0.0.0:3000, http://[::]:3000, http://[fe80::1]:3000, http://169.254.1.1, http://server.local:5000, https://example.com, http://*.localhost:3000, http://127.0.0.1..:4173, http://localhost..:4173"))
-      .toBe("\"http://0.0.0.0:3000\", \"http://[::]:3000\", \"http://[fe80::1]:3000\", \"http://169.254.1.1\", \"http://server.local:5000\", \"https://example.com\", \"http://*.localhost:3000\", \"http://127.0.0.1..:4173\", \"http://localhost..:4173\" aren't sites' addresses on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.");
+      .toBe("\"http://0.0.0.0:3000\", \"http://[::]:3000\", \"http://[fe80::1]:3000\", \"http://169.254.1.1\", \"http://server.local:5000\", \"https://example.com\", \"http://*.localhost:3000\", \"http://127.0.0.1..:4173\", \"http://localhost..:4173\" aren't sites' addresses on this computer or network. Enter addresses with http:// or https:// and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.");
   });
 
   it("registers browser.openPage, which opens a page on the workspace it names, at the address it gives", async () => {

@@ -233,7 +233,7 @@ export class Resources {
   ]);
   private static readonly refusedRequests: Readonly<Record<RefusedRequest, (browser: string) => string>> = {
     [RefusedRequest.Download]: t => `Downloads aren't available in ${t} yet.`,
-    [RefusedRequest.NewWindow]: t => `${t} didn't open the new window this page asked for.`,
+    [RefusedRequest.NewWindow]: t => `This page asked for a new window, and ${t} didn't open it.`,
     [RefusedRequest.Permission]: t => `Site permissions, such as the camera or your location, aren't available in ${t} yet.`,
     [RefusedRequest.FileChooser]: t => `Opening files from this computer isn't available in ${t} yet.`,
     [RefusedRequest.Authentication]: t => `Sign-in dialogs aren't available in ${t} yet.`,
@@ -440,7 +440,7 @@ export class Resources {
 
   public static formatRefusedLocalSites(entries: readonly string[]): string {
     const named: string = entries.map(t => `"${t}"`).join(", ");
-    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.`;
+    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with http:// or https:// and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.`;
   }
 
   public static formatSubdomainSuffix(host: string): string {
