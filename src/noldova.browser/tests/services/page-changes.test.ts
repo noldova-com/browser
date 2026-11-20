@@ -76,8 +76,8 @@ describe("PageChanges", () => {
     return new Promise<void>(resolve => setImmediate(resolve));
   }
 
-  function hearAsync(): Promise<() => void> {
-    return changes.hearAsync("view-1", options, () => {
+  function hearAsync(optionsOf: () => CallOptions = () => options): Promise<() => void> {
+    return changes.hearAsync("view-1", optionsOf, () => {
       heard += 1;
     });
   }
@@ -327,6 +327,56 @@ describe("PageChanges", () => {
 
     expect(heard).toBe(1);
     expect(switches(4)).toEqual(["view-1.1 off", "view-1.2 off", "view-1.3 off", "view-1.4 off", "view-1.5 off", "view-1.5 on"]);
+  });
+
+  it("hears a main frame that navigated while the hearing started in its new document, though the old document's start failed", async () => {
+    let isOld: boolean = true;
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      if (params["uniqueContextId"] !== "view-1.1" || !isOld)
+        return { result: { type: "boolean", value: true } };
+      isOld = false;
+      surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1" } });
+      return { result: { type: "boolean", value: false } };
+    });
+
+    const stopHearing: () => void = await hearAsync();
+    await settleAsync();
+    const started: readonly string[] = switches();
+    stopHearing();
+
+    expect([heard, started.filter(t => t === "view-1.1 on")]).toEqual([2, ["view-1.1 on", "view-1.1 on"]]);
+    expect(writtenTo(log)).toEqual([]);
+  });
+
+  it("starts a frame again with fresh options, so a restart late in the hearing has its own time", async () => {
+    const given: readonly CallOptions[] = [options, options.withDeadline(Date.now() + 5_000)];
+    let asked: number = 0;
+    await hearAsync(() => given[Math.min(asked++, 1)] ?? options);
+
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7", parentId: "F1" } });
+    await settleAsync();
+
+    expect([asked, switches(4)]).toEqual([2, ["view-1.5 on"]]);
+    expect(surface.calls.filter(t => t.method === "Page.createIsolatedWorld").at(-1)?.timeoutMilliseconds).toBeGreaterThan(1_000);
+  });
+
+  it("ends a start again that still waits for its world when the hearing stops, and keeps the view's tracker", async () => {
+    const enables = (): number => surface.calls.filter(t => t.method === "Runtime.enable").length;
+    const stopHearing: () => void = await hearAsync();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    surface.answer("Page.createIsolatedWorld", { executionContextId: 41 });
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F7", parentId: "F1" } });
+    await settleAsync();
+
+    stopHearing();
+    await settleAsync();
+    vi.advanceTimersByTime(2_000);
+    await settleAsync();
+    const before: number = enables();
+    await domains.startAsync("view-1", "https://shop.test", (method, params) => surface.relay.sendAsync("view-1", method, params, 1_000));
+
+    expect([enables(), before, heard]).toEqual([1, 1, 1]);
+    expect(writtenTo(log)).toEqual([]);
   });
 
   it("logs a start again that fails with a bug, and not one that fails as the view does, and starts none for a navigation without a frame or its id", async () => {

@@ -97,7 +97,7 @@ export class WaitForTool implements IBrowserTool {
 
   private async hearUntilAsync(viewId: string, options: CallOptions, until: number, ended: AbortSignal, isMetAsync: () => Promise<boolean>): Promise<boolean> {
     const heard: ChangeQueue = new ChangeQueue(ended);
-    const stopHearing: (() => void) | null = await this.kit.changes.hearAsync(viewId, options.withDeadline(until), () => heard.add())
+    const stopHearing: (() => void) | null = await this.kit.changes.hearAsync(viewId, () => options.withDeadline(until), () => heard.add())
       .catch((error: unknown) => WaitForTool.ignoreUnheard(error));
     if (stopHearing === null) {
       if (!ended.aborted)
