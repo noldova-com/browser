@@ -50,7 +50,7 @@ export class AimFollower {
     signal: AbortSignal): Promise<void> {
     const reading = (): CallOptions => options.withSignal(signal, Date.now() + Resources.readMilliseconds);
     const heard: ChangeQueue = new ChangeQueue(signal);
-    const stopHearing: (() => void) | null = await changes.hearAsync(element.viewId, reading(), () => heard.add()).catch((error: unknown) => AimFollower.unheard(error));
+    const stopHearing: (() => void) | null = await changes.hearAsync(element.viewId, reading, () => heard.add()).catch((error: unknown) => AimFollower.unheard(error));
     if (stopHearing === null)
       return;
     try {
