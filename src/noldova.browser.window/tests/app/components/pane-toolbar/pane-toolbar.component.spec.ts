@@ -256,6 +256,13 @@ describe("PaneToolbarComponent", () => {
     expect([view.calls, errors]).toEqual([[], []]);
   });
 
+  it("does nothing for the reload key without a page", async () => {
+    fixture.componentInstance.toolbar().reloadPage();
+    await fixture.whenStable();
+
+    expect([view.calls, errors]).toEqual([[], []]);
+  });
+
   it("goes back and forward while the page has history there", async () => {
     await showAsync(state("https://one.example/", false, true, true));
 
