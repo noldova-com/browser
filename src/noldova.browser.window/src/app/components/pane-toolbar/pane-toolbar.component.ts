@@ -230,13 +230,11 @@ export class PaneToolbarComponent {
   }
 
   protected goBack(): void {
-    if (this.status().canGoBack)
-      this.run(this.controller().goBackAsync());
+    this.run(this.controller().goBackAsync());
   }
 
   protected goForward(): void {
-    if (this.status().canGoForward)
-      this.run(this.controller().goForwardAsync());
+    this.run(this.controller().goForwardAsync());
   }
 
   protected reloadOrStop(): void {
