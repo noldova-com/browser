@@ -138,7 +138,6 @@ async function expectNothingOpenedAsync(app: TestApp, before: Before, title: str
     .toEqual([]);
 }
 
-
 function pathsOf(server: FixtureServer): readonly string[] {
   return server.requests.map(t => t.path).filter(t => t !== FAVICON);
 }
