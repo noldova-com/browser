@@ -886,7 +886,7 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
     expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
-      status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", "Browser doesn't open https://refused.example", DocumentTone.Neutral),
+      status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", `${WindowContext.appName}'s browser doesn't open https://refused.example`, DocumentTone.Neutral),
       { instance: tab.id, update: { status: null } }
     ]);
   });

@@ -8,6 +8,7 @@
 
 import type { Locator, Page } from "playwright/test";
 
+import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
@@ -243,7 +244,7 @@ test.describe("the pane", () => {
 
     await app.viewPages.runAtAsync(docs.url("/"), `location.href = ${JSON.stringify(other.url("/"))}; true`);
 
-    await expect(app.window.locator(STATE_HEADING)).toHaveText(`Browser doesn't open ${other.origin}`);
+    await expect(app.window.locator(STATE_HEADING)).toHaveText(AppBrowser.saying(`doesn't open ${other.origin}`));
     expect([await shownViewsAsync(app.window), other.requests], "The refused page's view is shown, or its site got a request.").toEqual([[], []]);
   });
 
@@ -263,7 +264,7 @@ test.describe("the pane", () => {
           await app.window.mouse.click((view?.host[0] ?? 0) + 20, (view?.host[1] ?? 0) + 20);
         return shown;
       }, { message: "The pane never showed the refusal." })
-        .toEqual([site.isLocal ? `Browser doesn't open ${other.origin}` : "This workspace doesn't allow https://www.example.com"]);
+        .toEqual([site.isLocal ? expect.stringMatching(AppBrowser.saying(`doesn't open ${other.origin}`)) : "This workspace doesn't allow https://www.example.com"]);
       // The record holds only ended requests, so it is read once none is in flight.
       await expect.poll(() => app.viewRequests.inFlightAsync(), { message: "A request of the view never ended." }).toEqual([]);
       const records = await app.viewRequests.peekAsync();

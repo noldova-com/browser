@@ -550,12 +550,12 @@ export class Pages {
     return Pages.placeOf(PageAnswers.readRecord(await this.context.requestAsync(BrowserMethods.readPage, new PageRequest(instance).toJson())));
   }
 
-  private static statusOf(state: PaneStatus): IDocumentStatus | null {
+  private static statusOf(state: PaneStatus, appName: string | null): IDocumentStatus | null {
     switch (state.state) {
       case PaneState.Failed:
-        return { glyph: Resources.pageErrorGlyph, description: Resources.formatPageStateText(state).heading, tone: DocumentTone.Failed };
+        return { glyph: Resources.pageErrorGlyph, description: Resources.formatPageStateText(state, appName).heading, tone: DocumentTone.Failed };
       case PaneState.Refused:
-        return { glyph: Resources.pageBlockedGlyph, description: Resources.formatPageStateText(state).heading, tone: DocumentTone.Neutral };
+        return { glyph: Resources.pageBlockedGlyph, description: Resources.formatPageStateText(state, appName).heading, tone: DocumentTone.Neutral };
       default:
         return null;
     }
@@ -587,7 +587,7 @@ export class Pages {
         title = tab.title;
         this.context.updateDocument(Resources.pageDocument, tab.id, { title });
       }
-      const next: IDocumentStatus | null = Pages.statusOf(status);
+      const next: IDocumentStatus | null = Pages.statusOf(status, this.appName());
       if (next?.description !== shownStatus?.description) {
         shownStatus = next;
         this.context.updateDocument(Resources.pageDocument, tab.id, { status: next });

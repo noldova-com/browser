@@ -160,8 +160,6 @@ export class Resources {
   public static readonly pageId: string = "nol-browser-page-";
   public static readonly elsewherePage: PageStateText = new PageStateText("tab", "This page moved to another window",
     "A page shows in one window at a time. Open it again from where you found it to show it here, or close this tab.");
-  public static readonly forgottenPage: PageStateText = new PageStateText("history", "This page can't open again",
-    "Browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it.");
   public static readonly pageStateActions: Readonly<Record<PageStateAction, string>> = {
     [PageStateAction.TryAgain]: "Try again", [PageStateAction.CopyAddress]: "Copy address", [PageStateAction.Back]: "Back", [PageStateAction.Reload]: "Reload",
     [PageStateAction.Close]: "Close", [PageStateAction.AllowSite]: "Allow this site for the workspace", [PageStateAction.NotNow]: "Not now"
@@ -191,15 +189,7 @@ export class Resources {
   public static readonly pageErrorGlyph: string = "error";
   public static readonly pageBlockedGlyph: string = "block";
   public static readonly thisBrowser: string = "this browser";
-  public static readonly refusedAddresses: Readonly<Record<AddressRefusal, string>> = {
-    [AddressRefusal.NotAnAddress]: "Type a web address, such as example.com.",
-    [AddressRefusal.NotWeb]: "Browser opens only addresses that start with http: or https:.",
-    [AddressRefusal.TooLong]: "This address is too long to open.",
-    [AddressRefusal.Credentials]: "Browser doesn't open addresses with a user name or password.",
-    [AddressRefusal.Local]: "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
-    [AddressRefusal.NeverAllowed]: "Browser never opens this address.",
-    [AddressRefusal.Failed]: "Browser couldn't allow this address's site in the workspace. Try again."
-  };
+  public static readonly thisBrowserStart: string = "This browser";
   public static readonly noticeId: string = "-notice";
   public static readonly stateHeadingId: string = "-state-heading";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
@@ -231,6 +221,15 @@ export class Resources {
     ["ERR_INTERNET_DISCONNECTED", "This computer isn't connected to the internet."],
     ["ERR_ADDRESS_UNREACHABLE", "The server's address can't be reached from this network."]
   ]);
+  private static readonly refusedAddresses: Readonly<Record<AddressRefusal, (browser: string) => string>> = {
+    [AddressRefusal.NotAnAddress]: () => "Type a web address, such as example.com.",
+    [AddressRefusal.NotWeb]: t => `${t} opens only addresses that start with http: or https:.`,
+    [AddressRefusal.TooLong]: () => "This address is too long to open.",
+    [AddressRefusal.Credentials]: t => `${t} doesn't open addresses with a user name or password.`,
+    [AddressRefusal.Local]: t => `${t} opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.`,
+    [AddressRefusal.NeverAllowed]: t => `${t} never opens this address.`,
+    [AddressRefusal.Failed]: t => `${t} couldn't allow this address's site in the workspace. Try again.`
+  };
   private static readonly refusedRequests: Readonly<Record<RefusedRequest, (browser: string) => string>> = {
     [RefusedRequest.Download]: t => `Downloads aren't available in ${t} yet.`,
     [RefusedRequest.NewWindow]: t => `This page asked for a new window, and ${t} didn't open it.`,
@@ -241,7 +240,26 @@ export class Resources {
     [RefusedRequest.NestedView]: t => `Pages shown inside other pages aren't available in ${t} yet.`
   };
 
-  public static formatPageStateText(status: PaneStatus): PageStateText {
+  // The pane names the module as the app's browser wherever it speaks of it, or as this browser while the app's name is unknown.
+  public static formatBrowser(appName: string | null): string {
+    return appName === null ? Resources.thisBrowser : `${appName}'s browser`;
+  }
+
+  public static formatBrowserStart(appName: string | null): string {
+    return appName === null ? Resources.thisBrowserStart : `${appName}'s browser`;
+  }
+
+  public static formatForgottenPage(appName: string | null): PageStateText {
+    return new PageStateText("history", "This page can't open again",
+      `${Resources.formatBrowserStart(appName)} no longer knows which workspace it belonged to. Close it, and open the page again from where you found it.`);
+  }
+
+  public static formatRefusedAddress(refusal: AddressRefusal, appName: string | null): string {
+    return Resources.refusedAddresses[refusal](Resources.formatBrowserStart(appName));
+  }
+
+  public static formatPageStateText(status: PaneStatus, appName: string | null): PageStateText {
+    const browser: string = Resources.formatBrowserStart(appName);
     switch (status.state) {
       case PaneState.Empty:
         return new PageStateText("travel_explore", "Type an address to open a page", null);
@@ -252,16 +270,16 @@ export class Resources {
       }
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
-          ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
+          ? new PageStateText("block", `${browser} doesn't open this address`, "Edit the address in the field to open its site.")
           : status.mayBeUnlisted && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
             ? new PageStateText("block", `This workspace doesn't allow ${status.refusedOrigin}`,
               "This address isn't among the sites this workspace allows. Type it in the address field to open it.")
-            : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
-              "Its address isn't one Browser opens.");
+            : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? `${browser} doesn't open this page` : `${browser} doesn't open ${status.refusedOrigin}`,
+              `Its address isn't one ${Resources.formatBrowser(appName)} opens.`);
       case PaneState.Crashed:
         return new PageStateText("sentiment_dissatisfied", "This page stopped working", "Its content process ended. Reload to open it again; anything typed into it is lost.");
       default:
-        return new PageStateText("web_asset_off", "Browser can't show pages here", null);
+        return new PageStateText("web_asset_off", `${browser} can't show pages here`, null);
     }
   }
 
@@ -358,7 +376,7 @@ export class Resources {
   }
 
   public static formatRefusedRequest(request: RefusedRequest, appName: string | null): string {
-    return Resources.refusedRequests[request](appName === null ? Resources.thisBrowser : `${appName}'s browser`);
+    return Resources.refusedRequests[request](Resources.formatBrowser(appName));
   }
 
   public static formatNoAppName(error: unknown): string {
