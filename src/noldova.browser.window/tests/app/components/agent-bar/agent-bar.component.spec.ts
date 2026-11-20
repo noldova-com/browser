@@ -90,10 +90,10 @@ describe("AgentBarComponent", () => {
     }
   });
 
-  it("names the teammate and says it is using the page, with Take over and Stop", () => {
+  it("names the teammate and says it is using the page, with Take over and Stop teammate", () => {
     expect([find(".nol-browser-agent-bar-glyph").textContent?.trim(), find(".nol-browser-agent-bar-name").textContent?.trim(),
       find(".nol-browser-agent-bar-message").textContent?.trim(), buttons().map(t => t.textContent?.trim())])
-      .toEqual(["smart_toy", "Scout", "Scout is using this page", ["Take over", "Stop"]]);
+      .toEqual(["smart_toy", "Scout", "Scout is using this page", ["Take over", "Stop teammate"]]);
     expect(find(".nol-browser-agent-bar-glyph").getAttribute("aria-hidden")).toBe("true");
   });
 

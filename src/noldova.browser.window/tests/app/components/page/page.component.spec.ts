@@ -433,7 +433,7 @@ describe("PageComponent", () => {
     const bar: DOMRect = find("nol-browser-agent-bar").getBoundingClientRect();
     const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
     expect([tags(find("nol-browser-page")), [...find(".nol-browser-agent-bar-row").children].map(t => t.textContent?.trim())])
-      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop"]]);
+      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop teammate"]]);
     expect([Math.round(bar.top - find("nol-browser-toolbar").getBoundingClientRect().bottom), Math.round(area.top - bar.bottom)]).toEqual([0, 0]);
     await vi.waitFor(() => expect(boundsOf(view.element.getBoundingClientRect())).toEqual(boundsOf(area)));
   });
@@ -1314,6 +1314,14 @@ describe("PageComponent colors", () => {
     await fixture?.whenStable();
   }
 
+  it("names the toolbar's Stop and the teammate's Stop teammate apart while a teammate acts on a loading page", async () => {
+    await loadingPageAsync();
+    await actAsync("Acting");
+
+    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
+      .toEqual(["Stop", "Stop teammate"]);
+  });
+
   async function failedPageAsync(): Promise<FakeWebView> {
     const view = await openAsync();
     await emitAsync(view, new ViewLoadFailureEvent("https://gone.example/", -105, "ERR_NAME_NOT_RESOLVED"));
@@ -1401,7 +1409,7 @@ describe("PageComponent colors", () => {
         ["the bar's message", ContrastFixture.ofText(find(".nol-browser-agent-bar-message")), 4.5],
         ["the bar's name", ContrastFixture.ofText(find(".nol-browser-agent-bar-name")), 4.5]
       );
-      for (const [name, action] of [["Take over", 1], ["Stop", 2]] as const) {
+      for (const [name, action] of [["Take over", 1], ["Stop teammate", 2]] as const) {
         const target = (): HTMLElement => find(`.nol-browser-agent-bar-action:nth-of-type(${action})`);
         pairs.push([name, ContrastFixture.ofText(target()), 4.5]);
         await tabToAsync(target());
