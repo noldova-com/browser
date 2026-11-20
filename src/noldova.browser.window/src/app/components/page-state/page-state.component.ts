@@ -66,6 +66,7 @@ export class PageStateComponent {
   public readonly isForgotten = input<boolean>(false);
   public readonly isElsewhere = input<boolean>(false);
   public readonly refusal = input<RefusedPage | null>(null);
+  public readonly headingId = input<string | null>(null);
   public readonly focusLeaving = output<void>();
   public readonly closed = output<void>();
   public readonly refusalAnswered = output<string | null>();

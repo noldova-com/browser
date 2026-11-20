@@ -9,12 +9,13 @@
 import { type Signal, type WritableSignal, signal } from "@angular/core";
 import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
-import { QualifiedName, WebViewPane } from "@noldova/desktop.protocol";
+import { QualifiedName, type WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
 import { DocumentTone, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
 import type { JsonValue } from "@noldova/context.json";
 
 import { Resources } from "../../resources.ts";
 import { AddressRefusal } from "../enums/address-refusal.ts";
+import { EntryAnswer } from "../enums/entry-answer.ts";
 import { PaneState } from "../enums/pane-state.ts";
 import { RefusedRequest } from "../enums/refused-request.ts";
 import { LinkRefusedException } from "../exceptions/link-refused.exception.ts";
@@ -189,17 +190,17 @@ export class Pages {
     return null;
   }
 
-  public async goToAsync(tab: PaneTab, text: string): Promise<boolean> {
+  public async goToAsync(tab: PaneTab, text: string): Promise<EntryAnswer> {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place === undefined || tab.controller.status.state === PaneState.Unavailable)
-      return false;
+      return EntryAnswer.Stayed;
     const entry: object = {};
     this.entries.set(tab, entry);
     const isLatest = (): boolean => this.shown.has(tab) && tab.controller.status.state !== PaneState.Unavailable && this.entries.get(tab) === entry;
     const reading: AddressReading = AddressReader.read(text);
     if (reading.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(reading.reason);
-      return false;
+      return EntryAnswer.Stayed;
     }
     let answer: TypedAddressAnswer;
     try {
@@ -210,20 +211,24 @@ export class Pages {
       throw error;
     }
     if (!isLatest())
-      return false;
+      return EntryAnswer.Stayed;
     if (answer.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(answer.reason, new URL(reading.url).origin);
-      return false;
+      return EntryAnswer.Stayed;
     }
     const typing: TypedLoad = new TypedLoad(entry);
     this.typing.set(tab, typing);
+    let navigation: WebViewNavigation;
     try {
-      await tab.controller.navigateAsync(reading.url);
+      navigation = await tab.controller.navigateAsync(reading.url);
     }
     finally {
       this.endGoing(tab, place, typing);
     }
-    return isLatest();
+    if (!isLatest())
+      return EntryAnswer.Stayed;
+    // A navigation Noldova Desktop doesn't start leaves the typed text in the field, marked by the refusal, for the person to correct.
+    return navigation.kind === WebViewNavigationKind.Started ? EntryAnswer.Gone : EntryAnswer.Refused;
   }
 
   public openPopup(tab: PaneTab, url: string): void {
