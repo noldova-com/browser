@@ -724,6 +724,19 @@ describe("PageComponent", () => {
     ]);
   });
 
+  it("keeps the typed text in the field, marked invalid and described by the refused page's heading, when Noldova Desktop refuses its navigation", async () => {
+    const view: FakeWebView = await openAsync();
+    surface().script("https://example.com/docs", { kind: "refuse" });
+
+    await typeAsync("example.com/docs");
+    await vi.waitFor(() => expect(view.calls).toEqual(["mount", "navigate https://example.com/docs"]));
+    await stableAsync();
+
+    expect([field().value, field().getAttribute("aria-invalid"), document.getElementById(field().getAttribute("aria-describedby") ?? "")?.textContent?.trim()])
+      .toEqual(["example.com/docs", "true", heading()]);
+    expect(heading()).toContain("example.com");
+  });
+
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {
     await openAsync();
 

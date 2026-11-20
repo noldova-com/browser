@@ -1110,6 +1110,14 @@ describe("Pages", () => {
       expect(first.controller.status.url).toBe("https://example.com/docs");
     });
 
+    it("answers that it didn't go when Noldova Desktop refuses the typed address's navigation, which the pane shows as refused", async () => {
+      surface().script("https://example.com/docs", { kind: "refuse" });
+      const tab = await openAsync();
+
+      expect(await pages.goToAsync(tab, "example.com/docs")).toBe(false);
+      expect([viewOf(tab).calls, tab.controller.status.state, tab.controller.status.refusedOrigin]).toEqual([["navigate https://example.com/docs"], PaneState.Refused, "https://example.com"]);
+    });
+
     it("follows the typed address's redirects for that load only, judging each one's address as a typed one, and only the page it lands on joins", async () => {
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       surface().script("https://www.example.com/", { kind: "redirect", to: "https://consent.example.net/", title: "", isRefused: true });

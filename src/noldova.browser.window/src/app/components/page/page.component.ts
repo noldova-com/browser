@@ -64,6 +64,7 @@ export class PageComponent {
   protected readonly pageId: string = `${Resources.pageId}${PageComponent.count++}`;
   protected readonly appName: Signal<string | null> = this.pages.appName;
   protected readonly noticeId: string = `${this.pageId}${Resources.noticeId}`;
+  protected readonly stateHeadingId: string = `${this.pageId}${Resources.stateHeadingId}`;
   protected readonly tab: WritableSignal<PaneTab | null> = signal(null);
   protected readonly isForgotten: WritableSignal<boolean> = signal(false);
   protected readonly isFinding: WritableSignal<boolean> = signal(false);

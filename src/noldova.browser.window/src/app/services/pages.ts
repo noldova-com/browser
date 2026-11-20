@@ -9,7 +9,7 @@
 import { type Signal, type WritableSignal, signal } from "@angular/core";
 import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
-import { QualifiedName, WebViewPane } from "@noldova/desktop.protocol";
+import { QualifiedName, type WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
 import { DocumentTone, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
 import type { JsonValue } from "@noldova/context.json";
 
@@ -217,13 +217,15 @@ export class Pages {
     }
     const typing: TypedLoad = new TypedLoad(entry);
     this.typing.set(tab, typing);
+    let navigation: WebViewNavigation;
     try {
-      await tab.controller.navigateAsync(reading.url);
+      navigation = await tab.controller.navigateAsync(reading.url);
     }
     finally {
       this.endGoing(tab, place, typing);
     }
-    return isLatest();
+    // A navigation Noldova Desktop doesn't start leaves the typed text in the field, marked by the refusal, for the person to correct.
+    return isLatest() && navigation.kind === WebViewNavigationKind.Started;
   }
 
   public openPopup(tab: PaneTab, url: string): void {

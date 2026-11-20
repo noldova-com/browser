@@ -152,7 +152,7 @@ Its look follows the app's design, whose rules this section writes out.
   The person types an address in it and goes there with Enter, as their own action, as [Typed addresses](#typed-addresses) says; the field keeps the person's edit while the page changes, until Enter or Escape, which puts back the page's address.
   Text without a scheme reads as `https:`, or as `http:` on this computer (`localhost`, a name under `.localhost`, `127.0.0.0/8` or `[::1]`), where local servers answer, so `example.com` and `localhost:3000` are addresses, while words with spaces and a single word without a dot aren't; Enter and Escape while an input method composes belong to the composition.
   An entered address stays in the field until its own answer: once the page goes there, the field follows the page again, and the page's events while the runtime part answers change nothing; only the latest entered address acts, so an earlier answer that comes later is dropped.
-  An address the page doesn't go to keeps its text in the field, marked invalid with the notice as its description.
+  An address the page doesn't go to keeps its text in the field, marked invalid with the notice as its description; one that Noldova Desktop refuses is described by the refused page's heading instead, until the person edits the field or the pane leaves the refusal.
   The page's notice says why, such as "Type a web address, such as example.com.", until a load starts or the person presses Escape.
   A runtime request that failed goes to the error handler, and the notice says that Browser couldn't allow the address's site in the workspace and to try again.
   A page opened without an address starts with the focus in the field.

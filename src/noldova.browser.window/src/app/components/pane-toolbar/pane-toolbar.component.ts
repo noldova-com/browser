@@ -48,7 +48,7 @@ export class PaneToolbarComponent {
   private readonly number: number = PaneToolbarComponent.count++;
   private readonly loadGroup: string = `${Resources.securityId}${this.number}${Resources.loadGroup}`;
   private readonly zoomGroup: string = `${Resources.securityId}${this.number}${Resources.zoomGroup}`;
-  private isEntered: boolean = false;
+  private readonly isEntered: WritableSignal<boolean> = signal(false);
   private isSelecting: boolean = false;
   private stopPresses: number = 0;
   private standingStop: number | null = null;
@@ -81,13 +81,19 @@ export class PaneToolbarComponent {
     return host === "" ? null : host;
   });
   protected readonly address: Signal<string> = computed(() => this.draft() ?? this.shown());
-  protected readonly isRefused: Signal<boolean> = computed(() => this.draft() !== null && this.status().refusedAddress !== null);
+  // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading.
+  private readonly isEnteredRefused: Signal<boolean> = computed(() => this.draft() !== null && this.isEntered() && this.status().refusedAddress === null
+    && this.status().state === PaneState.Refused);
+  protected readonly isRefused: Signal<boolean> = computed(() => this.draft() !== null && this.status().refusedAddress !== null || this.isEnteredRefused());
   protected readonly describedBy: Signal<string | null> = computed(() => {
     const ids: string[] = [];
     const notice: string | null = this.noticeId();
     if (this.isInsecure())
       ids.push(this.securityId);
-    if (this.isRefused() && notice !== null)
+    const refusal: string | null = this.refusalId();
+    if (this.isEnteredRefused() && refusal !== null)
+      ids.push(refusal);
+    else if (this.isRefused() && notice !== null)
       ids.push(notice);
     return ids.length === 0 ? null : ids.join(Resources.idListSeparator);
   });
@@ -100,6 +106,7 @@ export class PaneToolbarComponent {
   public readonly controller = input.required<PaneController>();
   public readonly openLink = input<((url: string) => Promise<void>) | null>(null);
   public readonly noticeId = input<string | null>(null);
+  public readonly refusalId = input<string | null>(null);
   public readonly shownAddress = input<string | null>(null);
   public readonly addressEntered = output<string>();
   public readonly clearBrowsingData = output<void>();
@@ -150,7 +157,7 @@ export class PaneToolbarComponent {
   }
 
   public followPage(controller: PaneController): void {
-    if (controller === this.controller() && this.isEntered)
+    if (controller === this.controller() && this.isEntered())
       this.restore();
   }
 
@@ -198,7 +205,7 @@ export class PaneToolbarComponent {
   }
 
   protected edit(): void {
-    this.isEntered = false;
+    this.isEntered.set(false);
     this.draft.set(this.field().nativeElement.value);
   }
 
@@ -255,7 +262,7 @@ export class PaneToolbarComponent {
     const text: string = this.field().nativeElement.value;
     if (text.trim() === "")
       return;
-    this.isEntered = true;
+    this.isEntered.set(true);
     this.draft.set(text);
     this.addressEntered.emit(text);
     this.conceal();
@@ -306,7 +313,7 @@ export class PaneToolbarComponent {
   }
 
   private restore(): void {
-    this.isEntered = false;
+    this.isEntered.set(false);
     this.draft.set(null);
   }
 
