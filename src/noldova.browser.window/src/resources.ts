@@ -302,8 +302,10 @@ export class Resources {
     return `calc(${length}px + 2 * var(--nol-browser-mark-ring-offset) - max(0px, var(--nol-browser-mark-ring-offset) - ${start}px))`;
   }
 
+  // The tag starts no later than its least width before the right edge, so the edge never cuts its glyph. The step term leaves a tag under an element past the edge at its place.
   public static formatTagStart(pixels: number): string {
-    return `max(0px, calc(${pixels}px - var(--nol-browser-mark-tag-offset)))`;
+    const place: string = `${pixels}px - var(--nol-browser-mark-tag-offset)`;
+    return `max(0px, min(${place}, max(100% - var(--nol-browser-mark-tag-least), (${pixels}px - 100%) * 100000)))`;
   }
 
   // The space from the tag's start to the page's right edge, so a tag near that edge is cut with its ellipsis rather than by the edge.
