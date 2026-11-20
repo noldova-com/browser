@@ -224,6 +224,19 @@ describe("RequestNoticeComponent", () => {
     expect(document.activeElement).toBe(before);
   });
 
+  it("doesn't announce its notice again when the page's status changes but the notice's text doesn't", async () => {
+    await loadAsync();
+    await refuseAsync(RefusedRequest.Download);
+    view.emit(new ViewStateEvent("https://docs.example.com/pricing", "Plans and prices", false, false, false));
+    view.emit(new ViewStateEvent("https://docs.example.com/pricing", "Plans and prices", false, true, false));
+    await fixture.whenStable();
+
+    expect([shown()[1], said]).toEqual([
+      "Downloads aren't available in Fixture App's browser yet.",
+      [["Downloads aren't available in Fixture App's browser yet.", AnnouncementPoliteness.Polite]]
+    ]);
+  });
+
   it("follows the controller it is given, and leaves the one before", async () => {
     const previous = fixture.componentInstance.controller();
     await refuseAsync(RefusedRequest.Download);
