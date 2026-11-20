@@ -17,6 +17,7 @@ import path from "node:path";
 import { JsonReader, type JsonValue } from "@noldova/context.json";
 import { type ElectronApplication, type Page, type TestInfo, _electron, expect } from "playwright/test";
 
+import { AnswerLimit } from "./answer-limit.ts";
 import { HangLimits } from "./hang-limits.ts";
 import { type LaunchSetting, LaunchSettings } from "./launch-settings.ts";
 import { TestAppLayout } from "./test-app-layout.ts";
@@ -205,11 +206,11 @@ export class TestApp {
   }
 
   private async answerAsync(method: string, payload: JsonValue): Promise<JsonReader> {
-    return JsonReader.parse(await this.window.evaluate(async request => {
+    return JsonReader.parse(await AnswerLimit.withinAsync(this.window.evaluate(async request => {
       if (globalThis.desktop === undefined)
         throw new Error("The page has no desktop bridge.");
       return JSON.stringify(await globalThis.desktop.request(request.method, JSON.parse(request.payload)));
-    }, { method, payload: JSON.stringify(payload) }));
+    }, { method, payload: JSON.stringify(payload) }), AbortSignal.timeout(HangLimits.APP_ANSWERS_A_REQUEST_WITHIN_MS), method));
   }
 
   // An app that can't answer any more still leaves what it logged before, and says why the rest is missing.
