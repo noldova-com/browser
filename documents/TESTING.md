@@ -290,7 +290,7 @@ The redirect row also asserts that the allowed server received each first hop, a
 | `agent-input-focus.spec.ts` | While the person types in a field of the window, an agent's key events and inserted text reach the page and don't take keyboard focus from that field. |
 | `loopback-only.spec.ts` | The no-request-leaves-loopback guard fails a run. |
 
-A request a test makes to the app fails after 65 s without an answer, naming its method: a tool's longest deadline and its answer's margin, so it fits any request the app answers in its own time, and a hang fails well before the test's 2-minute timeout.
+A request a test makes to the app fails after 65 s without an answer, naming its method: a tool's longest deadline, 60 s, and 5 s for the answer to come back through the test app, so it fits any request the app answers in its own time, and a hang fails well before the test's 2-minute timeout.
 A failed test keeps its trace, `trace.zip` in its results folder, with its steps, fixtures and Playwright calls, which name where it waited; a passed test's trace is deleted.
 
 The [architecture](ARCHITECTURE.md#8-buffers-and-limits) caps a capture's longer side at 1,600 pixels, and how the base reports a capture's size has changed between Electron versions, so `screenshot-scale.spec.ts` asserts the decoded image's pixels, whichever format it comes in, on the Electron version the module pins.
