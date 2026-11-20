@@ -77,7 +77,7 @@ export class Resources {
   public static readonly agentAsking: string = "is waiting for your answer";
   public static readonly unnamedAgent: string = "A teammate";
   public static readonly takeOver: string = "Take over";
-  public static readonly stopAgent: string = "Stop";
+  public static readonly stopAgent: string = "Stop teammate";
   public static readonly markAsking: string = "waiting for your answer";
   public static readonly markActions: Readonly<Record<PageAction, string>> = {
     [PageAction.Navigating]: "navigating", [PageAction.Reading]: "reading", [PageAction.Clicking]: "clicking", [PageAction.Typing]: "typing",
