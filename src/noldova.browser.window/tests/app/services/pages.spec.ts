@@ -886,8 +886,27 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
     expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
-      status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", "Browser doesn't open https://refused.example", DocumentTone.Neutral),
+      status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", `${WindowContext.appName}'s browser doesn't open https://refused.example`, DocumentTone.Neutral),
       { instance: tab.id, update: { status: null } }
+    ]);
+  });
+
+  it("names the app's browser in an open page's status when the app's name answers after a refusal", async () => {
+    let answerName: (name: JsonValue) => void = () => undefined;
+    context = new WindowContext();
+    context.answerRequest = (method, parameters) => method === BrowserMethods.readAppName ? new Promise<JsonValue>(t => {
+      answerName = t;
+    }) : declared(method, parameters);
+    pages = new Pages(context);
+    const tab = await openAsync();
+    const status = (heading: string) => ({ instance: tab.id, update: { status: { glyph: "block", description: heading, tone: DocumentTone.Neutral } } });
+
+    tab.controller.refuseNavigation("https://refused.example");
+    answerName(WindowContext.appName);
+    await vi.waitFor(() => expect(pages.appName()).toBe(WindowContext.appName));
+
+    expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
+      status("This browser doesn't open https://refused.example"), status(`${WindowContext.appName}'s browser doesn't open https://refused.example`)
     ]);
   });
 

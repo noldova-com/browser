@@ -25,10 +25,10 @@ LICENSE file in the root directory of this source tree.
     @if (isElsewhere()) {
       <nol-browser-page-state [isElsewhere]="true" (closed)="close()" />
     } @else if (isForgotten()) {
-      <nol-browser-page-state [isForgotten]="true" (closed)="close()" />
+      <nol-browser-page-state [isForgotten]="true" [appName]="appName()" (closed)="close()" />
     } @else if (tab(); as tab) {
       @if (placedTab() === null) {
-        <nol-browser-page-state [controller]="tab.controller" [refusal]="refusal()" [headingId]="stateHeadingId" (focusLeaving)="focusToolbar()"
+        <nol-browser-page-state [controller]="tab.controller" [refusal]="refusal()" [appName]="appName()" [headingId]="stateHeadingId" (focusLeaving)="focusToolbar()"
           (refusalAnswered)="answerRefusal(tab, $event)" />
       }
     }

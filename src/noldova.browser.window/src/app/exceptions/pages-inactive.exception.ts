@@ -12,7 +12,7 @@ import { BrowserWindowException } from "./browser-window.exception.ts";
 export class PagesInactiveException extends BrowserWindowException {
   public override readonly name: string = "PagesInactiveException";
 
-  public constructor() {
-    super(Resources.pagesInactive);
+  public constructor(appName: string | null) {
+    super(Resources.formatPagesInactive(appName));
   }
 }

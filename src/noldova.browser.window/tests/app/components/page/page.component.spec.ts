@@ -785,7 +785,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expectErrors([allowed]));
     expect([notice(), field().value, field().getAttribute("aria-invalid"), view.calls]).toEqual([
-      "Browser couldn't allow this address's site in the workspace. Try again.", "example.com", "true", ["mount"]
+      `${WindowContext.appName}'s browser couldn't allow this address's site in the workspace. Try again.`, "example.com", "true", ["mount"]
     ]);
   });
 
@@ -799,13 +799,13 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     expect([field().value, field().getAttribute("aria-invalid"), notice()]).toEqual(["http://192.168.1.1", "true",
-      "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network."]);
+      `${WindowContext.appName}'s browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.`]);
     expect(await AccessibilityTreeFixture.readAsync(find(".nol-browser-page-view"))).toEqual([
-      "heading \"Browser doesn't open http://192.168.1.1\" level=2",
+      `heading "${WindowContext.appName}'s browser doesn't open http://192.168.1.1" level=2`,
       "paragraph",
-      "  StaticText \"Its address isn't one Browser opens.\"",
+      `  StaticText "Its address isn't one ${WindowContext.appName}'s browser opens."`,
       "button \"Back\""
     ]);
   });
@@ -819,7 +819,7 @@ describe("PageComponent", () => {
     refuseTyped("Local");
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
 
     await userEvent.keyboard("{Escape}");
 
@@ -844,7 +844,7 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync(address);
 
-    await vi.waitFor(() => expect([heading(), said.includes("Browser doesn't open this address")]).toEqual(["Browser doesn't open this address", true]));
+    await vi.waitFor(() => expect([heading(), said.includes(`${WindowContext.appName}'s browser doesn't open this address`)]).toEqual([`${WindowContext.appName}'s browser doesn't open this address`, true]));
     expect([said.join(" "), find(".nol-browser-page-view").textContent]).toEqual([expect.not.stringMatching(/hunter2|user:|example\.com/u),
       expect.not.stringMatching(/hunter2|user:|example\.com/u)]);
   });
@@ -858,11 +858,11 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     expect([document.activeElement === field(), await AccessibilityTreeFixture.readAsync(find(".nol-browser-page-view"))]).toEqual([true, [
-      "heading \"Browser doesn't open http://192.168.1.1\" level=2",
+      `heading "${WindowContext.appName}'s browser doesn't open http://192.168.1.1" level=2`,
       "paragraph",
-      "  StaticText \"Its address isn't one Browser opens.\""
+      `  StaticText "Its address isn't one ${WindowContext.appName}'s browser opens."`
     ]]);
   });
 
@@ -873,7 +873,7 @@ describe("PageComponent", () => {
 
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     await userEvent.keyboard("{Escape}");
 
     await vi.waitFor(() => expect(heading()).toBe("This workspace doesn't allow https://blocked.example"));
@@ -1006,7 +1006,7 @@ describe("PageComponent", () => {
 
     await showAsync(pages.open("workspace-1", "https://one.example/"));
 
-    expect([surface().views, element.querySelector("nol-browser-toolbar") !== null, heading()]).toEqual([[], true, "Browser can't show pages here"]);
+    expect([surface().views, element.querySelector("nol-browser-toolbar") !== null, heading()]).toEqual([[], true, `${WindowContext.appName}'s browser can't show pages here`]);
   });
 
   it("says a restored page it keeps no record of can't open again, without a toolbar, and closes its document on Close", async () => {

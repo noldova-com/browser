@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
@@ -26,7 +27,7 @@ const ADDRESS_FIELD = ".nol-browser-toolbar-field";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 const SRCDOC = "about:srcdoc";
 const NOTICE_MESSAGE = ".nol-browser-request-notice-message";
-const NOT_WEB_MESSAGE = "Browser opens only addresses that start with http: or https:.";
+const NOT_WEB_MESSAGE = AppBrowser.saying("opens only addresses that start with http: or https:.");
 const PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
 const REFUSED_SCHEMES: readonly IRefusedScheme[] = [
@@ -84,12 +85,12 @@ test.describe("schemes", () => {
 
       await app.viewPages.runAsync(start.script(JSON.stringify(SRCDOC)));
 
-      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as refused.`).toHaveText(`Browser doesn't open ${SRCDOC}`);
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as refused.`).toHaveText(AppBrowser.saying(`doesn't open ${SRCDOC}`));
       await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
         .toEqual([[SRCDOC, false]]);
       expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
       await app.window.getByRole("button", { name: "Reload", exact: true }).click();
-      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't name ${SRCDOC} after Reload, from ${start.name}.`).toHaveText(`Browser doesn't open ${SRCDOC}`);
+      await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't name ${SRCDOC} after Reload, from ${start.name}.`).toHaveText(AppBrowser.saying(`doesn't open ${SRCDOC}`));
       expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toBe(requests);
 
       await field.fill(allowed.url("/again"));
