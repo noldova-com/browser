@@ -760,7 +760,7 @@ describe("PageComponent", () => {
     await vi.waitFor(() => expect(view.calls).toContain("navigate https://fixed.example/"));
     await stableAsync();
 
-    expect(refusal).toContain("doesn't allow");
+    expect(refusal).toContain("refused.example");
     expect(held).toEqual(["fixed.example", null, refusal]);
     expect(field().getAttribute("aria-invalid")).toBeNull();
   });
