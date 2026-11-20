@@ -51,7 +51,7 @@ export class WaitForTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Waiting, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, choice === Resources.referenceField);
-      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId);
+      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, null);
       try {
         const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
         const until: number = Math.min(Date.now() + timeout, call.deadline - Resources.answerMarginMilliseconds);

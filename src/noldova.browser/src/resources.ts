@@ -309,6 +309,7 @@ export class Resources {
   public static readonly exceptionThrownEvent: "Runtime.exceptionThrown" = "Runtime.exceptionThrown";
   public static readonly entryAddedEvent: "Log.entryAdded" = "Log.entryAdded";
   public static readonly frameNavigatedEvent: "Page.frameNavigated" = "Page.frameNavigated";
+  public static readonly navigatedWithinDocumentEvent: "Page.navigatedWithinDocument" = "Page.navigatedWithinDocument";
   public static readonly loadEvent: "Page.loadEventFired" = "Page.loadEventFired";
   public static readonly pngFormat: "png" = "png";
   public static readonly entryOverheadBytes: number = 64;

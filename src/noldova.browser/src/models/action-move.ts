@@ -19,6 +19,7 @@ import type { CallOptions } from "./call-options.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import { HistoryTarget } from "./history-target.ts";
 import { NavigationMove } from "./navigation-move.ts";
+import { WithinDocumentMove } from "./within-document-move.ts";
 
 export class ActionMove extends NavigationMove {
   public readonly action: WebViewAction;
@@ -44,6 +45,11 @@ export class ActionMove extends NavigationMove {
     if (typeof target !== "string")
       throw new MalformedReplyException();
     return new HistoryTarget(index, target);
+  }
+
+  // A reload always takes a new document, so only back and forward may stay in theirs.
+  public readWithinDocument(frame: FrameFacts, target: HistoryTarget): WithinDocumentMove | null {
+    return this.action === WebViewAction.Reload ? null : new WithinDocumentMove(frame.frameId, target.url);
   }
 
   public async goAsync(webViews: IRuntimeWebViews, viewId: string): Promise<WebViewNavigation> {
