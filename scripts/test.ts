@@ -18,6 +18,9 @@ class Test {
   private static readonly root: string = path.dirname(import.meta.dirname);
   private static readonly window: string = path.join(Test.root, Resources.windowFolder);
   private static readonly angularCli: string = path.join(Test.root, ...Resources.angularCliEntry);
+  private static readonly windowEnvironment: NodeJS.ProcessEnv = process.env[Resources.ciVariable] === undefined || process.env[Resources.debugVariable] !== undefined
+    ? process.env
+    : { ...process.env, [Resources.debugVariable]: Resources.browserSessionDebug };
 
   public static run(values: readonly string[]): number {
     const options: readonly string[] = values.filter(t => t.startsWith(Resources.optionPrefix));
@@ -78,7 +81,9 @@ class Test {
   private static runStages(stages: readonly Stage[]): number {
     for (const [folder, steps] of stages)
       for (const step of steps) {
-        const result: SpawnSyncReturns<string | Buffer> = spawnSync(process.execPath, step, { cwd: folder, stdio: Resources.inheritedStdio });
+        const result: SpawnSyncReturns<string | Buffer> = spawnSync(process.execPath, step, {
+          cwd: folder, env: folder === Test.window ? Test.windowEnvironment : process.env, stdio: Resources.inheritedStdio
+        });
         if (result.error !== undefined)
           console.error(result.error.message);
         if (result.status !== 0)
