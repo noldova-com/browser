@@ -8,6 +8,7 @@
 
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 import { BrowserEvents, BrowserMethods } from "@noldova/browser.protocol";
+import type { WebViewNavigation } from "@noldova/desktop.protocol";
 import { DocumentTone } from "@noldova/desktop.window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -1385,6 +1386,23 @@ describe("Pages", () => {
       answers.get("https://new.example/")?.({ kind: "Refused", reason: "Local" });
 
       expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/"], null]);
+    });
+
+    it("answers that the page stayed for an earlier entry whose navigation Noldova Desktop refuses after a later entry went", async () => {
+      surface().script("https://new.example/", { kind: "refuse" });
+      const tab = await openAsync();
+      const view: FakeWebView = viewOf(tab);
+      const navigate: (url: string) => Promise<WebViewNavigation> = view.navigateAsync.bind(view);
+      const held: (() => void)[] = [];
+      view.navigateAsync = (url: string) => url !== "https://new.example/" ? navigate(url)
+        : new Promise<WebViewNavigation>(resolve => held.push(() => resolve(navigate(url))));
+
+      const first = pages.goToAsync(tab, "new.example");
+      await vi.waitFor(() => expect(held).toHaveLength(1));
+      expect(await pages.goToAsync(tab, "kept.example")).toBe(EntryAnswer.Gone);
+      held.forEach(t => t());
+
+      expect([await first, view.calls]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/", "navigate https://new.example/"]]);
     });
 
     it("says so and rejects with the failure when the runtime part's request fails, and loads nothing", async () => {
