@@ -20,7 +20,7 @@ describe("FrameTreeReader", () => {
       childFrames: [{ frame: { id: "F2", loaderId: "L2", url: "https://ads.example/", securityOrigin: "https://ads.example" } }]
     } };
 
-    expect(FrameTreeReader.read(reply)).toStrictEqual(new FrameFacts("https://docs.example/guide", "https://docs.example", "L1"));
+    expect(FrameTreeReader.read(reply)).toStrictEqual(new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1"));
   });
 
   it("reads a blank tab's and a data URL's origin as the module's opaque origin", () => {
@@ -35,7 +35,8 @@ describe("FrameTreeReader", () => {
     ["no top frame", { frameTree: {} }],
     ["no URL", { frameTree: { frame: { loaderId: "L1", securityOrigin: "https://docs.example" } } }],
     ["an origin that isn't text", { frameTree: { frame: { loaderId: "L1", url: "https://docs.example/", securityOrigin: 1 } } }],
-    ["no loader id", { frameTree: { frame: { url: "https://docs.example/", securityOrigin: "https://docs.example" } } }]
+    ["no loader id", { frameTree: { frame: { url: "https://docs.example/", securityOrigin: "https://docs.example" } } }],
+    ["no frame id", { frameTree: { frame: { loaderId: "L1", url: "https://docs.example/", securityOrigin: "https://docs.example" } } }]
   ])("fails as a malformed reply with %s", (_case: string, reply: JsonObject) => {
     expect(() => FrameTreeReader.read(reply)).toThrow(MalformedReplyException);
   });

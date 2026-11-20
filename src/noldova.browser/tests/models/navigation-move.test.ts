@@ -12,12 +12,17 @@ import { describe, expect, it } from "vitest";
 
 import { HistoryTarget } from "../../src/models/history-target.ts";
 import { NavigationMove } from "../../src/models/navigation-move.ts";
+import type { WithinDocumentMove } from "../../src/models/within-document-move.ts";
 
 describe("NavigationMove", () => {
-  it("is the base of each way the navigate tool moves the page, which reads its target and goes there", async () => {
+  it("is the base of each way the navigate tool moves the page, which reads its target, whether it may stay in its document, and goes there", async () => {
     class StayMove extends NavigationMove {
       public readTargetAsync(): Promise<HistoryTarget> {
         return Promise.resolve(new HistoryTarget(null, "about:blank"));
+      }
+
+      public readWithinDocument(): WithinDocumentMove | null {
+        return null;
       }
 
       public goAsync(webViews: IRuntimeWebViews, viewId: string): Promise<WebViewNavigation> {
@@ -27,6 +32,6 @@ describe("NavigationMove", () => {
 
     const move: StayMove = new StayMove();
 
-    expect([move instanceof NavigationMove, await move.readTargetAsync()]).toStrictEqual([true, new HistoryTarget(null, "about:blank")]);
+    expect([move instanceof NavigationMove, await move.readTargetAsync(), move.readWithinDocument()]).toStrictEqual([true, new HistoryTarget(null, "about:blank"), null]);
   });
 });

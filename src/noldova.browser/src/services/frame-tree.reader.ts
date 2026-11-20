@@ -22,8 +22,9 @@ export class FrameTreeReader {
     const url: JsonValue | undefined = frame[Resources.urlField];
     const origin: JsonValue | undefined = frame[Resources.securityOriginField];
     const documentId: JsonValue | undefined = frame[Resources.loaderIdField];
-    if (typeof url !== "string" || typeof origin !== "string" || typeof documentId !== "string")
+    const frameId: JsonValue | undefined = frame[Resources.idField];
+    if (typeof url !== "string" || typeof origin !== "string" || typeof documentId !== "string" || typeof frameId !== "string")
       throw new MalformedReplyException();
-    return new FrameFacts(url, PageOrigin.of(origin), documentId);
+    return new FrameFacts(url, PageOrigin.of(origin), documentId, frameId);
   }
 }

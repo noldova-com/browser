@@ -12,7 +12,7 @@ import { FrameFacts } from "../../src/models/frame-facts.ts";
 
 describe("FrameFacts", () => {
   it("keeps its fields", () => {
-    const frameFacts: FrameFacts = new FrameFacts("https://shop.test/cart", "https://shop.test", "L1");
+    const frameFacts: FrameFacts = new FrameFacts("https://shop.test/cart", "https://shop.test", "L1", "F1");
 
     expect([frameFacts.url, frameFacts.origin, frameFacts.documentId]).toEqual(["https://shop.test/cart", "https://shop.test", "L1"]);
   });
