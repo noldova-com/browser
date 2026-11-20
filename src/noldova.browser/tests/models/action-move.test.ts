@@ -17,6 +17,7 @@ import { CallOptions } from "../../src/models/call-options.ts";
 import { FrameFacts } from "../../src/models/frame-facts.ts";
 import { HistoryTarget } from "../../src/models/history-target.ts";
 import { NavigationMove } from "../../src/models/navigation-move.ts";
+import { WithinDocumentMove } from "../../src/models/within-document-move.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
@@ -53,6 +54,13 @@ describe("ActionMove", () => {
 
     expect([back, forward]).toStrictEqual([new HistoryTarget(0, "https://docs.example/"), new HistoryTarget(2, "https://docs.example/next")]);
     expect(bench.methods).toEqual(["Page.getNavigationHistory", "Page.getNavigationHistory"]);
+  });
+
+  it("may stay in the frame's document at its history entry's URL going back or forward, and never on a reload", () => {
+    const target: HistoryTarget = new HistoryTarget(0, "https://docs.example/");
+
+    expect([WebViewAction.Back, WebViewAction.Forward, WebViewAction.Reload].map(action => new ActionMove(action).readWithinDocument(FRAME, target)))
+      .toStrictEqual([new WithinDocumentMove("F1", "https://docs.example/"), new WithinDocumentMove("F1", "https://docs.example/"), null]);
   });
 
   it("refuses a move past the history's end as no history", async () => {

@@ -10,6 +10,7 @@ import { ToolAbortReason } from "@noldova/desktop.runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
+import { WithinDocumentMove } from "../../src/models/within-document-move.ts";
 import { LoadWaiter } from "../../src/services/load-waiter.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { ScriptedViews } from "../fixtures/scripted-views.fixture.ts";
@@ -72,9 +73,9 @@ describe("LoadWaiter", () => {
     expect([await waiting, vi.getTimerCount()]).toEqual([true, 0]);
   });
 
-  it("ends the wait on its moving frame's navigation within its document, even after another frame took a new document", async () => {
+  it("ends the wait on its move's navigation within its frame's document to its URL, even after another frame took a new document", async () => {
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
-    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", "F1");
+    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", new WithinDocumentMove("F1", "https://docs.example/start"));
     surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F2", parentId: "F1" } });
     surface.emitProtocolEvent("view-1", "Page.frameNavigated", {});
 
@@ -84,17 +85,25 @@ describe("LoadWaiter", () => {
     expect(await waiting).toBe(true);
   });
 
-  it.each<[string, string | null, readonly [string, JsonObject][]]>([
-    ["another frame's navigation within its document", "F1", [["Page.navigatedWithinDocument", { frameId: "F2", url: "https://docs.example/frame#b" }]]],
-    ["one that comes after its moving frame took a new document, whose load it waits for", "F1", [
+  const MOVE: WithinDocumentMove = new WithinDocumentMove("F1", "https://docs.example/next#top");
+
+  it.each<[string, WithinDocumentMove | null, readonly [string, JsonObject][]]>([
+    ["another frame's navigation within its document", MOVE, [["Page.navigatedWithinDocument", { frameId: "F2", url: "https://docs.example/next#top" }]]],
+    ["its frame's navigation within its document to another URL, as the page's own pushState before the move commits", MOVE, [
+      ["Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide?step=2" }]
+    ]],
+    ["one that comes after its frame took a new document, whose load it waits for", MOVE, [
       ["Page.frameNavigated", { frame: { id: "F1", url: "https://docs.example/next" } }],
       ["Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/next#top" }]
     ]],
-    ["any, with no moving frame", null, [["Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/start" }]]]
-  ])("doesn't end the wait on %s", async (_case: string, movingFrameId: string | null, events: readonly [string, JsonObject][]) => {
+    ["any, with no move that may stay in its document", null, [
+      ["Page.frameNavigated", { frame: { id: "F1", url: "https://docs.example/next" } }],
+      ["Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/next#top" }]
+    ]]
+  ])("doesn't end the wait on %s", async (_case: string, within: WithinDocumentMove | null, events: readonly [string, JsonObject][]) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
-    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", movingFrameId);
+    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", within);
     events.forEach(([method, params]) => surface.emitProtocolEvent("view-1", method, params));
 
     const waiting: Promise<boolean> = loads.waitAsync(Date.now() + 1_000, new AbortController().signal);

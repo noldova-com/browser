@@ -229,12 +229,12 @@ describe("NavigateTool", () => {
     expect([result.content[2]?.value, result.content[2]?.origin]).toEqual(["The page is still loading; wait for it with browser_wait_for before you act on it.", null]);
   });
 
-  it.each<[string, JsonObject]>([
-    ["back to an entry the page pushed", { action: "back" }],
-    ["to a fragment of the page", { url: "https://docs.example/guide#setup" }]
-  ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject) => {
+  it.each<[string, JsonObject, string]>([
+    ["back to an entry the page pushed", { action: "back" }, "https://docs.example/start"],
+    ["to a fragment of the page", { url: "https://docs.example/guide#setup" }, "https://docs.example/guide#setup"]
+  ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject, url: string) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/start" });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url });
 
     const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input, new AbortController(), ToolBench.SESSION, 60_000));
     await ToolBench.settleAsync();
@@ -242,6 +242,18 @@ describe("NavigateTool", () => {
     const result: ToolResult = await running;
 
     expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+  });
+
+  it("waits on a reload for its load, which a navigation within the document doesn't end", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide" });
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ action: "reload" }, new AbortController(), ToolBench.SESSION, 2_050));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toHaveLength(1);
   });
 
   it("ends the wait for the load by the call's abort, and listens no more", async () => {

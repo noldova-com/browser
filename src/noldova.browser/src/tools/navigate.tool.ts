@@ -67,7 +67,7 @@ export class NavigateTool implements IBrowserTool {
           throw new PageChangedAfterGrantException();
       }
 
-      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, frame.frameId);
+      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, move.readWithinDocument(frame, target));
       let isLoaded: boolean;
       try {
         progress.markInputSent();
