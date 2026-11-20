@@ -123,5 +123,7 @@ export class NavigateTool implements IBrowserTool {
       throw error;
     }
     await this.kit.origins.allowTypedAsync(new TypedAddressRequest(page.profileKey, target));
+    if (activity.signal.aborted)
+      throw ToolFailures.fromAbort(activity.signal.reason);
   }
 }
