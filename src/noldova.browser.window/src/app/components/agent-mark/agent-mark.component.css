@@ -18,6 +18,7 @@
   --nol-browser-mark-ring-offset: 0.25rem;
   --nol-browser-mark-tag-offset: 0.125rem;
   --nol-browser-mark-tag-gap: 0.375rem;
+  --nol-browser-mark-tag-least: calc(2 * var(--nol-browser-mark-tag-padding) + var(--nol-browser-mark-glyph-size) + var(--nol-space-1) + 1em);
   --nol-browser-pointer-offset: 0.125rem;
 
   position: absolute;
@@ -39,7 +40,6 @@
   box-sizing: border-box;
   align-items: center;
   gap: var(--nol-space-1);
-  max-width: 100%;
   height: var(--nol-browser-mark-tag-height);
   padding: 0 var(--nol-browser-mark-tag-padding);
   border-radius: var(--nol-radius-small);

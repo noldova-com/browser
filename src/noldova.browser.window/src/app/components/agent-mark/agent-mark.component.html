@@ -8,7 +8,7 @@ LICENSE file in the root directory of this source tree.
 
 @if (box(); as box) {
   <div class="nol-browser-agent-mark-ring" [style.left]="ringStart(box.x)" [style.top]="ringStart(box.y)" [style.width]="ringLength(box.x, box.width)" [style.height]="ringLength(box.y, box.height)"></div>
-  <span class="nol-browser-agent-mark-tag" [style.left]="tagStart(box.x)" [style.top]="tagTop(box.y + box.height)"><span
+  <span class="nol-browser-agent-mark-tag" [style.left]="tagStart(box.x)" [style.max-width]="tagSpace(box.x)" [style.top]="tagTop(box.y + box.height)"><span
     class="nol-browser-agent-mark-glyph material-symbols-rounded">{{ glyph() }}</span><span class="nol-browser-agent-mark-text">{{ tag() }}</span></span>
 }
 @if (point(); as point) {
