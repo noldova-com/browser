@@ -51,6 +51,7 @@ export class Pages {
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly opening: Map<string, boolean> = new Map<string, boolean>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
+  private readonly renamers: Set<() => void> = new Set<() => void>();
   private readonly agentPages: AgentPages;
   private readonly stopActivities: () => void;
   private readonly stopClosing: () => void;
@@ -72,14 +73,14 @@ export class Pages {
       this.agentPages.closeTab(t);
       this.request(BrowserMethods.forgetPage, new PageRequest(t).toJson(), Resources.formatNotKept);
     });
-    context.requestAsync(BrowserMethods.readAppName, null).then(t => this.name.set(PageAnswers.readAppName(t)))
+    context.requestAsync(BrowserMethods.readAppName, null).then(t => this.receiveAppName(PageAnswers.readAppName(t)))
       .catch((error: unknown) => context.log(Resources.formatNoAppName(error)));
   }
 
   public static of(context: IWindowPartContext): Pages {
     const pages: Pages | undefined = Pages.registry.get(context);
     if (pages === undefined)
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(null);
     return pages;
   }
 
@@ -92,7 +93,7 @@ export class Pages {
     if (this.isClosed) {
       if (!claim.isHere)
         this.request(BrowserMethods.letGoPage, new PageRequest(picked).toJson(), Resources.formatNotLetGo);
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(this.appName());
     }
     const kept: PageRecord | null = claim.record;
     if (claim.isHere && kept !== null && kept.profileKey !== profileKey)
@@ -145,7 +146,7 @@ export class Pages {
     if (answer.kind === TypedAddressAnswerKind.Refused)
       throw new LinkRefusedException(answer.reason);
     if (this.isClosed)
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(this.appName());
     this.open(Resources.linkProfile, url);
   }
 
@@ -323,6 +324,12 @@ export class Pages {
     const next: Map<string, RefusedPage> = new Map<string, RefusedPage>(this.refused());
     next.delete(instance);
     this.refused.set(next);
+  }
+
+  private receiveAppName(name: string | null): void {
+    this.name.set(name);
+    for (const rename of this.renamers)
+      rename();
   }
 
   private receiveActivity(payload: JsonValue): void {
@@ -572,6 +579,15 @@ export class Pages {
     let clearWorking: (() => void) | null = null;
     let shownStatus: IDocumentStatus | null = null;
     this.request(BrowserMethods.rememberPage, new PageRecord(tab.id, place.profileKey, url).toJson(), Resources.formatNotKept);
+    const showStatus = (status: PaneStatus): void => {
+      const next: IDocumentStatus | null = Pages.statusOf(status, this.appName());
+      if (next?.description !== shownStatus?.description) {
+        shownStatus = next;
+        this.context.updateDocument(Resources.pageDocument, tab.id, { status: next });
+      }
+    };
+    const rename = (): void => showStatus(tab.controller.status);
+    this.renamers.add(rename);
     const stopStatus: () => void = tab.controller.onChange(status => {
       if (status.state !== PaneState.Loading && this.typing.get(tab)?.isAnswered === true)
         this.endTyping(tab, place);
@@ -587,11 +603,7 @@ export class Pages {
         title = tab.title;
         this.context.updateDocument(Resources.pageDocument, tab.id, { title });
       }
-      const next: IDocumentStatus | null = Pages.statusOf(status, this.appName());
-      if (next?.description !== shownStatus?.description) {
-        shownStatus = next;
-        this.context.updateDocument(Resources.pageDocument, tab.id, { status: next });
-      }
+      showStatus(status);
       if (status.url !== url && status.url !== "") {
         url = status.url;
         this.request(BrowserMethods.rememberPage, new PageRecord(tab.id, place.profileKey, url).toJson(), Resources.formatNotKept);
@@ -613,6 +625,7 @@ export class Pages {
     });
     const stopRedirects: () => void = tab.controller.onRefusedRedirect(event => this.followRedirect(tab, place, event));
     return () => {
+      this.renamers.delete(rename);
       stopStatus();
       stopWindows();
       stopRedirects();

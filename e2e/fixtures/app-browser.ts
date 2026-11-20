@@ -6,9 +6,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { JsonReader } from "@noldova/context.json";
+
+import { TestAppLayout } from "./test-app-layout.ts";
+
 export class AppBrowser {
-  // The pane names the module as the app's browser, or as this browser while the app's name is unknown, so a test passes whichever app runs it.
+  public static readonly productName: string = JsonReader.parse(readFileSync(path.join(TestAppLayout.TEMPLATE_FOLDER, "package.json"), "utf8"))
+    .readObject("desktop").readObject("product").readString("name");
+
   public static saying(rest: string): RegExp {
-    return new RegExp(`^(?:This browser|.+'s browser) ${rest.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+    return new RegExp(`^${AppBrowser.escape(`${AppBrowser.productName}'s browser ${rest}`)}$`);
+  }
+
+  private static escape(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 }

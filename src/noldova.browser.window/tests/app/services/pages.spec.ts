@@ -891,6 +891,25 @@ describe("Pages", () => {
     ]);
   });
 
+  it("names the app's browser in an open page's status when the app's name answers after a refusal", async () => {
+    let answerName: (name: JsonValue) => void = () => undefined;
+    context = new WindowContext();
+    context.answerRequest = (method, parameters) => method === BrowserMethods.readAppName ? new Promise<JsonValue>(t => {
+      answerName = t;
+    }) : declared(method, parameters);
+    pages = new Pages(context);
+    const tab = await openAsync();
+    const status = (heading: string) => ({ instance: tab.id, update: { status: { glyph: "block", description: heading, tone: DocumentTone.Neutral } } });
+
+    tab.controller.refuseNavigation("https://refused.example");
+    answerName(WindowContext.appName);
+    await vi.waitFor(() => expect(pages.appName()).toBe(WindowContext.appName));
+
+    expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
+      status("This browser doesn't open https://refused.example"), status(`${WindowContext.appName}'s browser doesn't open https://refused.example`)
+    ]);
+  });
+
   it("keeps the address the record has while the page shows none yet", async () => {
     const tab = await openAsync("https://docs.example.com/");
 

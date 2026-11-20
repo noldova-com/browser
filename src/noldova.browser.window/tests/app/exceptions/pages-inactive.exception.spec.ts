@@ -12,10 +12,12 @@ import { BrowserWindowException } from "../../../src/app/exceptions/browser-wind
 import { PagesInactiveException } from "../../../src/app/exceptions/pages-inactive.exception.ts";
 
 describe("PagesInactiveException", () => {
-  it("names itself and says the window part isn't active, as a window exception", () => {
-    const error: PagesInactiveException = new PagesInactiveException();
+  it("names itself and says the app's browser, or this browser with no name, can't show a page while its window part isn't active, as a window exception", () => {
+    const named: PagesInactiveException = new PagesInactiveException("Fixture App");
+    const unnamed: PagesInactiveException = new PagesInactiveException(null);
 
-    expect(error).toBeInstanceOf(BrowserWindowException);
-    expect([error.name, error.message]).toEqual(["PagesInactiveException", "A page document shows only while Browser's window part is active."]);
+    expect(named).toBeInstanceOf(BrowserWindowException);
+    expect([named.name, named.message, unnamed.message]).toEqual(["PagesInactiveException", "Fixture App's browser can't show a page here, since its window part isn't active.",
+      "This browser can't show a page here, since its window part isn't active."]);
   });
 });

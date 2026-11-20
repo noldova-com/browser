@@ -27,7 +27,6 @@ export class Resources {
   public static readonly pageTabRowPlace: string = "browser.pageTabRow";
   public static readonly agentPagesItem: string = "browser.agentPages";
   public static readonly agentPagesSeparator: string = ", ";
-  public static readonly pagesInactive: string = "A page document shows only while Browser's window part is active.";
   public static readonly openPageTitle: string = "Open a page";
   public static readonly newPageTitle: string = "New page";
   public static readonly newPageGlyph: string = "add";
@@ -243,6 +242,10 @@ export class Resources {
   // The pane names the module as the app's browser wherever it speaks of it, or as this browser while the app's name is unknown.
   public static formatBrowser(appName: string | null): string {
     return appName === null ? Resources.thisBrowser : `${appName}'s browser`;
+  }
+
+  public static formatPagesInactive(appName: string | null): string {
+    return `${Resources.formatBrowserStart(appName)} can't show a page here, since its window part isn't active.`;
   }
 
   public static formatBrowserStart(appName: string | null): string {
