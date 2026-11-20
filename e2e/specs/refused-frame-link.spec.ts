@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
@@ -37,9 +38,9 @@ test.describe("a refused link in a frame", () => {
     await app.window.mouse.click(box.x + 50, box.y + 20);
 
     await expect.poll(() => app.viewPages.frameTextsAsync(docs.url("/")), { message: "The frame never showed the refusal, as the frames' texts." })
-      .toEqual([expect.stringContaining(`Browser doesn't open ${other.origin}`)]);
+      .toEqual([expect.stringContaining(`${AppBrowser.productName}'s browser doesn't open ${other.origin}`)]);
     expect([await app.viewPages.frameTextsAsync(docs.url("/")), await app.viewPages.runAtAsync(docs.url("/"), FRAME_BOX)], "The frame's refusal lost its text or its box.")
-      .toEqual([[expect.stringContaining("Its address isn't one Browser opens.")], frameBox]);
+      .toEqual([[expect.stringContaining(`Its address isn't one ${AppBrowser.productName}'s browser opens.`)], frameBox]);
     expect([await app.window.locator(PAGE_STATE_HEADING).allTextContents(), (await app.viewPages.listAsync()).map(t => t.url)], "The pane left the page for the frame's refusal.")
       .toEqual([[], [docs.url("/")]]);
     expect(servers.requests.filter(t => t.host === `${other.name}:${other.port}`), "The refused site got a request.").toEqual([]);
