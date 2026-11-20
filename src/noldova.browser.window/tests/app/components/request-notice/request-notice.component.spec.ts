@@ -204,14 +204,14 @@ describe("RequestNoticeComponent", () => {
 
     expect(texts).toEqual([
       "Type a web address, such as example.com.",
-      "Browser opens only addresses that start with http: or https:.",
+      "Fixture App's browser opens only addresses that start with http: or https:.",
       "This address is too long to open.",
-      "Browser doesn't open addresses with a user name or password.",
-      "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
-      "Browser never opens this address.",
-      "Browser couldn't allow this address's site in the workspace. Try again."
+      "Fixture App's browser doesn't open addresses with a user name or password.",
+      "Fixture App's browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
+      "Fixture App's browser never opens this address.",
+      "Fixture App's browser couldn't allow this address's site in the workspace. Try again."
     ]);
-    expect([controller.status.refusedRequest, said.at(-1)]).toEqual([null, ["Browser couldn't allow this address's site in the workspace. Try again.", AnnouncementPoliteness.Polite]]);
+    expect([controller.status.refusedRequest, said.at(-1)]).toEqual([null, ["Fixture App's browser couldn't allow this address's site in the workspace. Try again.", AnnouncementPoliteness.Polite]]);
   });
 
   it("goes with the tab's next load, and tells the page only while it holds the focus", async () => {

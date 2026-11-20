@@ -39,7 +39,7 @@ export class RequestNoticeComponent {
       return new RequestNotice(Resources.popupGlyph, status.popup.hadRecentInput ? Resources.formatHeldWindow(host) : Resources.formatPopup(host), Resources.openAsTab);
     }
     if (status.refusedAddress !== null)
-      return new RequestNotice(Resources.refusedAddressGlyph, Resources.refusedAddresses[status.refusedAddress], null);
+      return new RequestNotice(Resources.refusedAddressGlyph, Resources.formatRefusedAddress(status.refusedAddress, this.appName()), null);
     return status.refusedRequest === null
       ? null
       : new RequestNotice(Resources.refusedRequestGlyphs[status.refusedRequest], Resources.formatRefusedRequest(status.refusedRequest, this.appName()), Resources.openExternal);
