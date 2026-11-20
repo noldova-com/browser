@@ -247,6 +247,7 @@ export class Resources {
   public static readonly coverageMetrics: readonly string[] = ["statements", "branches", "functions", "lines"];
   public static readonly ciVariable: string = "CI";
   public static readonly debugVariable: string = "DEBUG";
+  public static readonly chromeVariable: string = "CHROME_BIN";
   public static readonly browserSessionDebug: string = "vitest:browser:pool,vitest:browser:playwright,vitest:browser:api";
   public static readonly vitestArguments: readonly string[] = [`${Resources.modulesFolder}/vitest/vitest.mjs`, "run", "--coverage"];
   public static readonly defaultReporter: string = "--reporter=default";
