@@ -136,6 +136,8 @@ export class ToolKit {
   public actAsync<T>(call: ToolCall, page: SessionPage, action: PageAction, work: (activity: PageActivity) => Promise<T>): Promise<T> {
     const generation: number = this.stops.generationOf(page.instance);
     return this.queue.runAsync(page.viewId, async () => {
+      if (call.signal.aborted)
+        throw ToolFailures.fromAbort(call.signal.reason);
       this.ensureFree(call, page, generation);
       this.recordAgent(page);
       if (this.origins.isPassing(page.viewId)) {

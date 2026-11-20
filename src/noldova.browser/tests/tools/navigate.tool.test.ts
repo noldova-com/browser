@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddressRefusedException } from "../../src/exceptions/address-refused.exception.ts";
 import { ArgumentNotOneOfException } from "../../src/exceptions/argument-not-one-of.exception.ts";
 import { CallCancelledException } from "../../src/exceptions/call-cancelled.exception.ts";
+import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { ExactlyOneArgumentException } from "../../src/exceptions/exactly-one-argument.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { NavigationRefusedException } from "../../src/exceptions/navigation-refused.exception.ts";
@@ -114,6 +115,18 @@ describe("NavigateTool", () => {
     expect([bench.database.callsOf("transaction"), bench.surface.navigations, bench.sendingMarks]).toEqual([[], [], 0]);
     expect(bench.activities.at(-1)).toMatchObject({ state: "Idle", refusal: { url: "https://new.example/a", origin: "https://new.example" } });
   });
+
+  it.each([{ act: "stops the agent", isTakingOver: false }, { act: "takes over", isTakingOver: true }])(
+    "leaves the page where it was and fails as stopped when the person $act while the new site is being allowed", async ({ isTakingOver }) => {
+      bench.permissions.automaticDecision = PermissionDecision.AllowedAlways;
+      bench.surface.webViews.answer("setAllowedOriginsAsync", () => {
+        bench.kit.stops.stop("page-1", isTakingOver);
+        return Promise.resolve();
+      });
+
+      await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://new.example/a" })), CallStoppedException, { kind: "Stopped" });
+      expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
+    });
 
   it("leaves no address with the page when nobody answers the new origin's request in time", async () => {
     bench.permissions.automaticDecision = PermissionDecision.Expired;

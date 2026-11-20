@@ -7,7 +7,7 @@
  */
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
-import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
+import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolAbortReason, ToolFailureCode, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 import { PageAction, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,6 +17,7 @@ import { HandedOverException } from "../../src/exceptions/handed-over.exception.
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PageNotControlledException } from "../../src/exceptions/page-not-controlled.exception.ts";
+import { SessionEndedException } from "../../src/exceptions/session-ended.exception.ts";
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import { TypedRedirectAfterAgentException } from "../../src/exceptions/typed-redirect-after-agent.exception.ts";
 import { UnknownReferenceException } from "../../src/exceptions/unknown-reference.exception.ts";
@@ -60,6 +61,38 @@ describe("ToolKit", () => {
     expect(isRun).toBe(false);
     await bench.kit.actAsync(bench.call({}), new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Scout"), PageAction.Reading, async () => null);
     expect(bench.agents).toEqual([["page-1", "Builder"], ["page-1", "Scout"]]);
+  });
+
+  it("fails a call that waited for its turn while its session ended, and takes no control of the page for the ended session nor marks its view", async () => {
+    using bench: ToolBench = new ToolBench();
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+    const steps: unknown[][] = [];
+    bench.surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
+      steps.push([viewId, isControlled]);
+      return Promise.resolve();
+    });
+    const ending: AbortController = new AbortController();
+    let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const running: Promise<void> = new Promise<void>(resolve => started = resolve);
+    const first: Promise<null> = bench.kit.actAsync(bench.call({}, ending), page, PageAction.Reading, () => new Promise<null>(resolve => {
+      release = () => resolve(null);
+      started();
+    }));
+    let isRun: boolean = false;
+    const queued: Promise<null> = bench.kit.actAsync(bench.call({}, ending), page, PageAction.Reading, async () => { isRun = true; return null; });
+
+    await running;
+    ending.abort(ToolAbortReason.SessionEnded);
+    bench.kit.stops.endSession(ToolBench.SESSION);
+    release();
+
+    await first;
+    await expect(queued).rejects.toBeInstanceOf(SessionEndedException);
+    expect(isRun).toBe(false);
+    expect(bench.agents).toEqual([["page-1", "Builder"]]);
+    expect(bench.kit.stops.controlsView(ToolBench.VIEW)).toBe(false);
+    expect(steps).toEqual([[ToolBench.VIEW, true], [ToolBench.VIEW, false]]);
   });
 
   it("marks the page's view as controlled before each call's work, and as no longer controlled once the person stops the page", async () => {
