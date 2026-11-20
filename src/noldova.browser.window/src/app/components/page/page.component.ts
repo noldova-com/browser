@@ -15,6 +15,7 @@ import { type IWebViewHandle, type IWindowPartContext, LinkPlace, WindowPartToke
 import { Announcer, DialogService } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../../resources.ts";
+import { EntryAnswer } from "../../enums/entry-answer.ts";
 import { PaneState } from "../../enums/pane-state.ts";
 import type { PaneTab } from "../../models/pane-tab.ts";
 import type { RefusedPage } from "../../models/refused-page.ts";
@@ -64,6 +65,7 @@ export class PageComponent {
   protected readonly pageId: string = `${Resources.pageId}${PageComponent.count++}`;
   protected readonly appName: Signal<string | null> = this.pages.appName;
   protected readonly noticeId: string = `${this.pageId}${Resources.noticeId}`;
+  protected readonly stateHeadingId: string = `${this.pageId}${Resources.stateHeadingId}`;
   protected readonly tab: WritableSignal<PaneTab | null> = signal(null);
   protected readonly isForgotten: WritableSignal<boolean> = signal(false);
   protected readonly isFinding: WritableSignal<boolean> = signal(false);
@@ -219,9 +221,11 @@ export class PageComponent {
   }
 
   protected goTo(tab: PaneTab, text: string): void {
-    this.pages.goToAsync(tab, text).then(hasGone => {
-      if (hasGone)
+    this.pages.goToAsync(tab, text).then(answer => {
+      if (answer === EntryAnswer.Gone)
         this.toolbar()?.followPage(tab.controller);
+      else if (answer === EntryAnswer.Refused)
+        this.toolbar()?.markRefused(tab.controller);
     }).catch((error: unknown) => this.errors.handleError(error));
   }
 

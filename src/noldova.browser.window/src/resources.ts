@@ -201,6 +201,7 @@ export class Resources {
     [AddressRefusal.Failed]: "Browser couldn't allow this address's site in the workspace. Try again."
   };
   public static readonly noticeId: string = "-notice";
+  public static readonly stateHeadingId: string = "-state-heading";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
   public static readonly agentBarSelector: string = "nol-browser-agent-bar";
   public static readonly pageSelector: string = ".nol-browser-page";
