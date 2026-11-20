@@ -39,7 +39,6 @@
   box-sizing: border-box;
   align-items: center;
   gap: var(--nol-space-1);
-  max-width: 100%;
   height: var(--nol-browser-mark-tag-height);
   padding: 0 var(--nol-browser-mark-tag-padding);
   border-radius: var(--nol-radius-small);

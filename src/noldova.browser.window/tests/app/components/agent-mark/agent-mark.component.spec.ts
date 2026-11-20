@@ -197,6 +197,17 @@ describe("AgentMarkComponent", () => {
       .toEqual([0, 0, 0.25, 0.25, 0]);
   });
 
+  it("keeps the tag at its place under an element near the page's right edge, as wide as the space left there and cut with an ellipsis", async () => {
+    find(".frame").style.width = `${AppearanceFixture.toPixels(20)}px`;
+    await showAsync({ agentName: "A teammate with a long name", box: { x: AppearanceFixture.toPixels(14), y: 30, width: 40, height: 24 }, point: null });
+    const frame: DOMRect = find(".frame").getBoundingClientRect();
+    const label: DOMRect = find(".nol-browser-agent-mark-tag").getBoundingClientRect();
+    const text: HTMLElement = find(".nol-browser-agent-mark-text");
+
+    expect([rem(label.left - frame.left), rem(frame.right - label.right), text.scrollWidth > text.clientWidth, getComputedStyle(text).textOverflow])
+      .toEqual([13.875, 0, true, "ellipsis"]);
+  });
+
   it("keeps the tag inside a narrow page, cut with an ellipsis", async () => {
     await showAsync({ agentName: "A teammate with a very long name indeed, longer than the page is wide", box: { x: 0, y: 30, width: 120, height: 24 } });
     find(".frame").style.width = "160px";

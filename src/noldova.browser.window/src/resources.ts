@@ -306,6 +306,11 @@ export class Resources {
     return `max(0px, calc(${pixels}px - var(--nol-browser-mark-tag-offset)))`;
   }
 
+  // The space from the tag's start to the page's right edge, so a tag near that edge is cut with its ellipsis rather than by the edge.
+  public static formatTagSpace(pixels: number): string {
+    return `calc(100% - ${Resources.formatTagStart(pixels)})`;
+  }
+
   public static formatTagTop(pixels: number): string {
     return `calc(${pixels}px + var(--nol-browser-mark-tag-gap))`;
   }
