@@ -348,8 +348,35 @@ describe("PageChanges", () => {
     const started: readonly string[] = switches();
     stopHearing();
 
-    expect([heard, started.filter(t => t === "view-1.1 on")]).toEqual([2, ["view-1.1 on", "view-1.1 on"]]);
+    expect([heard, started.filter(t => t === "view-1.1 on")]).toEqual([2, ["view-1.1 on", "view-1.1 on", "view-1.1 on"]]);
     expect(writtenTo(log)).toEqual([]);
+  });
+
+  it("hears a main frame whose old document's start failed before its navigation came, by starting it once more", async () => {
+    let isOld: boolean = true;
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      if (params["uniqueContextId"] !== "view-1.1" || !isOld)
+        return { result: { type: "boolean", value: true } };
+      isOld = false;
+      setImmediate(() => surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1" } }));
+      return { result: { type: "boolean", value: false } };
+    });
+
+    const stopHearing: () => void = await hearAsync();
+    await settleAsync();
+    await settleAsync();
+    const started: readonly string[] = switches();
+    stopHearing();
+
+    expect([heard, started.filter(t => t === "view-1.1 on").length]).toEqual([2, 3]);
+    expect(writtenTo(log)).toEqual([]);
+  });
+
+  it("fails the hearing when the main frame's start fails again once more", async () => {
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => ({ result: { type: "boolean", value: params["uniqueContextId"] !== "view-1.1" } }));
+
+    await expect(hearAsync()).rejects.toBeInstanceOf(PageChangesNotSwitchedException);
+    expect(switches().filter(t => t === "view-1.1 on")).toEqual(["view-1.1 on", "view-1.1 on"]);
   });
 
   it("starts a frame again with fresh options, so a restart late in the hearing has its own time", async () => {
@@ -484,7 +511,7 @@ describe("PageChanges", () => {
     expect(childFailed).toEqual(["view-1.1 on", "view-1.3 on", "view-1.4 on"]);
     expect(mainFailed).toBeInstanceOf(PageChangesNotSwitchedException);
     expect([mainFailed, switches(3)]).toEqual([expect.objectContaining({ viewId: "view-1", frameId: "F1" }), [
-      "view-1.1 off", "view-1.1 on", "view-1.3 off", "view-1.3 on", "view-1.4 off", "view-1.4 on"
+      "view-1.1 off", "view-1.1 off", "view-1.1 on", "view-1.1 on", "view-1.3 off", "view-1.3 on", "view-1.4 off", "view-1.4 on"
     ]]);
   });
 
@@ -523,7 +550,7 @@ describe("PageChanges", () => {
     expect([noId, noResult, another]).toEqual([expect.any(PageChangesContextMissingException), expect.any(PageChangesNotSwitchedException),
       expect.any(PageChangesContextMissingException)]);
     expect(noId).toMatchObject({ viewId: "view-1", frameId: "F1" });
-    expect(switches()).toEqual(["view-1.1 off", "view-1.1 on"]);
+    expect(switches()).toEqual(["view-1.1 off", "view-1.1 off", "view-1.1 on", "view-1.1 on"]);
   });
 
   it("ends the wait for a world's context at the call's stop, with the stop's failure, and starts no function", async () => {

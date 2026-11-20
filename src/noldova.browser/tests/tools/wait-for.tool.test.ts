@@ -275,7 +275,7 @@ describe("WaitForTool", () => {
     controller.abort("Cancelled");
     await failing;
     expect(bench.surface.calls.filter(t => t.method === "Runtime.callFunctionOn" && JSON.stringify(t.params["arguments"]) === JSON.stringify([{ value: true }]))
-      .map(t => t.params["uniqueContextId"])).toEqual([`${ToolBench.VIEW}.1`, `${ToolBench.VIEW}.2`]);
+      .map(t => t.params["uniqueContextId"])).toEqual([`${ToolBench.VIEW}.1`, `${ToolBench.VIEW}.2`, `${ToolBench.VIEW}.1`]);
   });
 
   it("ends its wait by the call's abort while it hears the page, rather than saying the wait wasn't met", async () => {
