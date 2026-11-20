@@ -65,7 +65,7 @@
     {
       "name": "browser.localSites",
       "title": "Sites on this computer or network",
-      "description": "Sites on this computer or its network that you and agents may open, such as a development server: their addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173. No other address on this computer or network opens.",
+      "description": "Sites on this computer or its network that you and agents may open, such as a development server: their addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://127.0.0.1:4173. No other address on this computer or network opens.",
       "type": {
         "kind": "Text",
         "maxLength": 4000,

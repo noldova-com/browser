@@ -124,7 +124,7 @@ describe("RequestNoticeComponent", () => {
 
     expect(notices).toEqual([
       ["download", "Downloads aren't available in Fixture App's browser yet."],
-      ["tab", "Fixture App's browser didn't open the new window this page asked for."],
+      ["tab", "This page asked for a new window, and Fixture App's browser didn't open it."],
       ["location_off", "Site permissions, such as the camera or your location, aren't available in Fixture App's browser yet."],
       ["upload_file", "Opening files from this computer isn't available in Fixture App's browser yet."],
       ["key_off", "Sign-in dialogs aren't available in Fixture App's browser yet."],
@@ -143,7 +143,7 @@ describe("RequestNoticeComponent", () => {
     find("button").click();
 
     expect([shown()[1], fixture.componentInstance.links])
-      .toEqual(["Fixture App's browser didn't open the new window this page asked for.", ["https://status.example.com/"]]);
+      .toEqual(["This page asked for a new window, and Fixture App's browser didn't open it.", ["https://status.example.com/"]]);
   });
 
   it("names the browser the person is in while the app's name is unknown, and the app once it is known", async () => {
@@ -154,6 +154,18 @@ describe("RequestNoticeComponent", () => {
     fixture.componentInstance.appName.set("Fixture App");
     await fixture.whenStable();
     expect(shown()[1]).toBe("Downloads aren't available in Fixture App's browser yet.");
+  });
+
+  it("starts every refused request's notice with a capital while the app's name is unknown", async () => {
+    const starts: string[] = [];
+    fixture.componentInstance.appName.set(null);
+    await loadAsync();
+    for (const request of Object.values(RefusedRequest)) {
+      await refuseAsync(request);
+      starts.push(shown()[1]?.charAt(0) ?? "");
+    }
+
+    expect([starts.length, starts.filter(t => !/^[A-Z]/.test(t))]).toEqual([Object.values(RefusedRequest).length, []]);
   });
 
   it("says a pop-up was stopped, names the page's host, and opens its address as a tab, which takes the notice away", async () => {
