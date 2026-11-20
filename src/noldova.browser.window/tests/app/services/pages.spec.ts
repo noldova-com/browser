@@ -12,6 +12,7 @@ import { DocumentTone } from "@noldova/desktop.window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AddressRefusal } from "../../../src/app/enums/address-refusal.ts";
+import { EntryAnswer } from "../../../src/app/enums/entry-answer.ts";
 import { PaneState } from "../../../src/app/enums/pane-state.ts";
 import { RefusedRequest } from "../../../src/app/enums/refused-request.ts";
 import { LinkRefusedException } from "../../../src/app/exceptions/link-refused.exception.ts";
@@ -1104,17 +1105,17 @@ describe("Pages", () => {
       const first = await openAsync();
       const second = await openAsync();
 
-      expect(await pages.goToAsync(first, "  example.com/docs ")).toBe(true);
+      expect(await pages.goToAsync(first, "  example.com/docs ")).toBe(EntryAnswer.Gone);
       expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://example.com/docs" }]);
       expect([viewOf(first).calls, viewOf(second).calls]).toEqual([["navigate https://example.com/docs"], []]);
       expect(first.controller.status.url).toBe("https://example.com/docs");
     });
 
-    it("answers that it didn't go when Noldova Desktop refuses the typed address's navigation, which the pane shows as refused", async () => {
+    it("answers that Noldova Desktop refused when it refuses the typed address's navigation, which the pane shows as refused", async () => {
       surface().script("https://example.com/docs", { kind: "refuse" });
       const tab = await openAsync();
 
-      expect(await pages.goToAsync(tab, "example.com/docs")).toBe(false);
+      expect(await pages.goToAsync(tab, "example.com/docs")).toBe(EntryAnswer.Refused);
       expect([viewOf(tab).calls, tab.controller.status.state, tab.controller.status.refusedOrigin]).toEqual([["navigate https://example.com/docs"], PaneState.Refused, "https://example.com"]);
     });
 
@@ -1124,7 +1125,7 @@ describe("Pages", () => {
       surface().script("https://consent.example.net/", { kind: "load", title: "Consent" });
       const tab = await openAsync();
 
-      expect(await pages.goToAsync(tab, "example.com")).toBe(true);
+      expect(await pages.goToAsync(tab, "example.com")).toBe(EntryAnswer.Gone);
       await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://consent.example.net/", "end"]));
 
       expect(requestsOf(BrowserMethods.passTypedRedirect)).toEqual(["https://www.example.com/", "https://consent.example.net/"].map(url => ({ instance: tab.id, profileKey: "workspace-1", url })));
@@ -1318,7 +1319,7 @@ describe("Pages", () => {
       const tab = await openAsync();
       answer = { kind: "Refused", reason: "Local" };
 
-      expect(await pages.goToAsync(tab, "localhost:3000")).toBe(false);
+      expect(await pages.goToAsync(tab, "localhost:3000")).toBe(EntryAnswer.Stayed);
       expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "http://localhost:3000/" }]);
       expect([viewOf(tab).calls, tab.controller.status.state, tab.controller.status.refusedAddress]).toEqual([[], PaneState.Empty, "Local"]);
     });
@@ -1331,7 +1332,7 @@ describe("Pages", () => {
       expect([tab.controller.status.state, tab.controller.status.refusedAddress]).toEqual([PaneState.Failed, "NotAnAddress"]);
       answer = { kind: "Refused", reason: "Local" };
 
-      expect(await pages.goToAsync(tab, "http://192.168.1.1:8080/admin")).toBe(false);
+      expect(await pages.goToAsync(tab, "http://192.168.1.1:8080/admin")).toBe(EntryAnswer.Stayed);
       expect([tab.controller.status.state, tab.controller.status.refusedOrigin, tab.controller.status.refusedAddress, tab.controller.status.failureReason, tab.controller.status.url])
         .toEqual([PaneState.Refused, "http://192.168.1.1:8080", "Local", null, "https://down.example/"]);
     });
@@ -1366,7 +1367,7 @@ describe("Pages", () => {
       pages.release(tab);
       resolve({ kind: "Allowed", origin: "https://example.com" });
 
-      expect(await going).toBe(false);
+      expect(await going).toBe(EntryAnswer.Stayed);
       expect(viewOf(tab).calls).toEqual(["close"]);
     });
 
@@ -1380,10 +1381,10 @@ describe("Pages", () => {
       const first = pages.goToAsync(tab, "new.example");
       const second = pages.goToAsync(tab, "kept.example");
       answers.get("https://kept.example/")?.({ kind: "Allowed", origin: "https://kept.example" });
-      expect(await second).toBe(true);
+      expect(await second).toBe(EntryAnswer.Gone);
       answers.get("https://new.example/")?.({ kind: "Refused", reason: "Local" });
 
-      expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([false, ["navigate https://kept.example/"], null]);
+      expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/"], null]);
     });
 
     it("says so and rejects with the failure when the runtime part's request fails, and loads nothing", async () => {
@@ -1408,7 +1409,7 @@ describe("Pages", () => {
       const tab = await openAsync();
 
       const first = pages.goToAsync(tab, "new.example");
-      expect(await pages.goToAsync(tab, "kept.example")).toBe(true);
+      expect(await pages.goToAsync(tab, "kept.example")).toBe(EntryAnswer.Gone);
       fail();
 
       await expect(first).rejects.toThrow("The store is closed.");

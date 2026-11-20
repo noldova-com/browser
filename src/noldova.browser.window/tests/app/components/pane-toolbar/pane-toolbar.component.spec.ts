@@ -946,7 +946,11 @@ describe("PaneToolbarComponent", () => {
       await userEvent.keyboard("refused.example{Enter}");
       await controller.navigateAsync("https://refused.example/");
       await fixture.whenStable();
+      const unanswered: ReturnType<typeof mark> = mark();
+      fixture.componentInstance.toolbar().markRefused(controller);
+      await fixture.whenStable();
 
+      expect(unanswered.slice(0, 2)).toEqual([null, undefined]);
       expect([field().value, ...mark()]).toEqual(["refused.example", "true", "This workspace doesn't allow refused.example", refusedColour, refusedStyle, refusedWidth, shown]);
       await userEvent.click(field());
       await userEvent.keyboard("{End}/docs");
@@ -954,6 +958,7 @@ describe("PaneToolbarComponent", () => {
       const edited: [string, ...ReturnType<typeof mark>] = [field().value, ...mark()];
       await userEvent.keyboard("{Enter}");
       await controller.navigateAsync("https://refused.example/docs");
+      fixture.componentInstance.toolbar().markRefused(controller);
       await fixture.whenStable();
       const again: ReturnType<typeof mark> = mark();
       await loadAsync("https://one.example/");
@@ -964,6 +969,20 @@ describe("PaneToolbarComponent", () => {
       expect([field().value, left.slice(0, 2), left[3] === refusedStyle && left[2] === refusedColour, left[5]]).toEqual(["refused.example/docs", [null, undefined], false, shown]);
     });
   }
+
+  it("marks a refused entry only for its own controller, and only while the person's entry stands", async () => {
+    view.mount(document.createElement("div"));
+    views.script("https://refused.example/", { kind: "refuse" });
+    await controller.navigateAsync("https://refused.example/");
+    await fixture.whenStable();
+    fixture.componentInstance.toolbar().markRefused(controller);
+    await userEvent.click(field());
+    await userEvent.keyboard("refused.example{Enter}");
+    fixture.componentInstance.toolbar().markRefused(new PaneController(null));
+    await fixture.whenStable();
+
+    expect([field().value, field().getAttribute("aria-invalid")]).toEqual(["refused.example", null]);
+  });
 
   it("follows the page again once the pane went to an entered address that the origin check refused", async () => {
     await loadAsync("https://one.example/");

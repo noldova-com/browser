@@ -737,6 +737,34 @@ describe("PageComponent", () => {
     expect(heading()).toContain("example.com");
   });
 
+  it("marks no address entered over a refused page while its answer is held, nor once its navigation starts", async () => {
+    const view: FakeWebView = await openAsync();
+    surface().script("https://refused.example/", { kind: "refuse" });
+    surface().script("https://fixed.example/", { kind: "pending" });
+    await typeAsync("refused.example");
+    await vi.waitFor(() => expect(field().getAttribute("aria-invalid")).toBe("true"));
+    const refusal: string | undefined = heading();
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await userEvent.clear(field());
+    await typeAsync("fixed.example");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(2));
+    await stableAsync();
+    const held: [string, string | null, string | undefined] = [field().value, field().getAttribute("aria-invalid"), heading()];
+    allow({ kind: "Allowed", origin: "https://fixed.example" });
+    await vi.waitFor(() => expect(view.calls).toContain("navigate https://fixed.example/"));
+    await stableAsync();
+
+    expect(refusal).toContain("doesn't allow");
+    expect(held).toEqual(["fixed.example", null, refusal]);
+    expect(field().getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {
     await openAsync();
 

@@ -48,7 +48,7 @@ export class PaneToolbarComponent {
   private readonly number: number = PaneToolbarComponent.count++;
   private readonly loadGroup: string = `${Resources.securityId}${this.number}${Resources.loadGroup}`;
   private readonly zoomGroup: string = `${Resources.securityId}${this.number}${Resources.zoomGroup}`;
-  private readonly isEntered: WritableSignal<boolean> = signal(false);
+  private isEntered: boolean = false;
   private isSelecting: boolean = false;
   private stopPresses: number = 0;
   private standingStop: number | null = null;
@@ -81,8 +81,10 @@ export class PaneToolbarComponent {
     return host === "" ? null : host;
   });
   protected readonly address: Signal<string> = computed(() => this.draft() ?? this.shown());
-  // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading.
-  private readonly isEnteredRefused: Signal<boolean> = computed(() => this.draft() !== null && this.isEntered() && this.status().refusedAddress === null
+  // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading
+  // while the pane shows that refusal.
+  private readonly isAnswerRefused: WritableSignal<boolean> = signal(false);
+  private readonly isEnteredRefused: Signal<boolean> = computed(() => this.draft() !== null && this.isAnswerRefused() && this.status().refusedAddress === null
     && this.status().state === PaneState.Refused);
   protected readonly isRefused: Signal<boolean> = computed(() => this.draft() !== null && this.status().refusedAddress !== null || this.isEnteredRefused());
   protected readonly describedBy: Signal<string | null> = computed(() => {
@@ -132,6 +134,8 @@ export class PaneToolbarComponent {
       this.restore();
       onCleanup(controller.onChange(t => {
         this.announceLoad(this.current(), t);
+        if (t.state !== PaneState.Refused)
+          this.isAnswerRefused.set(false);
         this.current.set(t);
       }));
     });
@@ -156,8 +160,14 @@ export class PaneToolbarComponent {
       this.selectAddress();
   }
 
+  // Marks the address entered last, which Noldova Desktop refused, while the person hasn't changed it since.
+  public markRefused(controller: PaneController): void {
+    if (controller === this.controller() && this.isEntered)
+      this.isAnswerRefused.set(true);
+  }
+
   public followPage(controller: PaneController): void {
-    if (controller === this.controller() && this.isEntered())
+    if (controller === this.controller() && this.isEntered)
       this.restore();
   }
 
@@ -205,7 +215,8 @@ export class PaneToolbarComponent {
   }
 
   protected edit(): void {
-    this.isEntered.set(false);
+    this.isEntered = false;
+    this.isAnswerRefused.set(false);
     this.draft.set(this.field().nativeElement.value);
   }
 
@@ -262,7 +273,8 @@ export class PaneToolbarComponent {
     const text: string = this.field().nativeElement.value;
     if (text.trim() === "")
       return;
-    this.isEntered.set(true);
+    this.isEntered = true;
+    this.isAnswerRefused.set(false);
     this.draft.set(text);
     this.addressEntered.emit(text);
     this.conceal();
@@ -313,7 +325,8 @@ export class PaneToolbarComponent {
   }
 
   private restore(): void {
-    this.isEntered.set(false);
+    this.isEntered = false;
+    this.isAnswerRefused.set(false);
     this.draft.set(null);
   }
 
