@@ -12,6 +12,7 @@ import { readdir } from "node:fs/promises";
 
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
+import { FolderChanges } from "../fixtures/folder-changes.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { TestCertificate } from "../fixtures/test-certificate.ts";
 import { type AppSurfaces, ViewPage } from "../fixtures/view-pages.ts";
@@ -44,6 +45,9 @@ const FAVICON = "/favicon.ico";
 const NOTICE_MESSAGE =".nol-browser-request-notice-message";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 const SECURITY_MODEL = new URL("../../documents/SECURITY-MODEL.md", import.meta.url);
+// Chromium writes a temporary file to the downloads folder for each download, before the app can refuse it, and removes it a few milliseconds later.
+// So the check is that no file stays: it waits up to this long for the folder to be as it was.
+const DOWNLOADS_SETTLE_MS = 10_000;
 
 const PERMISSION_NOTICE = /^Site permissions, such as the camera or your location, aren't available in .+ yet\.$/;
 const DOWNLOAD_NOTICE = /^Downloads aren't available in .+ yet\.$/;
@@ -129,7 +133,9 @@ async function beforeAsync(app: TestApp): Promise<Before> {
 async function expectNothingOpenedAsync(app: TestApp, before: Before, title: string): Promise<void> {
   expect(await app.viewPages.takeChoosersAsync(), `The view's session offered a device chooser for ${title}.`).toEqual([]);
   expect(await app.viewPages.surfacesAsync(), `The app's windows or contents changed after ${title}, so something may have prompted.`).toEqual(before.surfaces);
-  expect(await filesAsync(await app.viewPages.downloadsFolderAsync()), `The downloads folder changed after ${title}.`).toEqual(before.downloads);
+  const folder: string = await app.viewPages.downloadsFolderAsync();
+  await expect.poll(async () => FolderChanges.between(before.downloads, await filesAsync(folder)), { message: `The downloads folder still differs after ${title}.`, timeout: DOWNLOADS_SETTLE_MS })
+    .toEqual([]);
 }
 
 function pathsOf(server: FixtureServer): readonly string[] {
