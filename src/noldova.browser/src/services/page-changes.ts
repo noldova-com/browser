@@ -57,6 +57,7 @@ export class PageChanges {
     };
     const options: CallOptions = fresh();
     const contexts: string[] = [];
+    const navigated: Set<string> = new Set<string>();
     let isStopped: boolean = false;
     let release: () => void = () => undefined;
     const restartAsync = async (frameId: string): Promise<void> => {
@@ -77,11 +78,15 @@ export class PageChanges {
       }
     };
     // A frame that navigates while the hearing starts fails there as its old document goes, whether or not its frameNavigated came yet, so a first
-    // start that fails starts that frame once more, in its new document; only a second failure fails it.
+    // start that fails starts that frame once more, in its new document. A frame that navigated again, such as by a redirect, fails that start too,
+    // and its restart hears the document it reached instead; only a frame that didn't navigate fails the hearing.
     const startAsync = (frameId: string): Promise<void> => this.startAsync(viewId, frameId, options, contexts).catch((error: unknown) => {
       if (!(error instanceof BrowserRuntimeException))
         throw error;
-      return this.startAsync(viewId, frameId, fresh(), contexts);
+      return this.startAsync(viewId, frameId, fresh(), contexts).catch((again: unknown) => {
+        if (!(again instanceof BrowserRuntimeException) || !navigated.has(frameId))
+          throw again;
+      });
     });
     const stopEvents: () => void = this.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
       if (event.method === Resources.frameNavigatedEvent) {
@@ -89,6 +94,7 @@ export class PageChanges {
         const frame: JsonValue | undefined = event.params[Resources.frameField];
         const frameId: JsonValue | undefined = JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
         if (typeof frameId === "string") {
+          navigated.add(frameId);
           void restartAsync(frameId).catch((error: unknown) => this.logRestartFailure(viewId, error));
         }
       }

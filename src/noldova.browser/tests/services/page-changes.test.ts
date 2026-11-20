@@ -372,11 +372,49 @@ describe("PageChanges", () => {
     expect(writtenTo(log)).toEqual([]);
   });
 
+  it("hears a main frame that navigated twice while the hearing started, though its start failed once more, in the document it reached", async () => {
+    let failures: number = 0;
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      if (params["uniqueContextId"] !== "view-1.1" || failures === 2)
+        return { result: { type: "boolean", value: true } };
+      failures += 1;
+      if (failures === 2) {
+        surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1" } });
+        surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1" } });
+      }
+      return { result: { type: "boolean", value: false } };
+    });
+
+    const stopHearing: () => void = await hearAsync();
+    await settleAsync();
+    const started: readonly string[] = switches();
+    stopHearing();
+
+    expect([heard, started.filter(t => t === "view-1.1 on").length]).toEqual([4, 4]);
+    expect(writtenTo(log)).toEqual([]);
+  });
+
   it("fails the hearing when the main frame's start fails again once more", async () => {
     surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => ({ result: { type: "boolean", value: params["uniqueContextId"] !== "view-1.1" } }));
 
     await expect(hearAsync()).rejects.toBeInstanceOf(PageChangesNotSwitchedException);
     expect(switches().filter(t => t === "view-1.1 on")).toEqual(["view-1.1 on", "view-1.1 on"]);
+  });
+
+  it("fails the hearing with a bug in the main frame's start once more, though the frame navigated", async () => {
+    const bug: TypeError = new TypeError("The start broke.");
+    let isOld: boolean = true;
+    surface.answerWith("Runtime.callFunctionOn", (params: JsonObject) => {
+      if (params["uniqueContextId"] !== "view-1.1")
+        return { result: { type: "boolean", value: true } };
+      if (!isOld)
+        throw bug;
+      isOld = false;
+      surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1" } });
+      return { result: { type: "boolean", value: false } };
+    });
+
+    await expect(hearAsync()).rejects.toBe(bug);
   });
 
   it("starts a frame again with fresh options, so a restart late in the hearing has its own time", async () => {
