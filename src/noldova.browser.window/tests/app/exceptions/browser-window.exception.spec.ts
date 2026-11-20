@@ -56,7 +56,7 @@ describe("BrowserWindowException", () => {
       new PageInAnotherWindowException("page-1"),
       new PageOnOtherWorkspaceException("page-1", "workspace-2"),
       new PageRecordAnswerMalformedException("$"),
-      new PagesInactiveException(),
+      new PagesInactiveException(null),
       new PaneUnavailableException(),
       new TypedAddressAnswerMalformedException("$")
     ];

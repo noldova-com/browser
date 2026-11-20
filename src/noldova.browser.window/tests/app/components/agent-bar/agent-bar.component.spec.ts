@@ -90,10 +90,10 @@ describe("AgentBarComponent", () => {
     }
   });
 
-  it("names the teammate and says it is using the page, with Take over and Stop", () => {
+  it("names the teammate and says it is using the page, with Take over and Stop teammate", () => {
     expect([find(".nol-browser-agent-bar-glyph").textContent?.trim(), find(".nol-browser-agent-bar-name").textContent?.trim(),
       find(".nol-browser-agent-bar-message").textContent?.trim(), buttons().map(t => t.textContent?.trim())])
-      .toEqual(["smart_toy", "Scout", "Scout is using this page", ["Take over", "Stop"]]);
+      .toEqual(["smart_toy", "Scout", "Scout is using this page", ["Take over", "Stop teammate"]]);
     expect(find(".nol-browser-agent-bar-glyph").getAttribute("aria-hidden")).toBe("true");
   });
 
@@ -131,7 +131,7 @@ describe("AgentBarComponent", () => {
       .toEqual([["take over", "stop"], [["button", 0, false], ["button", 0, false]]]);
   });
 
-  it("takes over with Enter and stops with Space, Tab going from Take over to Stop", async () => {
+  it("takes over with Enter and stops with Space, Tab going from Take over to Stop teammate", async () => {
     const [takeOver, stop] = buttons();
     takeOver?.focus();
     await userEvent.keyboard("{Enter}");

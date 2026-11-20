@@ -49,6 +49,10 @@ export class AgentMarkComponent {
     return Resources.formatTagStart(pixels);
   }
 
+  protected tagSpace(pixels: number): string {
+    return Resources.formatTagSpace(pixels);
+  }
+
   protected tagTop(pixels: number): string {
     return Resources.formatTagTop(pixels);
   }

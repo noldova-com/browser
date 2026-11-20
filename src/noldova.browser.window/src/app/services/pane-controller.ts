@@ -88,9 +88,12 @@ export class PaneController {
     return this.followAnswer(await this.startNavigation().goForwardAsync(), null);
   }
 
+  // Noldova Desktop brings a crashed page back only by a navigation, and answers its reload with no history, as it does after a refused
+  // navigation leaves the page crashed under the refusal; so a reload that finds no history loads the page's address again.
   public async reloadAsync(): Promise<WebViewNavigation> {
     const address: string = this.current.url;
-    return this.followAnswer(await this.startNavigation().reloadAsync(), address);
+    const answer: WebViewNavigation = this.followAnswer(await this.startNavigation().reloadAsync(), address);
+    return answer.kind === WebViewNavigationKind.NoHistory && address !== "" ? this.navigateAsync(address) : answer;
   }
 
   public async stopAsync(): Promise<WebViewNavigation> {

@@ -22,6 +22,8 @@ export default defineConfig({
   retries: 0,
   fullyParallel: false,
   forbidOnly: true,
+  // A failed test keeps the trace of its steps and Playwright calls, so a hang names where it waited; a passed test's trace is dropped.
+  use: { trace: "retain-on-failure" },
   outputDir: path.join(TestAppLayout.REPORT_FOLDER, "results"),
   reporter: [["list", { printFailuresInline: true }], ["json", { outputFile: path.join(TestAppLayout.REPORT_FOLDER, "report.json") }]]
 });

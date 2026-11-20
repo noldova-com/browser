@@ -7,7 +7,7 @@
  */
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
-import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
+import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailure, ToolFailureCode, type ToolResult, ToolRisk } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArgumentNotFlagException } from "../../src/exceptions/argument-not-flag.exception.ts";
@@ -19,7 +19,9 @@ import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-ti
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
+import { ActionProgress } from "../../src/models/action-progress.ts";
 import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
+import { ToolFailures } from "../../src/services/tool-failures.ts";
 import { TypeTool } from "../../src/tools/type.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -328,5 +330,23 @@ describe("TypeTool", () => {
 
     await CallFailures.expectAsync(running, PageChangedAfterGrantException, { reason: "Stale", message: "The page changed after the action was allowed, so nothing ran; take a new snapshot." });
     expect(sent("Input.insertText")).toEqual([]);
+  });
+
+  it.each<[string, () => void]>([
+    ["the old field stays in the engine, out of the document", () => ShopPage.showDocument(bench, { root: { backendNodeId: 1, nodeName: "#document", baseURL: "https://shop.test/cart/", children: [] } })],
+    ["the engine no longer knows the old field", () => bench.surface.fail("DOM.resolveNode", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"))]
+  ])("types nothing and fails as a changed page, not an uncertain outcome, when the field's focus handler replaces it and %s", async (_case: string, replace: () => void) => {
+    bench.checkAs(tool.descriptor);
+    bench.surface.answerWith("DOM.focus", () => {
+      replace();
+      return {};
+    });
+    const progress: ActionProgress = new ActionProgress(() => undefined);
+
+    const failure: ToolFailure | null = await tool.callAsync(bench.call({ reference: reference(ShopPage.SEARCH), text: "red" }), progress)
+      .then(() => null, (error: unknown) => ToolFailures.forCall(error, progress, tool.descriptor.isResumable !== true));
+
+    expect([failure, sent("DOM.focus").length, sent("Input.insertText")])
+      .toEqual([new ToolFailure(ToolFailureCode.Stale, "The page changed after the action was allowed, so nothing ran; take a new snapshot."), 1, []]);
   });
 });

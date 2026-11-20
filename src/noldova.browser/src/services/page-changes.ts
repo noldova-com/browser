@@ -46,18 +46,67 @@ export class PageChanges {
     this.log = log;
   }
 
-  public async hearAsync(viewId: string, options: CallOptions, changed: () => void): Promise<() => void> {
+  // A frame's navigation gives it a new document, which has neither the world nor its function, so the hearing starts again in that frame and
+  // calls back once more when it has, for what the new document shows by then. Each start takes fresh options, so a restart has its own time,
+  // and the stop ends the starts still running, so none of them outlives the hearing.
+  public async hearAsync(viewId: string, optionsOf: () => CallOptions, changed: () => void): Promise<() => void> {
+    const stopper: AbortController = new AbortController();
+    const fresh = (): CallOptions => {
+      const given: CallOptions = optionsOf();
+      return given.withSignal(AbortSignal.any([given.signal, stopper.signal]), given.deadline);
+    };
+    const options: CallOptions = fresh();
     const contexts: string[] = [];
+    const navigated: Set<string> = new Set<string>();
+    let isStopped: boolean = false;
     let release: () => void = () => undefined;
+    const restartAsync = async (frameId: string): Promise<void> => {
+      const started: string[] = [];
+      let isStarted: boolean = false;
+      try {
+        await this.startAsync(viewId, frameId, fresh(), started);
+        isStarted = true;
+      }
+      finally {
+        if (isStopped)
+          this.stopAll(viewId, started, options);
+        else {
+          contexts.push(...started);
+          if (isStarted)
+            changed();
+        }
+      }
+    };
+    // A frame that navigates while the hearing starts fails there as its old document goes, whether or not its frameNavigated came yet, so a first
+    // start that fails starts that frame once more, in its new document. A frame that navigated again, such as by a redirect, fails that start too,
+    // and its restart hears the document it reached instead; only a frame that didn't navigate fails the hearing.
+    const startAsync = (frameId: string): Promise<void> => this.startAsync(viewId, frameId, options, contexts).catch((error: unknown) => {
+      if (!(error instanceof BrowserRuntimeException))
+        throw error;
+      return this.startAsync(viewId, frameId, fresh(), contexts).catch((again: unknown) => {
+        if (!(again instanceof BrowserRuntimeException) || !navigated.has(frameId))
+          throw again;
+      });
+    });
     const stopEvents: () => void = this.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
-      if (event.method === Resources.frameNavigatedEvent || event.method === Resources.bindingCalledEvent && event.params[Resources.nameField] === PageChangeScript.bindingName)
+      if (event.method === Resources.frameNavigatedEvent) {
+        changed();
+        const frame: JsonValue | undefined = event.params[Resources.frameField];
+        const frameId: JsonValue | undefined = JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
+        if (typeof frameId === "string") {
+          navigated.add(frameId);
+          void restartAsync(frameId).catch((error: unknown) => this.logRestartFailure(viewId, error));
+        }
+      }
+      else if (event.method === Resources.bindingCalledEvent && event.params[Resources.nameField] === PageChangeScript.bindingName)
         changed();
     });
     const stop = (): void => {
+      isStopped = true;
+      stopper.abort();
       stopEvents();
       release();
-      for (const uniqueContextId of contexts)
-        void this.switchAsync(viewId, uniqueContextId, false, ViewCalls.releasing(options)).catch((error: unknown) => this.logStopFailure(viewId, error));
+      this.stopAll(viewId, contexts, options);
     };
     try {
       const { origin, mainId, childIds }: PageFrames = PageChanges.readFrames(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
@@ -66,8 +115,8 @@ export class PageChanges {
         this.domains.drop(viewId);
         throw error;
       });
-      const main: Promise<void> = this.startAsync(viewId, mainId, options, contexts);
-      const outcomes: readonly PromiseSettledResult<void>[] = await Promise.allSettled([main, ...childIds.map(t => this.startAsync(viewId, t, options, contexts))]);
+      const main: Promise<void> = startAsync(mainId);
+      const outcomes: readonly PromiseSettledResult<void>[] = await Promise.allSettled([main, ...childIds.map(startAsync)]);
       await main;
       const bug: PromiseRejectedResult | undefined = outcomes.find((t): t is PromiseRejectedResult => t.status === "rejected" && !(t.reason instanceof BrowserRuntimeException));
       if (bug !== undefined)
@@ -251,6 +300,17 @@ export class PageChanges {
     }, options);
     const result: JsonValue | undefined = reply[Resources.resultField];
     return JsonShapes.isObject(result) ? result[Resources.valueField] : undefined;
+  }
+
+  private stopAll(viewId: string, contexts: readonly string[], options: CallOptions): void {
+    for (const uniqueContextId of contexts)
+      void this.switchAsync(viewId, uniqueContextId, false, ViewCalls.releasing(options)).catch((error: unknown) => this.logStopFailure(viewId, error));
+  }
+
+  // A frame that navigates again, or a view that closes, before the new document's world forms fails as the view does; anything else is a bug.
+  private logRestartFailure(viewId: string, error: unknown): void {
+    if (!(error instanceof BrowserRuntimeException))
+      this.log.write(Resources.formatChangesNotRestarted(viewId, String(error)));
   }
 
   private logStopFailure(viewId: string, error: unknown): void {

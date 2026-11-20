@@ -72,7 +72,7 @@ interface IViewPageContents {
   getURL(): string;
   getTitle(): string;
   isLoading(): boolean;
-  readonly navigationHistory: { canGoBack(): boolean };
+  readonly navigationHistory: { canGoBack(): boolean; getActiveIndex(): number; getAllEntries(): readonly { readonly pageState?: string }[] };
   executeJavaScript(code: string, userGesture: boolean): Promise<unknown>;
   getOSProcessId(): number;
   isCrashed(): boolean;
@@ -81,6 +81,13 @@ interface IViewPageContents {
   on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
   on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
   on(event: "destroyed", listener: () => void): void;
+  removeListener(event: "destroyed", listener: () => void): void;
+  emit(event: "select-bluetooth-device", details: { preventDefault(): void }, devices: readonly IBluetoothDevice[], choose: (deviceId: string) => void): boolean;
+}
+
+interface IBluetoothDevice {
+  readonly deviceId: string;
+  readonly deviceName: string;
 }
 
 interface IViewPageRecord {
@@ -253,6 +260,26 @@ export class ViewPages {
     return this.application.evaluate(({ app }): string => app.getPath("downloads"));
   }
 
+  // Offers each view a Bluetooth device, as the engine does when a page asks for one, and gives each view's address, whether its contents
+  // took the choice from the engine, and the device ids it chose.
+  public async bluetoothChoicesAsync(): Promise<readonly (readonly [string, boolean, readonly string[]])[]> {
+    return this.application.evaluate(({ webContents }): [string, boolean, string[]][] => webContents.getAllWebContents()
+      .filter((t: IViewPageContents) => t.getType() === "webview")
+      .map((t: IViewPageContents): [string, boolean, string[]] => {
+        const chosen: string[] = [];
+        let isTaken = false;
+        t.emit("select-bluetooth-device", { preventDefault: (): void => { isTaken = true; } }, [{ deviceId: "AA:BB:CC:DD:EE:FF", deviceName: "Headphones" }],
+          (deviceId: string) => chosen.push(deviceId));
+        return [t.getURL(), isTaken, chosen];
+      }));
+  }
+
+  public async downloadSessionsAsync(): Promise<readonly (readonly [string, boolean])[]> {
+    return this.application.evaluate(({ webContents }): [string, boolean][] => webContents.getAllWebContents()
+      .filter((t: IViewPageContents) => t.getType() === "webview")
+      .map((t: IViewPageContents): [string, boolean] => [t.getURL(), globalThis.noldovaDownloadSessions?.has(t.session) === true]));
+  }
+
   public async takeChoosersAsync(): Promise<readonly string[]> {
     return this.application.evaluate(() => globalThis.noldovaViewChoosers?.splice(0) ?? []);
   }
@@ -273,6 +300,16 @@ export class ViewPages {
         throw new Error(`The app has ${views.length} views, not one.`);
       return view.navigationHistory.canGoBack();
     });
+  }
+
+  // Whether the state the view's page last committed to its history holds the text, as a form field's typed value, which the page
+  // commits about a second after the change; Noldova Desktop restores a moved view's page from that state.
+  public async holdsPageStateAsync(url: string, text: string): Promise<boolean> {
+    return this.application.evaluate(({ webContents }, [address, typed]): boolean => {
+      const view: IViewPageContents | undefined = webContents.getAllWebContents().find((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === address);
+      const state: string | undefined = view?.navigationHistory.getAllEntries()[view.navigationHistory.getActiveIndex()]?.pageState;
+      return state !== undefined && Buffer.from(state, "base64").includes(Buffer.from(typed, "utf16le"));
+    }, [url, text] as const);
   }
 
   public async attachChildAsync(url: string): Promise<ChildTarget> {
@@ -308,7 +345,13 @@ export class ViewPages {
       const [view] = views;
       if (views.length !== 1 || view === undefined)
         throw new Error(`The app has ${views.length} views at ${request.url}, not one.`);
-      return String(await view.executeJavaScript(request.code, true));
+      // Electron's executeJavaScript never answers when its view is destroyed during the call, as a move between groups destroys the moved
+      // page's old view.
+      return new Promise<string>((resolve, reject) => {
+        const closed = (): void => reject(new Error(`The view at ${request.url} closed.`));
+        view.on("destroyed", closed);
+        view.executeJavaScript(request.code, true).then(t => resolve(String(t)), reject).finally(() => view.removeListener("destroyed", closed));
+      });
     }, { url, code: script });
   }
 

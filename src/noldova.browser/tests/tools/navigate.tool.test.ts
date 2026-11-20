@@ -143,6 +143,14 @@ describe("NavigateTool", () => {
     expect([bench.permissions.requests.map(t => [t.subject, t.risk]), bench.database.callsOf("transaction"), bench.surface.navigations.length]).toEqual([[["http://127.0.0.1:4173", ToolRisk.Low]], [], 1]);
   });
 
+  it("refuses an address whose host holds a star before it asks, and keeps and loads nothing", async () => {
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://*.com/" })), AddressRefusedException, {
+      reason: "Refused", moduleCode: "browser.originRefused", message: "The text isn't a web address, so the browser never opens it."
+    });
+
+    expect([bench.permissions.requests, bench.database.callsOf("transaction"), bench.surface.navigations]).toEqual([[], [], []]);
+  });
+
   it.each<[string, WebViewAction, string]>([
     ["back", WebViewAction.Back, "https://docs.example"],
     ["forward", WebViewAction.Forward, "https://other.example"]
@@ -227,6 +235,33 @@ describe("NavigateTool", () => {
     const result: ToolResult = await running;
 
     expect([result.content[2]?.value, result.content[2]?.origin]).toEqual(["The page is still loading; wait for it with browser_wait_for before you act on it.", null]);
+  });
+
+  it.each<[string, JsonObject, string]>([
+    ["back to an entry the page pushed", { action: "back" }, "https://docs.example/start"],
+    ["to a fragment of the page", { url: "https://docs.example/guide#setup" }, "https://docs.example/guide#setup"]
+  ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject, url: string) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url });
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input, new AbortController(), ToolBench.SESSION, 60_000));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+  });
+
+  it("waits on a reload for its load, which a navigation within the document doesn't end", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide" });
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ action: "reload" }, new AbortController(), ToolBench.SESSION, 2_050));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toHaveLength(1);
   });
 
   it("ends the wait for the load by the call's abort, and listens no more", async () => {

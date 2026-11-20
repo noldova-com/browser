@@ -10,6 +10,7 @@ export class ActionProgress {
   private readonly onSending: () => void;
   private granted: boolean = false;
   private inputSent: boolean = false;
+  private onlyFocusSent: boolean = false;
 
   public constructor(onSending: () => void) {
     this.onSending = onSending;
@@ -23,14 +24,22 @@ export class ActionProgress {
     return this.inputSent;
   }
 
+  // Whether every input sent so far only moved the focus, so the action's own input, such as its text, hasn't reached the page.
+  public get isOnlyFocusSent(): boolean {
+    return this.onlyFocusSent;
+  }
+
   public markGranted(): void {
     this.granted = true;
   }
 
-  public markInputSent(): void {
-    if (this.inputSent)
+  public markInputSent(isFocus: boolean = false): void {
+    if (this.inputSent) {
+      this.onlyFocusSent &&= isFocus;
       return;
+    }
     this.onSending();
     this.inputSent = true;
+    this.onlyFocusSent = isFocus;
   }
 }

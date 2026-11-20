@@ -29,13 +29,14 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [PageStateComponent],
   template: `<div class="frame" style="width: 640px; height: 400px"><nol-browser-page-state [controller]="controller()" [isForgotten]="isForgotten()"
-    [isElsewhere]="isElsewhere()" [refusal]="refusal()" (focusLeaving)="leaves = leaves + 1" (closed)="closes = closes + 1" (refusalAnswered)="answers.push($event)" /></div><div class="panel" style="background: var(--nol-panel); color: var(--nol-text-muted)"></div>`
+    [isElsewhere]="isElsewhere()" [refusal]="refusal()" [appName]="appName()" (focusLeaving)="leaves = leaves + 1" (closed)="closes = closes + 1" (refusalAnswered)="answers.push($event)" /></div><div class="panel" style="background: var(--nol-panel); color: var(--nol-text-muted)"></div>`
 })
 class HostComponent {
   public readonly controller: WritableSignal<PaneController | null> = signal(new PaneController(null));
   public readonly isForgotten: WritableSignal<boolean> = signal(false);
   public readonly isElsewhere: WritableSignal<boolean> = signal(false);
   public readonly refusal: WritableSignal<RefusedPage | null> = signal(null);
+  public readonly appName: WritableSignal<string | null> = signal(null);
   public readonly answers: (string | null)[] = [];
   public leaves: number = 0;
   public closes: number = 0;
@@ -45,6 +46,7 @@ describe("PageStateComponent", () => {
   const CANT_REACH: string = "The address may be mistyped, or the site is down.";
   let fixture: ComponentFixture<HostComponent>;
   let element: HTMLElement;
+  let views: FakeWebViews;
   let view: FakeWebView;
   let errors: unknown[];
   let checkedErrors: number;
@@ -115,7 +117,8 @@ describe("PageStateComponent", () => {
       said.push([message, politeness]);
       announce(message, politeness, options);
     });
-    view = new FakeWebViews().open("workspace-1");
+    views = new FakeWebViews();
+    view = views.open("workspace-1");
     fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.controller.set(new PaneController(view));
     fixture.autoDetectChanges();
@@ -130,9 +133,11 @@ describe("PageStateComponent", () => {
     try {
       vi.restoreAllMocks();
       (await AppearanceFixture.parkPointerAsync()).remove();
-      fixture.destroy();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
+      fixture.destroy();
+      TestBed.resetTestingModule();
       AppearanceFixture.reset();
       await Promise.all([ForcedColorsFixture.resetAsync(), ZoomFixture.resetAsync()]);
     }
@@ -188,10 +193,11 @@ describe("PageStateComponent", () => {
     expect([clipboard.texts, fixture.componentInstance.leaves]).toEqual([["https://docs.example.com/pricing"], 0]);
   });
 
-  it("names the origin Browser refused, and goes back only while the tab has history", async () => {
+  it("names the origin the browser refused, and goes back only while the tab has history", async () => {
     await showAsync(state(false), new ViewRefusalEvent("https://blocked.example/page", "https://blocked.example", false));
 
-    expect(shown()).toEqual(["block", "Browser doesn't open https://blocked.example", ["Its address isn't one Browser opens."], []]);
+    expect(shown()).toEqual(["block", "This workspace doesn't allow https://blocked.example",
+      ["This address isn't among the sites this workspace allows. Type it in the address field to open it."], []]);
     await showAsync(state(true), new ViewRefusalEvent("https://other.example/", "https://other.example", false));
 
     expect(shown()[3]).toEqual(["Back"]);
@@ -199,6 +205,17 @@ describe("PageStateComponent", () => {
 
     await vi.waitFor(() => expect(view.calls).toEqual(["back"]));
     expect(fixture.componentInstance.leaves).toBe(1);
+  });
+
+  it("names the app's browser in its refusal and in a page that can't open again, once the app has a name", async () => {
+    fixture.componentInstance.appName.set("Fixture App");
+    await showAsync(state(false), new ViewRefusalEvent("about:srcdoc", "null", false));
+    const refused: (string | undefined)[] = [shown()[1], ...shown()[2]];
+    fixture.componentInstance.isForgotten.set(true);
+    await fixture.whenStable();
+
+    expect([...refused, ...shown()[2]]).toEqual(["Fixture App's browser doesn't open about:srcdoc", "Its address isn't one Fixture App's browser opens.",
+      "Fixture App's browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it."]);
   });
 
   it("names a refused address whose origin is opaque, and calls one with no address this page", async () => {
@@ -209,16 +226,54 @@ describe("PageStateComponent", () => {
     fixture.componentInstance.controller()?.refuseNavigation("null");
     await fixture.whenStable();
 
-    expect([named, shown()[1]]).toEqual(["Browser doesn't open about:srcdoc", "Browser doesn't open this page"]);
+    expect([named, shown()[1]]).toEqual(["This browser doesn't open about:srcdoc", "This browser doesn't open this page"]);
   });
 
-  it("says a page stopped working, and reloads it", async () => {
+  it("says an address of a kind the browser never opens is one it doesn't open, whatever the workspace's sites", async () => {
+    const texts: (string | undefined)[] = [];
+    const refusals: readonly (readonly [string, string])[] = [["http://127.0.0.1:4173/", "http://127.0.0.1:4173"], ["http://192.168.1.1/", "http://192.168.1.1"],
+      ["about:srcdoc", "null"], ["data:text/html,x", "null"], ["ftp://example.org/", "ftp://example.org"], ["http://[fd00::1]/", "http://[fd00::1]"],
+      ["http://localhost:4173/", "http://localhost:4173"], ["https://user:secret@example.org/", "https://example.org"], ["https://:secret@example.org/", "https://example.org"],
+      ["https://user@example.org/", "https://example.org"],
+      [`https://example.org/${"a".repeat(32_768)}`, "https://example.org"], ["no address", "https://example.org"]];
+    for (const [address, origin] of refusals) {
+      await showAsync(state(false), new ViewRefusalEvent(address, origin, false));
+      texts.push(...shown()[2]);
+    }
+    fixture.componentInstance.controller()?.refuseNavigation("null");
+    await fixture.whenStable();
+
+    expect([...texts, ...shown()[2]]).toEqual(new Array<string>(13).fill("Its address isn't one this browser opens."));
+  });
+
+  it("says a public site the view's own navigate or Back refused isn't one the browser opens, since the answer doesn't say why", async () => {
+    const controller: PaneController | null = fixture.componentInstance.controller();
+    if (controller === null)
+      throw new Error("The page has no controller.");
+    view.mount(document.createElement("div"));
+    views.script("https://exampel.org/", { kind: "refuse" });
+    await controller.navigateAsync("https://exampel.org/");
+    await fixture.whenStable();
+    const typed: ReturnType<typeof shown> = shown();
+    await controller.navigateAsync("https://listed.example/");
+    await controller.navigateAsync("https://one.example/");
+    views.script("https://listed.example/", { kind: "refuse" });
+    await controller.goBackAsync();
+    await fixture.whenStable();
+
+    expect([typed, shown()]).toEqual([
+      ["block", "This browser doesn't open https://exampel.org", ["Its address isn't one this browser opens."], []],
+      ["block", "This browser doesn't open https://listed.example", ["Its address isn't one this browser opens."], ["Back"]]
+    ]);
+  });
+
+  it("says a page stopped working, and loads its address again", async () => {
     await showAsync(state(false), new ViewCrashEvent());
 
     expect(shown()).toEqual(["sentiment_dissatisfied", "This page stopped working", ["Its content process ended. Reload to open it again; anything typed into it is lost."], ["Reload"]]);
     button().click();
 
-    await vi.waitFor(() => expect(view.calls).toEqual(["reload"]));
+    await vi.waitFor(() => expect(view.calls).toEqual(["reload", "navigate https://one.example/"]));
     expect(fixture.componentInstance.leaves).toBe(1);
   });
 
@@ -228,7 +283,7 @@ describe("PageStateComponent", () => {
     await fixture.whenStable();
 
     expect(shown()).toEqual(["history", "This page can't open again",
-      ["Browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it."], ["Close"]]);
+      ["This browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it."], ["Close"]]);
     button().focus();
     button().click();
     await fixture.whenStable();
@@ -430,14 +485,14 @@ describe("PageStateComponent", () => {
     expect([shown()[3], fixture.componentInstance.leaves]).toEqual([[], 0]);
   });
 
-  it("says Browser can't show pages without a view or a controller, with no action", async () => {
+  it("says the browser can't show pages without a view or a controller, with no action", async () => {
     fixture.componentInstance.controller.set(new PaneController(null));
     await fixture.whenStable();
     const withoutView = shown();
     fixture.componentInstance.controller.set(null);
     await fixture.whenStable();
 
-    expect([withoutView, shown()]).toEqual([["web_asset_off", "Browser can't show pages here", [], []], ["web_asset_off", "Browser can't show pages here", [], []]]);
+    expect([withoutView, shown()]).toEqual([["web_asset_off", "This browser can't show pages here", [], []], ["web_asset_off", "This browser can't show pages here", [], []]]);
   });
 
   it("announces each new heading politely, once, without taking focus", async () => {

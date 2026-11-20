@@ -12,3 +12,4 @@ declare var noldovaViewCommits: string[] | undefined;
 declare var noldovaViewLog: string[] | undefined;
 declare var noldovaViewFrameCommits: string[] | undefined;
 declare var noldovaViewChoosers: string[] | undefined;
+declare var noldovaDownloadSessions: Set<object> | undefined;

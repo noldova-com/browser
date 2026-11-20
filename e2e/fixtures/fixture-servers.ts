@@ -59,6 +59,8 @@ export class FixtureServer {
   private readonly server: Server;
   private readonly pages: Map<string, FixturePage>;
   private readonly redirects: Map<string, string> = new Map();
+  private readonly holds: Map<string, Promise<void>> = new Map();
+  private listened: number | null = null;
   private readonly received: FixtureRequest[] = [];
   private readonly logLines: FixtureLogLine[] = [];
 
@@ -80,10 +82,14 @@ export class FixtureServer {
     const server = new FixtureServer(name, address, pages, certificate);
     server.server.listen(0, address);
     await once(server.server, "listening");
+    server.listened = server.port;
     return server;
   }
 
+  // The port the server listened on, which it keeps once closed, so the loopback guard still knows a server a test closed.
   public get port(): number {
+    if (this.listened !== null)
+      return this.listened;
     const address: AddressInfo | string | null = this.server.address();
     if (address === null || typeof address === "string")
       throw new Error(`The fixture server for ${this.name} isn't listening on a port.`);
@@ -111,6 +117,16 @@ export class FixtureServer {
     this.pages.set(path, new FixturePage(body, headers, status));
   }
 
+  // Holds the answer to each request for the path until the function it returns runs, so a view stays loading the path until then.
+  public hold(path: string): () => void {
+    const released = Promise.withResolvers<void>();
+    this.holds.set(path, released.promise);
+    return (): void => {
+      this.holds.delete(path);
+      released.resolve();
+    };
+  }
+
   public redirect(path: string, location: string): void {
     this.redirects.set(path, new URL(location).href);
   }
@@ -136,6 +152,14 @@ export class FixtureServer {
   private answer(request: IncomingMessage, response: ServerResponse): void {
     const path = request.url ?? "";
     this.note(request, path);
+    const held = this.holds.get(path);
+    if (held === undefined)
+      this.send(path, response);
+    else
+      void held.then(() => this.send(path, response));
+  }
+
+  private send(path: string, response: ServerResponse): void {
     const location = this.redirects.get(path);
     if (location !== undefined) {
       response.writeHead(302, { location, "cache-control": "no-store" }).end();

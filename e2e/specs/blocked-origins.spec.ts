@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
@@ -264,7 +265,7 @@ test.describe("blocked origins", () => {
           if (start.isTopLevel) {
             await expectNavigationStartedAsync(app, how);
             await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't show the refusal of ${how}.`)
-              .toHaveText(`Browser doesn't open ${new URL(target).origin}`);
+              .toHaveText(AppBrowser.saying(`doesn't open ${new URL(target).origin}`));
           }
           const barrier = `After ${how}`;
           await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);

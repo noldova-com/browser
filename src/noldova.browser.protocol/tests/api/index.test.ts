@@ -15,6 +15,7 @@ import { PageActivityState } from "../../src/enums/page-activity-state.ts";
 import { TypedAddressAnswerKind } from "../../src/enums/typed-address-answer-kind.ts";
 import { TypedAddressRefusal } from "../../src/enums/typed-address-refusal.ts";
 import { AddressKinds } from "../../src/models/address-kinds.ts";
+import { AddressLimits } from "../../src/models/address-limits.ts";
 import { BrowserEvents } from "../../src/models/browser-events.ts";
 import { BrowserMethods } from "../../src/models/browser-methods.ts";
 import { BrowserToolNames } from "../../src/models/browser-tool-names.ts";
@@ -42,7 +43,7 @@ import { TypedAddressAnswerReader } from "../../src/services/typed-address-answe
 describe("@noldova/browser.protocol", () => {
   it("exports exactly its public values", () => {
     expect(Object.keys(api).sort()).toEqual([
-      "AddressKind", "AddressKinds", "BrowserEvents", "BrowserMethods", "BrowserToolNames", "BrowsingDataRequest", "ElementFactsScript", "HeldPages", "LocalSites", "OpenPagesRequest",
+      "AddressKind", "AddressKinds", "AddressLimits", "BrowserEvents", "BrowserMethods", "BrowserToolNames", "BrowsingDataRequest", "ElementFactsScript", "HeldPages", "LocalSites", "OpenPagesRequest",
       "PageAction", "PageActivity", "PageActivityState", "PageAgent", "PageBox", "PageChangeScript", "PageClaim", "PagePoint", "PageRecord", "PageRefusal", "PageRequest",
       "PageStopRequest", "TypedAddressAllowed", "TypedAddressAnswerKind", "TypedAddressAnswerReader", "TypedAddressRefusal", "TypedAddressRefused",
       "TypedAddressRequest", "TypedRedirectRequest"
@@ -50,14 +51,14 @@ describe("@noldova/browser.protocol", () => {
     expect([api.AddressKind, api.PageAction, api.PageActivityState, api.TypedAddressAnswerKind, api.TypedAddressRefusal])
       .toEqual([AddressKind, PageAction, PageActivityState, TypedAddressAnswerKind, TypedAddressRefusal]);
     expect([
-      api.AddressKinds, api.BrowserEvents, api.BrowserMethods, api.BrowserToolNames, api.BrowsingDataRequest, api.ElementFactsScript, api.HeldPages, api.LocalSites, api.OpenPagesRequest,
+      api.AddressKinds, api.AddressLimits, api.BrowserEvents, api.BrowserMethods, api.BrowserToolNames, api.BrowsingDataRequest, api.ElementFactsScript, api.HeldPages, api.LocalSites, api.OpenPagesRequest,
       api.PageActivity, api.PageAgent, api.PageBox, api.PageChangeScript, api.PageClaim, api.PagePoint, api.PageRecord, api.PageRefusal, api.PageRequest, api.PageStopRequest,
       api.TypedAddressAllowed, api.TypedAddressRefused, api.TypedAddressRequest, api.TypedRedirectRequest, api.TypedAddressAnswerReader
     ].map((t, index) => t === [
-      AddressKinds, BrowserEvents, BrowserMethods, BrowserToolNames, BrowsingDataRequest, ElementFactsScript, HeldPages, LocalSites, OpenPagesRequest, PageActivity, PageAgent, PageBox,
+      AddressKinds, AddressLimits, BrowserEvents, BrowserMethods, BrowserToolNames, BrowsingDataRequest, ElementFactsScript, HeldPages, LocalSites, OpenPagesRequest, PageActivity, PageAgent, PageBox,
       PageChangeScript, PageClaim, PagePoint, PageRecord, PageRefusal, PageRequest, PageStopRequest, TypedAddressAllowed, TypedAddressRefused, TypedAddressRequest,
       TypedRedirectRequest, TypedAddressAnswerReader
-    ][index])).toEqual(Array.from({ length: 24 }, () => true));
+    ][index])).toEqual(Array.from({ length: 25 }, () => true));
   });
 
   it("spells each enum's wire values as its members' names", () => {

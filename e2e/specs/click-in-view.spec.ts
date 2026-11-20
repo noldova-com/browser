@@ -11,6 +11,7 @@ import type { JsonObject, JsonValue } from "@noldova/context.json";
 import { expect, test } from "../fixtures/app-test.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
+const AGENT_BAR = "nol-browser-agent-bar";
 const PROFILE_KEY = "e2e";
 const PRESS_LINE = /button "Press" \[(e\d+)\]/;
 
@@ -77,7 +78,12 @@ test.describe("an agent's click on an element in view", () => {
       const bindings = { page: instance, profileKey: PROFILE_KEY };
       const snapshot = textOf(await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings }));
       const reference = PRESS_LINE.exec(snapshot)?.[1] ?? "";
-      // Placed once the agent acts, as the pane's bar for it makes the view shorter; the page's own scroll is recorded before the count starts.
+      // Placed once the agent's bar shows and the view has the height left under it, as the bar comes after the call answers; the page's own
+      // scroll is recorded before the count starts.
+      await expect(app.window.locator(AGENT_BAR)).toBeVisible();
+      const host = app.window.locator(".nol-browser-page-view");
+      await expect.poll(async () => Number(await app.viewPages.runAtAsync(docs.url("/"), "innerHeight")) === Math.round((await host.boundingBox())?.height ?? -1),
+        { message: "The view never took the height under the agent's bar." }).toBe(true);
       await app.viewPages.runAtAsync(docs.url("/"), `const h = innerHeight; const press = document.getElementById("press"); const pane = document.getElementById("pane");`
         + `${item.place}; true`);
       await expect.poll(() => app.viewPages.runAtAsync(docs.url("/"), "seen.includes(\"scroll\")")).toBe("true");

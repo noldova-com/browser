@@ -98,13 +98,11 @@ export class FindBarComponent {
   }
 
   protected goNext(): void {
-    if (this.hasMatches())
-      this.step(true);
+    this.step(true);
   }
 
   protected goPrevious(): void {
-    if (this.hasMatches())
-      this.step(false);
+    this.step(false);
   }
 
   protected close(): void {

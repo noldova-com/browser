@@ -9,12 +9,13 @@
 import { type Signal, type WritableSignal, signal } from "@angular/core";
 import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
-import { QualifiedName, WebViewPane } from "@noldova/desktop.protocol";
+import { QualifiedName, type WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
 import { DocumentTone, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
 import type { JsonValue } from "@noldova/context.json";
 
 import { Resources } from "../../resources.ts";
 import { AddressRefusal } from "../enums/address-refusal.ts";
+import { EntryAnswer } from "../enums/entry-answer.ts";
 import { PaneState } from "../enums/pane-state.ts";
 import { RefusedRequest } from "../enums/refused-request.ts";
 import { LinkRefusedException } from "../exceptions/link-refused.exception.ts";
@@ -50,6 +51,7 @@ export class Pages {
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly opening: Map<string, boolean> = new Map<string, boolean>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
+  private readonly renamers: Set<() => void> = new Set<() => void>();
   private readonly agentPages: AgentPages;
   private readonly stopActivities: () => void;
   private readonly stopClosing: () => void;
@@ -71,14 +73,14 @@ export class Pages {
       this.agentPages.closeTab(t);
       this.request(BrowserMethods.forgetPage, new PageRequest(t).toJson(), Resources.formatNotKept);
     });
-    context.requestAsync(BrowserMethods.readAppName, null).then(t => this.name.set(PageAnswers.readAppName(t)))
+    context.requestAsync(BrowserMethods.readAppName, null).then(t => this.receiveAppName(PageAnswers.readAppName(t)))
       .catch((error: unknown) => context.log(Resources.formatNoAppName(error)));
   }
 
   public static of(context: IWindowPartContext): Pages {
     const pages: Pages | undefined = Pages.registry.get(context);
     if (pages === undefined)
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(null);
     return pages;
   }
 
@@ -91,7 +93,7 @@ export class Pages {
     if (this.isClosed) {
       if (!claim.isHere)
         this.request(BrowserMethods.letGoPage, new PageRequest(picked).toJson(), Resources.formatNotLetGo);
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(this.appName());
     }
     const kept: PageRecord | null = claim.record;
     if (claim.isHere && kept !== null && kept.profileKey !== profileKey)
@@ -144,7 +146,7 @@ export class Pages {
     if (answer.kind === TypedAddressAnswerKind.Refused)
       throw new LinkRefusedException(answer.reason);
     if (this.isClosed)
-      throw new PagesInactiveException();
+      throw new PagesInactiveException(this.appName());
     this.open(Resources.linkProfile, url);
   }
 
@@ -189,17 +191,17 @@ export class Pages {
     return null;
   }
 
-  public async goToAsync(tab: PaneTab, text: string): Promise<boolean> {
+  public async goToAsync(tab: PaneTab, text: string): Promise<EntryAnswer> {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place === undefined || tab.controller.status.state === PaneState.Unavailable)
-      return false;
+      return EntryAnswer.Stayed;
     const entry: object = {};
     this.entries.set(tab, entry);
     const isLatest = (): boolean => this.shown.has(tab) && tab.controller.status.state !== PaneState.Unavailable && this.entries.get(tab) === entry;
     const reading: AddressReading = AddressReader.read(text);
     if (reading.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(reading.reason);
-      return false;
+      return EntryAnswer.Stayed;
     }
     let answer: TypedAddressAnswer;
     try {
@@ -210,20 +212,24 @@ export class Pages {
       throw error;
     }
     if (!isLatest())
-      return false;
+      return EntryAnswer.Stayed;
     if (answer.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(answer.reason, new URL(reading.url).origin);
-      return false;
+      return EntryAnswer.Stayed;
     }
     const typing: TypedLoad = new TypedLoad(entry);
     this.typing.set(tab, typing);
+    let navigation: WebViewNavigation;
     try {
-      await tab.controller.navigateAsync(reading.url);
+      navigation = await tab.controller.navigateAsync(reading.url);
     }
     finally {
       this.endGoing(tab, place, typing);
     }
-    return isLatest();
+    if (!isLatest())
+      return EntryAnswer.Stayed;
+    // A navigation Noldova Desktop doesn't start leaves the typed text in the field, marked by the refusal, for the person to correct.
+    return navigation.kind === WebViewNavigationKind.Started ? EntryAnswer.Gone : EntryAnswer.Refused;
   }
 
   public openPopup(tab: PaneTab, url: string): void {
@@ -318,6 +324,12 @@ export class Pages {
     const next: Map<string, RefusedPage> = new Map<string, RefusedPage>(this.refused());
     next.delete(instance);
     this.refused.set(next);
+  }
+
+  private receiveAppName(name: string | null): void {
+    this.name.set(name);
+    for (const rename of this.renamers)
+      rename();
   }
 
   private receiveActivity(payload: JsonValue): void {
@@ -545,12 +557,12 @@ export class Pages {
     return Pages.placeOf(PageAnswers.readRecord(await this.context.requestAsync(BrowserMethods.readPage, new PageRequest(instance).toJson())));
   }
 
-  private static statusOf(state: PaneStatus): IDocumentStatus | null {
+  private static statusOf(state: PaneStatus, appName: string | null): IDocumentStatus | null {
     switch (state.state) {
       case PaneState.Failed:
-        return { glyph: Resources.pageErrorGlyph, description: Resources.formatPageStateText(state).heading, tone: DocumentTone.Failed };
+        return { glyph: Resources.pageErrorGlyph, description: Resources.formatPageStateText(state, appName).heading, tone: DocumentTone.Failed };
       case PaneState.Refused:
-        return { glyph: Resources.pageBlockedGlyph, description: Resources.formatPageStateText(state).heading, tone: DocumentTone.Neutral };
+        return { glyph: Resources.pageBlockedGlyph, description: Resources.formatPageStateText(state, appName).heading, tone: DocumentTone.Neutral };
       default:
         return null;
     }
@@ -567,6 +579,15 @@ export class Pages {
     let clearWorking: (() => void) | null = null;
     let shownStatus: IDocumentStatus | null = null;
     this.request(BrowserMethods.rememberPage, new PageRecord(tab.id, place.profileKey, url).toJson(), Resources.formatNotKept);
+    const showStatus = (status: PaneStatus): void => {
+      const next: IDocumentStatus | null = Pages.statusOf(status, this.appName());
+      if (next?.description !== shownStatus?.description) {
+        shownStatus = next;
+        this.context.updateDocument(Resources.pageDocument, tab.id, { status: next });
+      }
+    };
+    const rename = (): void => showStatus(tab.controller.status);
+    this.renamers.add(rename);
     const stopStatus: () => void = tab.controller.onChange(status => {
       if (status.state !== PaneState.Loading && this.typing.get(tab)?.isAnswered === true)
         this.endTyping(tab, place);
@@ -582,11 +603,7 @@ export class Pages {
         title = tab.title;
         this.context.updateDocument(Resources.pageDocument, tab.id, { title });
       }
-      const next: IDocumentStatus | null = Pages.statusOf(status);
-      if (next?.description !== shownStatus?.description) {
-        shownStatus = next;
-        this.context.updateDocument(Resources.pageDocument, tab.id, { status: next });
-      }
+      showStatus(status);
       if (status.url !== url && status.url !== "") {
         url = status.url;
         this.request(BrowserMethods.rememberPage, new PageRecord(tab.id, place.profileKey, url).toJson(), Resources.formatNotKept);
@@ -608,6 +625,7 @@ export class Pages {
     });
     const stopRedirects: () => void = tab.controller.onRefusedRedirect(event => this.followRedirect(tab, place, event));
     return () => {
+      this.renamers.delete(rename);
       stopStatus();
       stopWindows();
       stopRedirects();

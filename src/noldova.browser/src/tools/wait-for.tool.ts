@@ -51,7 +51,7 @@ export class WaitForTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Waiting, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, choice === Resources.referenceField);
-      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId);
+      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, null);
       try {
         const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
         const until: number = Math.min(Date.now() + timeout, call.deadline - Resources.answerMarginMilliseconds);
@@ -97,7 +97,7 @@ export class WaitForTool implements IBrowserTool {
 
   private async hearUntilAsync(viewId: string, options: CallOptions, until: number, ended: AbortSignal, isMetAsync: () => Promise<boolean>): Promise<boolean> {
     const heard: ChangeQueue = new ChangeQueue(ended);
-    const stopHearing: (() => void) | null = await this.kit.changes.hearAsync(viewId, options.withDeadline(until), () => heard.add())
+    const stopHearing: (() => void) | null = await this.kit.changes.hearAsync(viewId, () => options.withDeadline(until), () => heard.add())
       .catch((error: unknown) => WaitForTool.ignoreUnheard(error));
     if (stopHearing === null) {
       if (!ended.aborted)
@@ -113,7 +113,8 @@ export class WaitForTool implements IBrowserTool {
         stopHearing();
       }
     }
-    return stopHearing === null && await isMetAsync();
+    // The last change before the limit may have come during a check, or while the hearing started again in a new document, so the wait reads once more.
+    return await isMetAsync();
   }
 
   // Reads the whole tree for the text until it is too large for one reply, then only the page's shown text, for the rest of the wait.

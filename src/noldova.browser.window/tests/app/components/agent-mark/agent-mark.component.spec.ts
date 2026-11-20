@@ -197,6 +197,36 @@ describe("AgentMarkComponent", () => {
       .toEqual([0, 0, 0.25, 0.25, 0]);
   });
 
+  it("keeps the tag at its place under an element near the page's right edge, as wide as the space left there and cut with an ellipsis", async () => {
+    find(".frame").style.width = `${AppearanceFixture.toPixels(20)}px`;
+    await showAsync({ agentName: "A teammate with a long name", box: { x: AppearanceFixture.toPixels(14), y: 30, width: 40, height: 24 }, point: null });
+    const frame: DOMRect = find(".frame").getBoundingClientRect();
+    const label: DOMRect = find(".nol-browser-agent-mark-tag").getBoundingClientRect();
+    const text: HTMLElement = find(".nol-browser-agent-mark-text");
+
+    expect([rem(label.left - frame.left), rem(frame.right - label.right), text.scrollWidth > text.clientWidth, getComputedStyle(text).textOverflow])
+      .toEqual([13.875, 0, true, "ellipsis"]);
+  });
+
+  it("starts the tag early enough under an element 1rem from the page's right edge that it ends at the edge with its glyph and ellipsis inside its fill", async () => {
+    find(".frame").style.width = `${AppearanceFixture.toPixels(20)}px`;
+    await showAsync({ agentName: "A teammate with a long name", box: { x: AppearanceFixture.toPixels(19), y: 30, width: 16, height: 16 }, point: null });
+    const frame: DOMRect = find(".frame").getBoundingClientRect();
+    const label: DOMRect = find(".nol-browser-agent-mark-tag").getBoundingClientRect();
+    const glyph: DOMRect = find(".nol-browser-agent-mark-glyph").getBoundingClientRect();
+    const text: HTMLElement = find(".nol-browser-agent-mark-text");
+
+    expect([rem(frame.right - label.right), rem(label.left - frame.left) < 18.875, glyph.left >= label.left, glyph.right <= label.right, text.clientWidth > 0, getComputedStyle(text).textOverflow])
+      .toEqual([0, true, true, true, true, "ellipsis"]);
+  });
+
+  it("leaves the tag at its place under an element past the page's right edge, rather than pulling it onto the page", async () => {
+    find(".frame").style.width = `${AppearanceFixture.toPixels(20)}px`;
+    await showAsync({ box: { x: AppearanceFixture.toPixels(21), y: 30, width: 16, height: 16 }, point: null });
+
+    expect(rem(find(".nol-browser-agent-mark-tag").getBoundingClientRect().left - find(".frame").getBoundingClientRect().left)).toBe(20.875);
+  });
+
   it("keeps the tag inside a narrow page, cut with an ellipsis", async () => {
     await showAsync({ agentName: "A teammate with a very long name indeed, longer than the page is wide", box: { x: 0, y: 30, width: 120, height: 24 } });
     find(".frame").style.width = "160px";
