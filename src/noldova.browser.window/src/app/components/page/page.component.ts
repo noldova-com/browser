@@ -270,7 +270,11 @@ export class PageComponent {
         if (tab.controller.status.state === PaneState.Empty)
           afterNextRender(() => this.toolbar()?.focusAddress(), { injector: this.injector });
       }
-    }).catch((error: unknown) => this.errors.handleError(error));
+    }).catch((error: unknown) => {
+      // A page whose record can't be read can't open again, as one with no record can't.
+      this.isForgotten.set(!this.isDestroyed);
+      this.errors.handleError(error);
+    });
   }
 
   private runKey(tab: PaneTab, name: string): void {

@@ -995,7 +995,7 @@ describe("PageComponent", () => {
     expect([heading(), element.querySelector("nol-browser-toolbar"), surface().views.map(t => t.isClosed)]).toEqual(["This page moved to another window", null, [true]]);
   });
 
-  it("hands the failure to the error handler, and says nothing it doesn't know, when the runtime part can't read a restored page's record", async () => {
+  it("says a restored page whose record the runtime part can't read can't open again, without a toolbar, closes its document on Close, and hands the failure to the error handler", async () => {
     const failure: Error = new Error("The database is closed.");
     context.answerRequest = () => Promise.reject(failure);
 
@@ -1003,7 +1003,10 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expectErrors([failure]));
     await stableAsync();
-    expect([heading(), element.querySelector("nol-browser-toolbar")]).toEqual([undefined, null]);
+    expect([heading(), element.querySelector("nol-browser-toolbar"), surface().views]).toEqual(["This page can't open again", null, []]);
+    find<HTMLButtonElement>("button.nol-browser-page-state-action").click();
+
+    expect(context.closed).toEqual(["4a1c7e2b-9d3f-4e8a-b6c5-0f1e2d3c4b5a"]);
   });
 
   it("reopens a restored page in its workspace at its last address", async () => {
