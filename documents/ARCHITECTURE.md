@@ -218,7 +218,7 @@ Its look follows the app's design, whose rules this section writes out.
   A page counts for the agent whose call last acted on it, from the activity events, the controls read again after a restart and the record's agent that the claims and the reported tabs give, while its tab is open here, shown or not; a tab whose page another window has counts for that window.
   The item takes Noldova Desktop's muted tone, which draws it in the design's muted text colour, and in the system's text colour under forced colours.
 - **A site the person denied a teammate:** when the person denies a navigation's new origin on its card, the page stays where it was, and a state takes the view's place: "Scout can't open docs.example.com", that the site isn't among the sites the workspace allows, with Allow this site for the workspace and Not now, and the address field shows the refused address until the person edits it.
-  Allow goes to the address as the person's own, as typing it does, so the runtime part keeps its origin for the workspace before the page loads; Not now gives the page back as it was; either moves the focus to the toolbar, and the page's next load also takes the state away.
+  Allow goes to the address as the person's own, as typing it does, so the runtime part keeps its origin for the workspace before the page loads; Not now gives the page back as it was; either moves the focus to the toolbar, the page's next load also takes the state away, and so does closing its tab, so the page opened again under the same instance shows none.
 
 **Not yet:**
 - The page's favicon on its tab waits for the window part to read the web view's `Favicon` event, which Noldova Desktop has since 0.0.3 ([desktop#137](https://github.com/noldova-com/desktop/pull/137)).

@@ -328,6 +328,20 @@ describe("Pages", () => {
     expect([reloading, tab.controller.status.state, tab.controller.status.refusedOrigin]).toEqual([PaneState.Loading, PaneState.Loaded, null]);
   });
 
+  it("drops the refusal of a tab the person closes, so its page opened again under the same instance shows none", async () => {
+    const tab = await openAsync();
+    const navigating: JsonObject = { instance: tab.id, activity: "call-1", agentName: "Scout", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
+    context.emit(BrowserEvents.pageActivity, navigating);
+    context.emit(BrowserEvents.pageActivity, { ...navigating, state: "Ended", refusal: { url: "https://docs.example.com/pricing", origin: "https://docs.example.com" } });
+    const isRefused: boolean = pages.refusals().has(tab.id);
+
+    context.closeByPerson(tab.id);
+    pages.release(tab);
+    await pages.showAsync(tab.id);
+
+    expect([isRefused, pages.refusals().has(tab.id)]).toEqual([true, false]);
+  });
+
   it("forgets the refused navigations once the part deactivates", () => {
     const navigating: JsonObject = { instance: "page-1", activity: "call-1", agentName: "Scout", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
     context.emit(BrowserEvents.pageActivity, navigating);
