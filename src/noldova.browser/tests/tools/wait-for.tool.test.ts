@@ -245,11 +245,13 @@ describe("WaitForTool", () => {
 
     const loads: Promise<ToolResult> = waitOutAsync(bench.runAsync(tool, bench.call({ load: true, timeoutMilliseconds: 5_000 }, new AbortController(), ToolBench.SESSION, 3_000)), 2_000);
     const loaded: ToolResult = await loads;
+    const enabled: number = bench.methods.filter(t => t === "Page.enable").length;
+    bench.surface.calls.length = 0;
     const text: Promise<ToolResult> = waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 5_000 }, new AbortController(), ToolBench.SESSION, 1_500)), 500);
     const shown: ToolResult = await text;
 
-    expect([loaded.content[0]?.value, shown.content[0]?.value, bench.methods.filter(t => t === "Page.enable").length])
-      .toEqual(["The wait wasn't met in 2000 ms.", "The wait wasn't met in 500 ms.", 1]);
+    expect([loaded.content[0]?.value, shown.content[0]?.value, enabled, bench.methods[0]])
+      .toEqual(["The wait wasn't met in 2000 ms.", "The wait wasn't met in 500 ms.", 1, "Page.getFrameTree"]);
   });
 
   it("fails on another failure of the element's boxes, and as malformed on a reply without boxes", async () => {
