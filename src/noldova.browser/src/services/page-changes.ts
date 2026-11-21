@@ -20,6 +20,7 @@ import { ProtocolFailedException } from "../exceptions/protocol-failed.exception
 import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
+import { FieldSelectScript } from "../models/field-select-script.ts";
 import { MarkedSnapshot } from "../models/marked-snapshot.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageSnapshotScript } from "../models/page-snapshot-script.ts";
@@ -203,6 +204,14 @@ export class PageChanges {
     return this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
       { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, arguments: [{ value: false }], returnByValue: true, silent: true },
       options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
+  }
+
+  // Selects what the resolved field holds, so the text typed next replaces it; false for an element that isn't a text field or editable.
+  public async selectFieldAsync(viewId: string, objectId: string, options: CallOptions): Promise<boolean> {
+    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
+      { functionDeclaration: FieldSelectScript.functionDeclaration, objectId, returnByValue: true, silent: true }, options);
+    const result: JsonValue | undefined = reply[Resources.resultField];
+    return JsonShapes.isObject(result) && result[Resources.valueField] === true;
   }
 
   // The whole subtree of the form the resolved element belongs to, through every shadow root, closed ones too, which the function in the

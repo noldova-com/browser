@@ -149,7 +149,7 @@ export class Resources {
   public static readonly clickTitle: string = "Click an element";
   public static readonly clickDescription: string = "Clicks an element by its reference from the last snapshot. Clicks that submit a form or leave the page ask the person first.";
   public static readonly typeTitle: string = "Type into a field";
-  public static readonly typeDescription: string = "Types text into a field by its reference, and optionally presses Enter. Secret fields and submitting ask the person first.";
+  public static readonly typeDescription: string = "Replaces what a field holds with the text, by the field's reference, and optionally presses Enter. An empty text clears the field. Secret fields and submitting ask the person first.";
   public static readonly pressKeyTitle: string = "Press a key";
   public static readonly pressKeyDescription: string = "Presses a key, with optional modifiers, in the focused element. Keys that submit a form ask the person first.";
   public static readonly screenshotTitle: string = "Take a screenshot";
@@ -364,13 +364,14 @@ export class Resources {
   public static readonly widthField: string = "width";
   public static readonly heightField: string = "height";
   public static readonly enterKey: KeyDefinition = new KeyDefinition("Enter", "Enter", 13, "\r");
+  public static readonly deleteKey: KeyDefinition = new KeyDefinition("Delete", "Delete", 46, "");
   public static readonly namedKeys: readonly KeyDefinition[] = [
     Resources.enterKey,
     new KeyDefinition(" ", "Space", 32, " "),
     new KeyDefinition("Tab", "Tab", 9, ""),
     new KeyDefinition("Escape", "Escape", 27, ""),
     new KeyDefinition("Backspace", "Backspace", 8, ""),
-    new KeyDefinition("Delete", "Delete", 46, ""),
+    Resources.deleteKey,
     new KeyDefinition("ArrowLeft", "ArrowLeft", 37, ""),
     new KeyDefinition("ArrowUp", "ArrowUp", 38, ""),
     new KeyDefinition("ArrowRight", "ArrowRight", 39, ""),

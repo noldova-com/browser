@@ -255,6 +255,16 @@ export class ToolKit {
     }
   }
 
+  public async selectFieldAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<boolean> {
+    const element: ResolvedElement = await this.changes.resolveElementAsync(viewId, backendNodeId, options);
+    try {
+      return await this.changes.selectFieldAsync(viewId, element.objectId, options);
+    }
+    finally {
+      await this.changes.releaseAsync(viewId, element.objectId, options);
+    }
+  }
+
   public async readTitleOfAsync(viewId: string, documentId: string, options: CallOptions): Promise<string> {
     const title: string = AccessibilitySnapshot.readTitle(AccessibilitySnapshot.readNodes(
       await this.calls.sendAsync(viewId, Resources.getFullAXTreeMethod, { depth: Resources.rootLevelDepth }, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))));

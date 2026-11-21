@@ -21,6 +21,7 @@ import { PageChangesContextMissingException } from "../../src/exceptions/page-ch
 import { PageChangesNotSwitchedException } from "../../src/exceptions/page-changes-not-switched.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import { FieldSelectScript } from "../../src/models/field-select-script.ts";
 import { MarkedSnapshot } from "../../src/models/marked-snapshot.ts";
 import { PageSnapshotScript } from "../../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
@@ -29,7 +30,7 @@ import { ConsoleBuffers } from "../../src/services/console-buffers.ts";
 import { PageChanges } from "../../src/services/page-changes.ts";
 import { RuntimeDomains } from "../../src/services/runtime-domains.ts";
 import { ViewCalls } from "../../src/services/view-calls.ts";
-import type { JsonObject } from "../../src/types/json-value.ts";
+import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import { writtenTo } from "../fixtures/desktop-fakes.fixture.ts";
 import { ScriptedViews } from "../fixtures/scripted-views.fixture.ts";
 
@@ -209,6 +210,19 @@ describe("PageChanges", () => {
       ["DOM.describeNode", { objectId: "form-4", depth: -1, pierce: true }],
       ["Runtime.releaseObject", { objectId: "form-4" }]
     ]);
+  });
+
+  it("selects what the resolved field holds with the pinned function alone, by value and silent, and gives whether it did", async () => {
+    const answers: JsonValue[] = [{ type: "boolean", value: true }, { type: "boolean", value: false }, { type: "string", value: "true" }];
+    surface.answerWith("Runtime.callFunctionOn", () => ({ result: answers.shift() ?? null }));
+
+    const selected: boolean[] = [];
+    for (let index = 0; index < 4; index++)
+      selected.push(await changes.selectFieldAsync("view-1", "element-5", options));
+
+    expect(selected).toEqual([true, false, false, false]);
+    expect(surface.calls.map(t => [t.method, t.params])[0]).toEqual(
+      ["Runtime.callFunctionOn", { functionDeclaration: FieldSelectScript.functionDeclaration, objectId: "element-5", returnByValue: true, silent: true }]);
   });
 
   it("releases the form's object when its description fails, and when the call that read it was stopped", async () => {

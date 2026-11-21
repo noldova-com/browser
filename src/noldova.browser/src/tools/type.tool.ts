@@ -73,7 +73,12 @@ export class TypeTool implements IBrowserTool {
       const classify = (now: ElementFacts): ToolRisk => RiskClassifier.classifyTyping(now.path, isSubmitting, now.form);
       await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: element.backendNodeId }, options);
       await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
-      await this.kit.calls.sendAsync(page.viewId, Resources.insertTextMethod, { text }, options);
+      const isSelected: boolean = await this.kit.selectFieldAsync(page.viewId, element.backendNodeId, options);
+      const deleting: KeyPress = KeyEvents.press(Resources.deleteKey, 0);
+      if (text !== "")
+        await this.kit.calls.sendAsync(page.viewId, Resources.insertTextMethod, { text }, options);
+      else if (isSelected)
+        await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, deleting.down, deleting.up, ViewCalls.holding(options));
       if (isSubmitting) {
         await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options, () => new NotSubmittedException());
         const keys: KeyPress = KeyEvents.press(Resources.enterKey, 0);
