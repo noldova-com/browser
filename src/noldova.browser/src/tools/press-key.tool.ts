@@ -89,6 +89,10 @@ export class PressKeyTool implements IBrowserTool {
         await this.kit.confirmRiskAsync(page.viewId, focused, facts, risk, now => RiskClassifier.classifyKey(key, now.path, now.form), options);
 
       await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, keys.down, keys.up, ViewCalls.holding(options));
+      // A key other than Enter or Space submits no form and follows no link by itself, so a document changed by now ends the call as
+      // uncertain, even when the page's own handler of the key navigated.
+      if (!Resources.activatingKeys.includes(key))
+        await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
       return this.kit.doneAsync(page.viewId, Resources.pressed, null, options);
     });
   }
