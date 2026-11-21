@@ -48,10 +48,10 @@ export class RuntimePart implements IRuntimePart {
       context.registerMethod(BrowserMethods.allowTypedAddress, {
         handleAsync: async t => {
           const request: TypedAddressRequest = PageRequests.readTypedAddress(RuntimePart.fromWindow(t).payload);
-          const callsOn = (): number | null => request.instance === null ? null : kit.stops.callsOn(request.instance);
-          const calls: number | null = callsOn();
-          const answer: TypedAddressAnswer = await origins.allowTypedAsync(request);
-          return (callsOn() === calls ? answer : new TypedAddressLeft()).toJson();
+          const movesOn = (): number | null => request.instance === null ? null : kit.stops.movesOn(request.instance);
+          const moves: number | null = movesOn();
+          const answer: TypedAddressAnswer = await origins.allowTypedAsync(request, () => movesOn() !== moves);
+          return (movesOn() === moves ? answer : new TypedAddressLeft()).toJson();
         }
       });
       context.registerMethod(BrowserMethods.passTypedRedirect, {

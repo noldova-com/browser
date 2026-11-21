@@ -6,7 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { type TypedAddressAllowed, type TypedAddressAnswer, TypedAddressAnswerKind, type TypedAddressRefused, type TypedAddressRequest, type TypedRedirectRequest } from "@noldova/browser.protocol";
+import { type TypedAddressAllowed, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressLeft, type TypedAddressRefused, type TypedAddressRequest,
+  type TypedRedirectRequest } from "@noldova/browser.protocol";
 import type { WebViewInfo } from "@noldova/desktop.protocol";
 import type { IRuntimeWebViews } from "@noldova/desktop.runtime";
 
@@ -31,12 +32,14 @@ export class WorkspaceOrigins {
     this.settingsOrigins = settingsOrigins;
   }
 
-  public async allowTypedAsync(request: TypedAddressRequest): Promise<TypedAddressAnswer> {
+  public async allowTypedAsync(request: TypedAddressRequest, isLeft: () => boolean = () => false): Promise<TypedAddressAnswer> {
     const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     return this.inTurnAsync(request.profileKey, async () => {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
+      if (isLeft())
+        return new TypedAddressLeft();
       if (!origins.has(answer.origin) && !this.settingsOrigins.includes(answer.origin)) {
         const next: ReadonlySet<string> = new Set([...origins, answer.origin]);
         await this.store.writeAsync(request.profileKey, [...next]);
