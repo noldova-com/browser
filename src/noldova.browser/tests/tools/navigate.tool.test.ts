@@ -22,6 +22,7 @@ import { NoHistoryException } from "../../src/exceptions/no-history.exception.ts
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
 import { PermissionExpiredException } from "../../src/exceptions/permission-expired.exception.ts";
+import { Resources } from "../../src/resources.ts";
 import { NavigateTool } from "../../src/tools/navigate.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -30,8 +31,108 @@ import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 // The engine gives a URL's fragment apart from the frame's URL.
 function frame(url: string, origin: string, loaderId: string): JsonObject {
   const [address, fragment]: string[] = url.split("#");
-  const parts: JsonObject = fragment === undefined ? {} : { urlFragment: `#${fragment}` };
+  const parts: JsonObject = Object.isUndefined(fragment) ? {} : { urlFragment: `#${fragment}` };
   return { frameTree: { frame: { id: "F1", loaderId, url: address ?? url, securityOrigin: origin, ...parts } } };
+}
+
+// A way the person ends the call while the new site is being allowed.
+class StopCase {
+  public readonly act: string;
+  public readonly isTakingOver: boolean;
+
+  public constructor(act: string, isTakingOver: boolean) {
+    this.act = act;
+    this.isTakingOver = isTakingOver;
+  }
+}
+
+// An address the tool refuses, by its kind.
+class AddressCase {
+  public readonly kind: string;
+  public readonly url: string;
+
+  public constructor(kind: string, url: string) {
+    this.kind = kind;
+    this.url = url;
+  }
+}
+
+// A move through the history, the view's action it takes and the origin it is judged by.
+class ActionCase {
+  public readonly action: string;
+  public readonly expected: WebViewAction;
+  public readonly origin: string;
+
+  public constructor(action: string, expected: WebViewAction, origin: string) {
+    this.action = action;
+    this.expected = expected;
+    this.origin = origin;
+  }
+}
+
+// A history the engine answers, by what it holds.
+class HistoryCase {
+  public readonly holds: string;
+  public readonly history: JsonObject;
+
+  public constructor(holds: string, history: JsonObject) {
+    this.holds = holds;
+    this.history = history;
+  }
+}
+
+// A call's input and the frame the page moved to before the person allowed it.
+class MovedCase {
+  public readonly move: string;
+  public readonly input: JsonObject;
+  public readonly moved: JsonObject;
+
+  public constructor(move: string, input: JsonObject, moved: JsonObject) {
+    this.move = move;
+    this.input = input;
+    this.moved = moved;
+  }
+}
+
+// A call's input and the history's addresses once the page moved after its last read.
+class LandedCase {
+  public readonly move: string;
+  public readonly input: JsonObject;
+  public readonly moved: readonly string[];
+
+  public constructor(move: string, input: JsonObject, moved: readonly string[]) {
+    this.move = move;
+    this.input = input;
+    this.moved = moved;
+  }
+}
+
+// A history whose entry at `index` the URL's navigation replaces.
+class ReplacedCase {
+  public readonly entry: string;
+  public readonly entries: readonly string[];
+  public readonly index: number;
+  public readonly url: string;
+
+  public constructor(entry: string, entries: readonly string[], index: number, url: string) {
+    this.entry = entry;
+    this.entries = entries;
+    this.index = index;
+    this.url = url;
+  }
+}
+
+// A move within the document, by the call's input and the URL the page moves to.
+class WithinDocumentCase {
+  public readonly move: string;
+  public readonly input: JsonObject;
+  public readonly url: string;
+
+  public constructor(move: string, input: JsonObject, url: string) {
+    this.move = move;
+    this.input = input;
+    this.url = url;
+  }
 }
 
 describe("NavigateTool", () => {
@@ -45,7 +146,7 @@ describe("NavigateTool", () => {
     const target: string | undefined = bench.surface.navigations.at(-1)?.target;
     if (target === WebViewAction.Back || target === WebViewAction.Forward)
       current += target === WebViewAction.Back ? -1 : 1;
-    else if (target !== WebViewAction.Reload && target !== undefined) {
+    else if (target !== WebViewAction.Reload && !Object.isUndefined(target)) {
       pages = [...pages.slice(0, current + 1), target];
       current = pages.length - 1;
     }
@@ -72,7 +173,7 @@ describe("NavigateTool", () => {
     bench.surface.answerWith("Page.getFrameTree", () => shown);
     pages = ["https://docs.example/start", "https://docs.example/guide", "https://other.example/next"];
     current = 1;
-    bench.surface.answerWith("Page.getNavigationHistory", () => ({ currentIndex: current, entries: pages.map(url => ({ url })) }));
+    bench.surface.answerWith("Page.getNavigationHistory", () => ({ currentIndex: current, entries: pages.map(url => ({ url, title: "Next steps" })) }));
     bench.surface.answer("Accessibility.getFullAXTree", { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Next steps" } }] });
     bench.surface.afterNavigation = (viewId: string): void => {
       land();
@@ -142,11 +243,11 @@ describe("NavigateTool", () => {
     expect(bench.activities.at(-1)).toMatchObject({ state: "Idle", refusal: { url: "https://new.example/a", origin: "https://new.example" } });
   });
 
-  it.each([{ act: "stops the agent", isTakingOver: false }, { act: "takes over", isTakingOver: true }])(
-    "leaves the page where it was and fails as stopped when the person $act while the new site is being allowed", async ({ isTakingOver }) => {
+  it.each([new StopCase("stops the agent", false), new StopCase("takes over", true)])(
+    "leaves the page where it was and fails as stopped when the person $act while the new site is being allowed", async (row: StopCase) => {
       bench.permissions.automaticDecision = PermissionDecision.AllowedAlways;
       bench.surface.webViews.answer("setAllowedOriginsAsync", () => {
-        bench.kit.stops.stop("page-1", isTakingOver);
+        bench.kit.stops.stop("page-1", row.isTakingOver);
         return Promise.resolve();
       });
 
@@ -161,12 +262,12 @@ describe("NavigateTool", () => {
     expect(bench.activities.at(-1)).toMatchObject({ state: "Idle", refusal: null });
   });
 
-  it.each<[string, string]>([
-    ["a local address", "http://192.168.1.2/admin"],
-    ["a loopback address", "http://127.0.0.1:8080/"],
-    ["a link-local address", "http://169.254.169.254/latest"]
-  ])("refuses %s before it asks or loads", async (_case: string, url: string) => {
-    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url })), AddressRefusedException, { reason: "Refused", moduleCode: "browser.originRefused" });
+  it.each([
+    new AddressCase("a local address", "http://192.168.1.2/admin"),
+    new AddressCase("a loopback address", "http://127.0.0.1:8080/"),
+    new AddressCase("a link-local address", "http://169.254.169.254/latest")
+  ])("refuses $kind before it asks or loads", async (row: AddressCase) => {
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: row.url })), AddressRefusedException, { reason: "Refused", moduleCode: "browser.originRefused" });
     expect([bench.permissions.requests, bench.surface.navigations]).toEqual([[], []]);
   });
 
@@ -190,79 +291,80 @@ describe("NavigateTool", () => {
     expect([bench.permissions.requests, bench.database.callsOf("transaction"), bench.surface.navigations]).toEqual([[], [], []]);
   });
 
-  it.each<[string, WebViewAction, string]>([
-    ["back", WebViewAction.Back, "https://docs.example"],
-    ["forward", WebViewAction.Forward, "https://other.example"]
-  ])("goes %s to the history's next entry, judged by that entry's origin", async (action: string, expected: WebViewAction, origin: string) => {
+  it.each([
+    new ActionCase("back", WebViewAction.Back, "https://docs.example"),
+    new ActionCase("forward", WebViewAction.Forward, "https://other.example")
+  ])("goes $action to the history's next entry, judged by that entry's origin", async (row: ActionCase) => {
     bench.keep("workspace-1", ["https://docs.example", "https://other.example"]);
 
-    await bench.runAsync(tool, bench.call({ action }));
+    await bench.runAsync(tool, bench.call({ action: row.action }));
 
-    expect(bench.surface.navigations).toEqual([{ viewId: "view-1", target: expected }]);
-    expect(bench.permissions.requests[0]?.subject).toBe(origin);
+    expect(bench.surface.navigations).toEqual([{ viewId: "view-1", target: row.expected }]);
+    expect(bench.permissions.requests[0]?.subject).toBe(row.origin);
   });
 
-  it.each<[string, JsonObject]>([
-    ["another entry", { currentIndex: 1, entries: [{ url: "https://other.example/a" }, { url: "https://docs.example/guide" }, { url: "https://other.example/b" }] }],
-    ["the same entry at another place", { currentIndex: 2, entries: [{ url: "https://docs.example/intro" }, { url: "https://docs.example/start" }, { url: "https://docs.example/guide" }] }]
-  ])("moves nowhere and fails as stale when the history holds %s by the time the person allows the move", async (_case: string, history: JsonObject) => {
+  it.each([
+    new HistoryCase("another entry", { currentIndex: 1, entries: [{ url: "https://other.example/a" }, { url: "https://docs.example/guide" }, { url: "https://other.example/b" }] }),
+    new HistoryCase("the same entry at another place", { currentIndex: 2, entries: [{ url: "https://docs.example/intro" }, { url: "https://docs.example/start" }, { url: "https://docs.example/guide" }] })
+  ])("moves nowhere and fails as stale when the history holds $holds by the time the person allows the move", async (row: HistoryCase) => {
     bench.permissions.automaticDecision = null;
     const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ action: "back" }));
     await bench.permissions.raised;
-    bench.surface.answer("Page.getNavigationHistory", history);
+    bench.surface.answer("Page.getNavigationHistory", row.history);
     bench.permissions.answerNext(PermissionDecision.AllowedOnce);
 
     await CallFailures.expectAsync(running, PageChangedAfterGrantException, { reason: "Stale" });
     expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
   });
 
-  it.each<[string, JsonObject, JsonObject]>([
-    ["opening a URL, when the page went to another address", { url: "https://docs.example/next" }, frame("https://docs.example/other", "https://docs.example", "L3")],
-    ["a reload, when the page loaded a new document at its address", { action: "reload" }, frame("https://docs.example/guide", "https://docs.example", "L3")],
-    ["going back, when the page replaced its address, which leaves the history's index as it was", { action: "back" }, frame("https://docs.example/replaced", "https://docs.example", "L1")]
-  ])("moves nowhere and fails as stale on %s by the time the person allows the move", async (_case: string, input: JsonObject, moved: JsonObject) => {
+  it.each([
+    new MovedCase("opening a URL, when the page went to another address", { url: "https://docs.example/next" }, frame("https://docs.example/other", "https://docs.example", "L3")),
+    new MovedCase("a reload, when the page loaded a new document at its address", { action: "reload" }, frame("https://docs.example/guide", "https://docs.example", "L3")),
+    new MovedCase("going back, when the page replaced its address, which leaves the history's index as it was", { action: "back" },
+      frame("https://docs.example/replaced", "https://docs.example", "L1"))
+  ])("moves nowhere and fails as stale on $move by the time the person allows the move", async (row: MovedCase) => {
     bench.permissions.automaticDecision = null;
-    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input));
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(row.input));
     await bench.permissions.raised;
-    shown = moved;
+    shown = row.moved;
     bench.permissions.answerNext(PermissionDecision.AllowedOnce);
 
     await CallFailures.expectAsync(running, PageChangedAfterGrantException, { reason: "Stale" });
     expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
   });
 
-  it.each<[string, JsonObject, string[]]>([
-    ["a reload", { action: "reload" }, ["https://docs.example/start", "https://docs.example/moved"]],
-    ["going back", { action: "back" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"]],
-    ["opening a URL", { url: "https://docs.example/next" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"]]
-  ])("fails as stale with browser.landedElsewhere, past its point of no return, when the page moved after its last read and before %s", async (_case: string, input: JsonObject, moved: string[]) => {
+  it.each([
+    new LandedCase("a reload", { action: "reload" }, ["https://docs.example/start", "https://docs.example/moved"]),
+    new LandedCase("going back", { action: "back" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"]),
+    new LandedCase("opening a URL", { url: "https://docs.example/next" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"])
+  ])("fails as stale with browser.landedElsewhere, past its point of no return, when the page moved after its last read and before $move", async (row: LandedCase) => {
     bench.surface.afterNavigation = (viewId: string): void => {
-      pages = moved;
-      current = moved.length - 1;
+      pages = [...row.moved];
+      current = row.moved.length - 1;
       land();
       loadNew(viewId);
     };
 
-    await CallFailures.expectAsync(bench.runAsync(tool, bench.call(input)), LandedElsewhereException, { reason: "Stale", moduleCode: "browser.landedElsewhere" });
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call(row.input)), LandedElsewhereException, { reason: "Stale", moduleCode: "browser.landedElsewhere" });
     expect([bench.surface.navigations.length, bench.sendingMarks]).toEqual([1, 1]);
   });
 
-  it.each<[string, string[], number, string]>([
-    ["the history's first entry", ["about:blank"], 0, "https://docs.example/next"],
-    ["the entry of the page's own address", ["https://docs.example/start", "https://docs.example/guide"], 1, "https://docs.example/guide"]
-  ])("opens a URL whose navigation replaced %s, with no entry before it that names the page it left", async (_case: string, entries: string[], index: number, url: string) => {
-    const left: string = entries[index] ?? "about:blank";
+  it.each([
+    new ReplacedCase("the history's first entry", ["about:blank"], 0, "https://docs.example/next"),
+    new ReplacedCase("the entry of the page's own address", ["https://docs.example/start", "https://docs.example/guide"], 1, "https://docs.example/guide")
+  ])("opens a URL whose navigation replaced $entry, with no entry before it that names the page it left", async (row: ReplacedCase) => {
+    const left: string = row.entries[row.index] ?? "about:blank";
     shown = frame(left, new URL(left).origin, "L1");
     bench.surface.afterNavigation = (viewId: string): void => {
-      pages = [...entries.slice(0, index), url];
-      current = index;
-      shown = frame(url, "https://docs.example", "L2");
+      pages = [...row.entries.slice(0, row.index), row.url];
+      current = row.index;
+      shown = frame(row.url, "https://docs.example", "L2");
       loadNew(viewId);
     };
 
-    const result: ToolResult = await bench.runAsync(tool, bench.call({ url }));
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ url: row.url }));
 
-    expect(result.structured).toEqual({ page: { url, title: "Next steps" } });
+    expect(result.structured).toEqual({ page: { url: row.url, title: "Next steps" } });
   });
 
   it("reloads the current page, judged by its own origin, without reading the history", async () => {
@@ -330,13 +432,13 @@ describe("NavigateTool", () => {
     expect(bench.permissions.requests).toEqual([]);
   });
 
-  it.each<[string, JsonObject]>([
-    ["no current index", { entries: [] }],
-    ["entries that aren't a list", { currentIndex: 1, entries: {} }],
-    ["an entry that isn't an object", { currentIndex: 1, entries: ["a", "b"] }],
-    ["an entry with no URL", { currentIndex: 1, entries: [{}, {}] }]
-  ])("fails as malformed with a history of %s", async (_case: string, history: JsonObject) => {
-    bench.surface.answer("Page.getNavigationHistory", history);
+  it.each([
+    new HistoryCase("no current index", { entries: [] }),
+    new HistoryCase("entries that aren't a list", { currentIndex: 1, entries: {} }),
+    new HistoryCase("an entry that isn't an object", { currentIndex: 1, entries: ["a", "b"] }),
+    new HistoryCase("an entry with no URL", { currentIndex: 1, entries: [{}, {}] })
+  ])("fails as malformed with a history of $holds", async (row: HistoryCase) => {
+    bench.surface.answer("Page.getNavigationHistory", row.history);
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ action: "back" })), MalformedReplyException, { reason: "Unavailable", moduleCode: "browser.malformedReply" });
   });
@@ -385,17 +487,31 @@ describe("NavigateTool", () => {
     expect([result.content[2]?.value, result.content[2]?.origin]).toEqual(["The page is still loading; wait for it with browser_wait_for before you act on it.", null]);
   });
 
-  it.each<[string, JsonObject, string]>([
-    ["back to an entry the page pushed", { action: "back" }, "https://docs.example/start"],
-    ["to a fragment of the page", { url: "https://docs.example/guide#setup" }, "https://docs.example/guide#setup"]
-  ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject, url: string) => {
+  it("reads a page still loading from the view's history, as every call the page answers waits for the next document's answer", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (): void => bench.surface.answerWith("Page.getFrameTree", () => new Promise<JsonObject>(() => undefined));
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }, new AbortController(), ToolBench.SESSION, 2_050));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect([result.content.slice(1).map(t => [t.value, t.origin]), result.structured]).toEqual([[["URL: https://docs.example/guide\nTitle: Next steps", "https://docs.example"],
+      [Resources.stillLoading, null]], { page: { url: "https://docs.example/guide", title: "Next steps" } }]);
+    expect(bench.methods.at(-1)).toBe("Page.getNavigationHistory");
+  });
+
+  it.each([
+    new WithinDocumentCase("back to an entry the page pushed", { action: "back" }, "https://docs.example/start"),
+    new WithinDocumentCase("to a fragment of the page", { url: "https://docs.example/guide#setup" }, "https://docs.example/guide#setup")
+  ])("answers as soon as the page moved $move, which fires no load", async (row: WithinDocumentCase) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.afterNavigation = (viewId: string): void => {
       land();
-      bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url });
+      bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: row.url });
     };
 
-    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input, new AbortController(), ToolBench.SESSION, 60_000));
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(row.input, new AbortController(), ToolBench.SESSION, 60_000));
     await ToolBench.settleAsync();
     await vi.advanceTimersByTimeAsync(50);
     const result: ToolResult = await running;

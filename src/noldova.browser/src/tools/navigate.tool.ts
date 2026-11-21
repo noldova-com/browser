@@ -23,6 +23,7 @@ import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import type { FrameFacts } from "../models/frame-facts.ts";
+import type { HistoryPage } from "../models/history-page.ts";
 import type { HistoryTarget } from "../models/history-target.ts";
 import type { NavigationMove } from "../models/navigation-move.ts";
 import type { PageActivity } from "../models/page-activity.ts";
@@ -32,6 +33,7 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { UrlMove } from "../models/url-move.ts";
 import { Resources } from "../resources.ts";
+import { HistoryPageReader } from "../services/history-page.reader.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { LoadWaiter } from "../services/load-waiter.ts";
 import { PermissionCards } from "../services/permission-cards.ts";
@@ -65,7 +67,7 @@ export class NavigateTool implements IBrowserTool {
       const granted: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
       if (granted.documentId !== frame.documentId || granted.url !== frame.url)
         throw new PageChangedAfterGrantException();
-      if (target.index !== null) {
+      if (!Object.isNull(target.index)) {
         const now: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
         if (now.index !== target.index || now.url !== target.url)
           throw new PageChangedAfterGrantException();
@@ -77,7 +79,7 @@ export class NavigateTool implements IBrowserTool {
         progress.markInputSent();
         const outcome: WebViewNavigation = await move.goAsync(this.kit.webViews, page.viewId);
         const refusal: CallFailureException | null = ToolFailures.fromNavigation(outcome);
-        if (refusal !== null)
+        if (!Object.isNull(refusal))
           throw refusal;
         isLoaded = await loads.waitAsync(call.deadline - Resources.readMarginMilliseconds, activity.signal);
       }
@@ -85,20 +87,24 @@ export class NavigateTool implements IBrowserTool {
         loads[Symbol.dispose]();
       }
 
+      // While the main frame waits for the next document's answer, every call the page answers waits too, so the view's history says
+      // which page it still shows.
+      if (!isLoaded) {
+        const shown: HistoryPage = await HistoryPageReader.readAsync(this.kit.calls, page.viewId, options);
+        return ToolResults.page(shown.origin, [ToolContent.fromText(Resources.formatNavigated(shown.page.url, shown.page.title), shown.origin),
+          ToolContent.fromText(Resources.stillLoading, null)], shown.page);
+      }
       const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      if (isLoaded && !await move.isLandedAsync(this.kit.calls, page.viewId, granted, target, now, options))
+      if (!await move.isLandedAsync(this.kit.calls, page.viewId, granted, target, now, options))
         throw new LandedElsewhereException();
       const title: string = await this.kit.readTitleOfAsync(page.viewId, now.documentId, options);
-      const content: ToolContent[] = [ToolContent.fromText(Resources.formatNavigated(now.url, title), now.origin)];
-      if (!isLoaded)
-        content.push(ToolContent.fromText(Resources.stillLoading, null));
-      return ToolResults.page(now.origin, content, new ShownPage(now.url, title));
+      return ToolResults.page(now.origin, [ToolContent.fromText(Resources.formatNavigated(now.url, title), now.origin)], new ShownPage(now.url, title));
     });
   }
 
   private static readAction(input: JsonObject): WebViewAction {
     const action: WebViewAction | undefined = NavigateTool.ACTIONS.get(InputValidator.readText(input, Resources.actionField, BrowserLimits.maximumUrlLength));
-    if (action === undefined)
+    if (Object.isUndefined(action))
       throw new ArgumentNotOneOfException(Resources.actionField, [...NavigateTool.ACTIONS.keys()]);
     return action;
   }

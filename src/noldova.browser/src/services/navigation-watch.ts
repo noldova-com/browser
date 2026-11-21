@@ -19,6 +19,7 @@ import { LoadWaiter } from "./load-waiter.ts";
 export class NavigationWatch implements Disposable {
   private static readonly ENDING_KINDS: readonly WebViewEventKind[] = [WebViewEventKind.NavigationRefused, WebViewEventKind.Crashed, WebViewEventKind.Closed];
   private readonly loads: LoadWaiter;
+  private readonly requests: PromiseWithResolvers<void> = Promise.withResolvers<void>();
   private readonly stopProtocol: () => void;
   private readonly stopView: () => void;
   private isRequested: boolean = false;
@@ -29,8 +30,10 @@ export class NavigationWatch implements Disposable {
     this.stopProtocol = webViews.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
       if (event.params[Resources.frameIdField] !== frameId)
         return;
-      if (event.method === Resources.frameRequestedNavigationEvent && event.params[Resources.dispositionField] === Resources.currentTabDisposition)
+      if (event.method === Resources.frameRequestedNavigationEvent && event.params[Resources.dispositionField] === Resources.currentTabDisposition) {
         this.isRequested = true;
+        this.requests.resolve();
+      }
       else if (event.method === Resources.frameStartedNavigatingEvent && this.isRequested)
         this.isStarted = true;
       else if (event.method === Resources.navigatedWithinDocumentEvent && this.isRequested
@@ -41,6 +44,11 @@ export class NavigationWatch implements Disposable {
       if (event.view === viewId && NavigationWatch.ENDING_KINDS.includes(event.kind))
         this.loads.end();
     });
+  }
+
+  // Settles once the page asked for the navigation, which it does before the engine starts it.
+  public get requested(): Promise<void> {
+    return this.requests.promise;
   }
 
   // Whether the page is done with what the input started: at once when the page asked for no navigation, and otherwise once the navigation

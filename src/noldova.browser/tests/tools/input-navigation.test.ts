@@ -36,6 +36,9 @@ describe("an input that navigates", () => {
     ] };
   }
 
+  // The history of a view at the shop's cart.
+  const CART_HISTORY: JsonObject = { currentIndex: 1, entries: [{ url: "https://shop.test/", title: "Shop" }, { url: "https://shop.test/cart/", title: "Cart" }] };
+
   function lastText(result: ToolResult): string | undefined {
     return result.content.map(t => t.value).at(-1);
   }
@@ -86,15 +89,32 @@ describe("an input that navigates", () => {
     expect([lastText(result), result.structured]).toEqual([`URL: ${RequestedNavigation.URL}`, { page: { url: RequestedNavigation.URL, title: RequestedNavigation.TITLE } }]);
   });
 
-  it("is reported as still loading, with the page it left, when the call's time ends before the load", async () => {
+  it("is reported as still loading, with the page it left as the view's history holds it, when the call's time ends before the load", async () => {
     ShopPage.serve(bench, ShopPage.LINK);
     RequestedNavigation.serve(bench, "Input.dispatchMouseEvent", "mouseReleased", true);
+    bench.surface.answer("Page.getNavigationHistory", CART_HISTORY);
 
     const running: Promise<ToolResult> = bench.runAsync(new ClickTool(bench.kit), bench.call({ reference: reference(ShopPage.LINK) }));
     await vi.advanceTimersByTimeAsync(5_000 - Resources.readMarginMilliseconds);
     const result: ToolResult = await running;
 
+    expect([result.content.map(t => t.value).slice(-2), result.structured]).toEqual([["URL: https://shop.test/cart/", Resources.stillLoading],
+      { page: { url: "https://shop.test/cart/", title: "Cart" }, element: { role: "link", name: "Help", isSecret: false } }]);
+  });
+
+  it("goes on once the page asked for the navigation, though the call after the input waits for the next document's answer, and reads no frame", async () => {
+    ShopPage.serve(bench, ShopPage.LINK);
+    RequestedNavigation.serve(bench, "Input.dispatchMouseEvent", "mouseReleased", true);
+    bench.surface.answer("Page.getNavigationHistory", CART_HISTORY);
+    bench.surface.answerWith("Page.enable", () => bench.methods.includes("Input.dispatchMouseEvent") ? new Promise<JsonObject>(() => undefined) : {});
+
+    const running: Promise<ToolResult> = bench.runAsync(new ClickTool(bench.kit), bench.call({ reference: reference(ShopPage.LINK) }));
+    await vi.advanceTimersByTimeAsync(5_000 - Resources.readMarginMilliseconds);
+    const result: ToolResult = await running;
+    await vi.advanceTimersByTimeAsync(Resources.readMarginMilliseconds);
+
     expect(result.content.map(t => t.value).slice(-2)).toEqual(["URL: https://shop.test/cart/", Resources.stillLoading]);
+    expect(bench.methods.slice(bench.methods.lastIndexOf("Input.dispatchMouseEvent") + 1)).toEqual(["Page.enable", "Page.getNavigationHistory"]);
   });
 
   it("isn't waited for when the page asked for no navigation", async () => {

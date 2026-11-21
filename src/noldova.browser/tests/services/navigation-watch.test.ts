@@ -49,6 +49,23 @@ describe("NavigationWatch", () => {
     expect(await waitAsync(watch)).toBe(true);
   });
 
+  it("settles its request only once the page asked for the navigation in its main frame", async () => {
+    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    using watch: NavigationWatch = new NavigationWatch(surface.webViews, "view-1", "main");
+    let isRequested: boolean = false;
+    void watch.requested.then(() => {
+      isRequested = true;
+    });
+    surface.emitProtocolEvent("view-1", "Page.frameRequestedNavigation", { ...REQUEST, frameId: "inner" });
+    await Promise.resolve();
+    const before: boolean = isRequested;
+
+    surface.emitProtocolEvent("view-1", "Page.frameRequestedNavigation", REQUEST);
+    await watch.requested;
+
+    expect([before, isRequested]).toEqual([false, true]);
+  });
+
   it("ignores a request of another frame, another view or for a new tab", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);

@@ -26,6 +26,7 @@ import { AimFollower } from "../services/aim-follower.ts";
 import { ConsoleBuffers } from "../services/console-buffers.ts";
 import { ContentQuads } from "../services/content-quads.ts";
 import { FrameTreeReader } from "../services/frame-tree.reader.ts";
+import { HistoryPageReader } from "../services/history-page.reader.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { NavigationWatch } from "../services/navigation-watch.ts";
 import { NodeFactsReader } from "../services/node-facts.reader.ts";
@@ -47,6 +48,7 @@ import { CallOptions } from "./call-options.ts";
 import { ElementFacts } from "./element-facts.ts";
 import { ElementReference } from "./element-reference.ts";
 import type { FrameFacts } from "./frame-facts.ts";
+import type { HistoryPage } from "./history-page.ts";
 import type { NodeFacts } from "./node-facts.ts";
 import type { PageActivity } from "./page-activity.ts";
 import { PageStops } from "./page-stops.ts";
@@ -302,7 +304,8 @@ export class ToolKit {
   // Sends the input `send` gives and reports the call done. An input that makes the page navigate its main frame in place, as a link's click
   // or a form's Enter does, is reported once that navigation loaded, with the page it loaded, or as still loading when the call's time ends
   // first. The page asks for the navigation while it handles the input, and answers a call only after that, so the call after the input
-  // lets its request arrive before the wait is decided.
+  // lets its request arrive before the wait is decided. Once the engine started the navigation, a call the page answers waits until the
+  // next document's answer came, so the request ends that call's wait, and a page still loading is read from the view's history.
   public async doneAsync(viewId: string, frameId: string, message: string, element: ShownElement | null, options: CallOptions,
     send: () => Promise<void>): Promise<ToolResult> {
     await this.calls.sendAsync(viewId, Resources.enableMethod, {}, options);
@@ -310,14 +313,21 @@ export class ToolKit {
     let isLoaded: boolean;
     try {
       await send();
-      await this.calls.sendAsync(viewId, Resources.enableMethod, {}, options);
+      const turn: Promise<JsonObject> = this.calls.sendAsync(viewId, Resources.enableMethod, {}, options);
+      // The race fails with the call; once the request came, the call's later answer or failure tells nothing.
+      turn.catch(() => undefined);
+      await Promise.race([turn, watch.requested]);
       isLoaded = await watch.waitAsync(options.deadline - Resources.readMarginMilliseconds, options.signal);
     }
     finally {
       watch[Symbol.dispose]();
     }
+    if (!isLoaded) {
+      const shown: HistoryPage = await HistoryPageReader.readAsync(this.calls, viewId, options);
+      return ToolResults.done(message, shown.origin, shown.page, element, false);
+    }
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
-    return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element, isLoaded);
+    return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element, true);
   }
 
   // The view keeps drawing while hidden only while it is marked, and a document it loads hidden takes no press until it draws, so a call
