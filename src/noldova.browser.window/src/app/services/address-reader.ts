@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressKind, AddressKinds, TypedAddressRefusal, TypedAddressRefused } from "@noldova/browser.protocol";
+import { AddressKinds, TypedAddressRefusal, TypedAddressRefused } from "@noldova/browser.protocol";
 
 import { Resources } from "../../resources.ts";
 import { ReadAddress } from "../models/read-address.ts";
@@ -25,7 +25,7 @@ export class AddressReader {
     const url: URL | null = URL.parse(name === null ? Resources.formatDefaultSchemeAddress(typed) : typed);
     if (url === null || (name === null && !AddressReader.isHost(url.hostname)))
       return new TypedAddressRefused(TypedAddressRefusal.NotAnAddress);
-    if (name === null && AddressReader.isThisComputer(url.hostname))
+    if (name === null && AddressReader.isLocal(url.hostname))
       return new ReadAddress(new URL(Resources.formatLocalAddress(typed)).href);
     return new ReadAddress(url.href);
   }
@@ -34,7 +34,9 @@ export class AddressReader {
     return hostname.includes(Resources.hostLabelSeparator) || hostname === Resources.localName || hostname.startsWith(Resources.ipv6Opening);
   }
 
-  private static isThisComputer(hostname: string): boolean {
-    return AddressKinds.ofHost(hostname) === AddressKind.Loopback;
+  // A host on this computer or its network, which browsers don't upgrade to https: a loopback or private address, or a name in `.local`.
+  // A single-label name other than `localhost` isn't read as an address at all.
+  private static isLocal(hostname: string): boolean {
+    return Resources.httpAddressKinds.includes(AddressKinds.ofHost(hostname)) || hostname.endsWith(Resources.networkNameSuffix);
   }
 }

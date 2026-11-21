@@ -203,6 +203,8 @@ export class Resources {
   public static readonly schemeEnd: string = ":";
   public static readonly defaultScheme: string = "https://";
   public static readonly localScheme: string = "http://";
+  public static readonly httpAddressKinds: readonly AddressKind[] = [AddressKind.Loopback, AddressKind.Private];
+  public static readonly networkNameSuffix: string = ".local";
   public static readonly localName: string = "localhost";
   public static readonly hostLabelSeparator: string = ".";
   public static readonly ipv6Opening: string = "[";
