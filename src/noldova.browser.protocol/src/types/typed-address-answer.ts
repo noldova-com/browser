@@ -7,6 +7,7 @@
  */
 
 import type { TypedAddressAllowed } from "../models/typed-address-allowed.ts";
+import type { TypedAddressLeft } from "../models/typed-address-left.ts";
 import type { TypedAddressRefused } from "../models/typed-address-refused.ts";
 
-export type TypedAddressAnswer = TypedAddressAllowed | TypedAddressRefused;
+export type TypedAddressAnswer = TypedAddressAllowed | TypedAddressRefused | TypedAddressLeft;

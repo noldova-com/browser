@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { BrowserEvents, BrowserMethods, HeldPages, LocalSites, PageAgent, PageClaim, type PageRecord } from "@noldova/browser.protocol";
+import { BrowserEvents, BrowserMethods, HeldPages, LocalSites, PageAgent, PageClaim, type PageRecord, type TypedAddressAnswer, TypedAddressLeft, type TypedAddressRequest } from "@noldova/browser.protocol";
 import { Failure, FailureCode, ShellClients, WebViewEventKind, type WebViewEvent } from "@noldova/desktop.protocol";
 import { type EventChannel, type IModuleLog, type IRuntimePart, type IRuntimePartContext, MethodFailureException, type Migration, ProductInfo, type RequestContext } from "@noldova/desktop.runtime";
 
@@ -19,7 +19,6 @@ import { DatabaseOriginStore } from "./services/database-origin-store.ts";
 import { DatabasePageStore } from "./services/database-page-store.ts";
 import { PageRequests } from "./services/page-requests.ts";
 import { ToolHost } from "./services/tool-host.ts";
-import { TypedAddressRequests } from "./services/typed-address-requests.ts";
 import { WorkspaceOrigins } from "./services/workspace-origins.ts";
 import { BrowserTools } from "./tools/browser-tools.ts";
 import type { JsonValue } from "./types/json-value.ts";
@@ -47,7 +46,13 @@ export class RuntimePart implements IRuntimePart {
       for (const tool of BrowserTools.create(kit))
         registrations.push(host.register(tool));
       context.registerMethod(BrowserMethods.allowTypedAddress, {
-        handleAsync: async t => (await origins.allowTypedAsync(TypedAddressRequests.read(RuntimePart.fromWindow(t).payload))).toJson()
+        handleAsync: async t => {
+          const request: TypedAddressRequest = PageRequests.readTypedAddress(RuntimePart.fromWindow(t).payload);
+          const movesOn = (): number | null => request.instance === null ? null : kit.stops.movesOn(request.instance);
+          const moves: number | null = movesOn();
+          const answer: TypedAddressAnswer = await origins.allowTypedAsync(request, () => movesOn() !== moves);
+          return (movesOn() === moves ? answer : new TypedAddressLeft()).toJson();
+        }
       });
       context.registerMethod(BrowserMethods.passTypedRedirect, {
         handleAsync: async t => (await origins.passTypedAsync(PageRequests.readRedirect(RuntimePart.fromWindow(t).payload))).toJson()

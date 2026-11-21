@@ -226,11 +226,15 @@ export class PageComponent {
 
   protected goTo(tab: PaneTab, text: string): void {
     this.pages.goToAsync(tab, text).then(answer => {
-      if (answer === EntryAnswer.Gone)
+      if (answer === EntryAnswer.Gone || answer === EntryAnswer.Left)
         this.toolbar()?.followPage(tab.controller);
       else if (answer === EntryAnswer.Refused)
         this.toolbar()?.markRefused(tab.controller);
     }).catch((error: unknown) => this.errors.handleError(error));
+  }
+
+  protected leaveEntry(tab: PaneTab): void {
+    this.pages.leaveEntry(tab);
   }
 
   protected openPopup(tab: PaneTab, url: string): void {

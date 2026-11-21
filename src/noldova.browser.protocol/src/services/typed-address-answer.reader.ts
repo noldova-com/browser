@@ -10,6 +10,7 @@ import { JsonReader } from "@noldova/context.json";
 
 import { TypedAddressAnswerKind } from "../enums/typed-address-answer-kind.ts";
 import { TypedAddressAllowed } from "../models/typed-address-allowed.ts";
+import { TypedAddressLeft } from "../models/typed-address-left.ts";
 import { TypedAddressRefused } from "../models/typed-address-refused.ts";
 import { Resources } from "../resources.ts";
 import type { TypedAddressAnswer } from "../types/typed-address-answer.ts";
@@ -19,6 +20,8 @@ export class TypedAddressAnswerReader {
 
   public static read(value: unknown, path?: string): TypedAddressAnswer {
     const kind: TypedAddressAnswerKind = JsonReader.fromValue(value, path).readOneOf(Resources.kindField, TypedAddressAnswerReader.KINDS);
-    return kind === TypedAddressAnswerKind.Allowed ? TypedAddressAllowed.fromJson(value, path) : TypedAddressRefused.fromJson(value, path);
+    if (kind === TypedAddressAnswerKind.Allowed)
+      return TypedAddressAllowed.fromJson(value, path);
+    return kind === TypedAddressAnswerKind.Refused ? TypedAddressRefused.fromJson(value, path) : TypedAddressLeft.fromJson(value, path);
   }
 }

@@ -26,6 +26,7 @@ import { ViewRefusalEvent } from "../../../src/app/models/view-refusal-event.ts"
 import { ViewRequestRefusalEvent } from "../../../src/app/models/view-request-refusal-event.ts";
 import { ViewStateEvent } from "../../../src/app/models/view-state-event.ts";
 import { ViewZoomEvent } from "../../../src/app/models/view-zoom-event.ts";
+import { NavigationStarts } from "../../../src/app/services/navigation-starts.ts";
 import { PaneController } from "../../../src/app/services/pane-controller.ts";
 import { FakeWebView, FakeWebViews, WebViewValues } from "../../fixtures/fake-web-views.fixture.ts";
 
@@ -69,6 +70,27 @@ describe("PaneController", () => {
 
     expect(controller.status.state).toBe(PaneState.Loaded);
     expect(view.calls).toEqual(["navigate https://one.example/", "navigate https://two.example/", "back", "forward", "forward", "reload", "stop"]);
+  });
+
+  it("tells each navigation it starts before the view gets it, not a stop or a page's own load, until the listener stops or it closes", async () => {
+    const { view, controller } = open();
+    const seen: string[] = [];
+    const stop: () => void = NavigationStarts.listen(controller, () => seen.push(`start after ${String(view.calls.length)} calls`));
+    NavigationStarts.listen(controller, () => seen.push("other"));
+
+    await controller.navigateAsync("https://one.example/");
+    await controller.navigateAsync("https://two.example/");
+    await controller.goBackAsync();
+    await controller.goForwardAsync();
+    await controller.reloadAsync();
+    await controller.stopAsync();
+    view.emit(new ViewStateEvent("https://three.example/", "Three", true, true, false));
+    stop();
+    await controller.reloadAsync();
+    controller.close();
+    await controller.navigateAsync("https://four.example/").catch(() => undefined);
+
+    expect(seen).toEqual(["start after 0 calls", "other", "start after 1 calls", "other", "start after 2 calls", "other", "start after 3 calls", "other", "start after 4 calls", "other", "other"]);
   });
 
   it("shows a refused answer to a navigation or a move, a refused redirect, and a crash", async () => {

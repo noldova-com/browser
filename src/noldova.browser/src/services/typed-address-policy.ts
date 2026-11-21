@@ -6,13 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressKind, AddressKinds, TypedAddressAllowed, type TypedAddressAnswer, TypedAddressRefusal, TypedAddressRefused } from "@noldova/browser.protocol";
+import { AddressKind, AddressKinds, TypedAddressAllowed, TypedAddressRefusal, TypedAddressRefused } from "@noldova/browser.protocol";
 
 import { BrowserLimits } from "../models/browser-limits.ts";
 import { Resources } from "../resources.ts";
 
 export class TypedAddressPolicy {
-  public static judge(url: string, settingsOrigins: readonly string[]): TypedAddressAnswer {
+  public static judge(url: string, settingsOrigins: readonly string[]): TypedAddressAllowed | TypedAddressRefused {
     if (url.length > BrowserLimits.maximumUrlLength)
       return new TypedAddressRefused(TypedAddressRefusal.TooLong);
     const parsed: URL | null = URL.parse(url);

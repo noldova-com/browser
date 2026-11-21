@@ -439,6 +439,10 @@ export class Resources {
     return `A typed address's redirect to another site wasn't followed: ${Resources.kindOf(error)}.`;
   }
 
+  public static formatLeftEntryFailed(error: unknown): string {
+    return `A typed address the person left failed after it: ${Resources.kindOf(error)}.`;
+  }
+
   public static formatRedirectsNotEnded(error: unknown): string {
     return `A typed address's redirects weren't ended: ${Resources.kindOf(error)}.`;
   }

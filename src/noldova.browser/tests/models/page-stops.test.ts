@@ -74,6 +74,14 @@ describe("PageStops", () => {
     expect([held, control.viewId, released]).toEqual([[true, true], "view-2", []]);
   });
 
+  it("counts the calls on a page that can move it, navigating, clicking, typing and pressing a key, and no other", () => {
+    for (const action of Object.values(PageAction))
+      stops.finish(begin("page-1", "session-1", action));
+    begin("page-2", "session-1", PageAction.Clicking);
+
+    expect([stops.movesOn("page-1"), stops.movesOn("page-2"), stops.movesOn("page-3")]).toEqual([4, 1, 0]);
+  });
+
   it("keeps one control of a page across a session's calls, resting between them, and lists it", () => {
     const first: PageActivity = run("page-1", "session-1");
     const second: PageActivity = begin("page-1", "session-1", PageAction.Clicking);

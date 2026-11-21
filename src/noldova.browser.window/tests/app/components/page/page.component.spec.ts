@@ -700,7 +700,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expect(view.calls.filter(t => t.startsWith("navigate")).at(-1)).toBe("navigate https://example.com/pricing"));
     expect([requestsOf(BrowserMethods.allowTypedAddress), element.querySelector(".nol-browser-page-state")]).toEqual([
-      [{ profileKey: "workspace-1", url: "https://example.com/pricing" }], null
+      [{ profileKey: "workspace-1", url: "https://example.com/pricing", instance: expect.any(String) }], null
     ]);
   });
 
@@ -722,7 +722,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expect(field().value).toBe("https://example.com/docs"));
     expect([requestsOf(BrowserMethods.allowTypedAddress), view.calls.filter(t => t.startsWith("navigate"))]).toEqual([
-      [{ profileKey: "workspace-1", url: "https://example.com/docs" }], ["navigate https://example.com/docs"]
+      [{ profileKey: "workspace-1", url: "https://example.com/docs", instance: expect.any(String) }], ["navigate https://example.com/docs"]
     ]);
   });
 
@@ -765,6 +765,46 @@ describe("PageComponent", () => {
     expect(refusal).toContain("refused.example");
     expect(held).toEqual(["fixed.example", null, refusal]);
     expect(field().getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("goes nowhere once Escape leaves an entered address that still waits for its answer", async () => {
+    const view: FakeWebView = await placeAsync();
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await typeAsync("two.example");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(1));
+    await userEvent.keyboard("{Escape}");
+    allow({ kind: "Allowed", origin: "https://two.example" });
+    await stableAsync();
+
+    expect([view.calls.filter(t => t.startsWith("navigate")), field().value]).toEqual([["navigate https://one.example/"], "https://one.example/"]);
+  });
+
+  it("goes nowhere once the failed page's own Try again leaves an entered address that still waits for its answer, and puts the page's address back", async () => {
+    const view: FakeWebView = await stateAsync(PaneState.Failed);
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("three.example{Enter}");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(1));
+    const entered: string = field().value;
+    stateAction("Try again").click();
+    await vi.waitFor(() => expect(field().value).not.toBe(entered));
+    allow({ kind: "Allowed", origin: "https://three.example" });
+    await stableAsync();
+
+    expect([entered, view.calls.filter(t => t === "reload" || t === "navigate https://three.example/"), field().value]).toEqual(["three.example", ["reload"], "https://two.example/"]);
   });
 
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {

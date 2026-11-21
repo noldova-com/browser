@@ -8,7 +8,8 @@
 
 export const TypedAddressAnswerKind = {
   Allowed: "Allowed",
-  Refused: "Refused"
+  Refused: "Refused",
+  Left: "Left"
 } as const;
 
 export type TypedAddressAnswerKind = (typeof TypedAddressAnswerKind)[keyof typeof TypedAddressAnswerKind];

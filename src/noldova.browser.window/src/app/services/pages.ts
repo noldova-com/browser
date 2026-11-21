@@ -26,6 +26,7 @@ import { PagesInactiveException } from "../exceptions/pages-inactive.exception.t
 import type { PaneStatus } from "../models/pane-status.ts";
 import { PaneTab } from "../models/pane-tab.ts";
 import { RefusedPage } from "../models/refused-page.ts";
+import { TypedEntry } from "../models/typed-entry.ts";
 import { TypedLoad } from "../models/typed-load.ts";
 import type { ViewNewWindowEvent } from "../models/view-new-window-event.ts";
 import type { ViewRefusalEvent } from "../models/view-refusal-event.ts";
@@ -33,6 +34,7 @@ import type { AddressReading } from "../types/address-reading.ts";
 import type { PagePlace } from "../types/page-place.ts";
 import { AddressReader } from "./address-reader.ts";
 import { AgentPages } from "./agent-pages.ts";
+import { NavigationStarts } from "./navigation-starts.ts";
 import { PageAnswers } from "./page-answers.ts";
 
 export class Pages {
@@ -41,7 +43,7 @@ export class Pages {
   private readonly pending: Map<string, PagePlace> = new Map<string, PagePlace>();
   private readonly shown: Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }> = new Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }>();
   private readonly lastAsked: Map<string, string> = new Map<string, string>();
-  private readonly entries: WeakMap<PaneTab, object> = new WeakMap<PaneTab, object>();
+  private readonly entries: WeakMap<PaneTab, TypedEntry> = new WeakMap<PaneTab, TypedEntry>();
   private readonly typing: WeakMap<PaneTab, TypedLoad> = new WeakMap<PaneTab, TypedLoad>();
   private readonly passing: WeakSet<PaneTab> = new WeakSet<PaneTab>();
   private readonly name: WritableSignal<string | null> = signal(null);
@@ -57,6 +59,7 @@ export class Pages {
   private readonly stopClosing: () => void;
   private isClosed: boolean = false;
   private arriving: PageActivity[] | null = null;
+  private starting: PaneTab | null = null;
 
   public readonly appName: Signal<string | null> = this.name.asReadonly();
   public readonly activities: Signal<ReadonlyMap<string, PageActivity>> = this.current.asReadonly();
@@ -195,8 +198,25 @@ export class Pages {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place === undefined || tab.controller.status.state === PaneState.Unavailable)
       return EntryAnswer.Stayed;
-    const entry: object = {};
+    const entry: TypedEntry = new TypedEntry();
     this.entries.set(tab, entry);
+    let isAnswered: boolean = false;
+    const going: Promise<EntryAnswer> = this.goAsync(tab, place, entry, text).finally(() => {
+      isAnswered = true;
+    });
+    return Promise.race([going, entry.left.then(answer => {
+      if (!isAnswered)
+        going.catch((error: unknown) => this.context.log(Resources.formatLeftEntryFailed(error)));
+      return answer;
+    })]);
+  }
+
+  public leaveEntry(tab: PaneTab): void {
+    this.entries.get(tab)?.end();
+    this.entries.delete(tab);
+  }
+
+  private async goAsync(tab: PaneTab, place: PagePlace, entry: TypedEntry, text: string): Promise<EntryAnswer> {
     const isLatest = (): boolean => this.shown.has(tab) && tab.controller.status.state !== PaneState.Unavailable && this.entries.get(tab) === entry;
     const reading: AddressReading = AddressReader.read(text);
     if (reading.kind === TypedAddressAnswerKind.Refused) {
@@ -205,7 +225,7 @@ export class Pages {
     }
     let answer: TypedAddressAnswer;
     try {
-      answer = PageAnswers.readTypedAddress(await this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, reading.url).toJson()));
+      answer = PageAnswers.readTypedAddress(await this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, reading.url, tab.id).toJson()));
     } catch (error: unknown) {
       if (isLatest())
         tab.controller.refuseAddress(AddressRefusal.Failed);
@@ -213,6 +233,10 @@ export class Pages {
     }
     if (!isLatest())
       return EntryAnswer.Stayed;
+    if (answer.kind === TypedAddressAnswerKind.Left) {
+      this.leaveEntry(tab);
+      return EntryAnswer.Left;
+    }
     if (answer.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(answer.reason, new URL(reading.url).origin);
       return EntryAnswer.Stayed;
@@ -221,7 +245,7 @@ export class Pages {
     this.typing.set(tab, typing);
     let navigation: WebViewNavigation;
     try {
-      navigation = await tab.controller.navigateAsync(reading.url);
+      navigation = await this.navigateOwnAsync(tab, reading.url);
     }
     finally {
       this.endGoing(tab, place, typing);
@@ -473,7 +497,17 @@ export class Pages {
       this.refuseRedirect(tab, place, event);
       return;
     }
-    await tab.controller.navigateAsync(event.address);
+    await this.navigateOwnAsync(tab, event.address);
+  }
+
+  private navigateOwnAsync(tab: PaneTab, url: string): Promise<WebViewNavigation> {
+    this.starting = tab;
+    try {
+      return tab.controller.navigateAsync(url);
+    }
+    finally {
+      this.starting = null;
+    }
   }
 
   private refuseRedirect(tab: PaneTab, place: PagePlace, event: ViewRefusalEvent): void {
@@ -590,7 +624,12 @@ export class Pages {
     };
     const rename = (): void => showStatus(tab.controller.status);
     this.renamers.add(rename);
+    let was: PaneStatus = tab.controller.status;
     const stopStatus: () => void = tab.controller.onChange(status => {
+      const entry: TypedEntry | undefined = this.entries.get(tab);
+      if (status.state === PaneState.Loading && was.state !== PaneState.Loading && entry !== undefined && this.typing.get(tab)?.entry !== entry)
+        this.leaveEntry(tab);
+      was = status;
       if (status.state !== PaneState.Loading && this.typing.get(tab)?.isAnswered === true)
         this.endTyping(tab, place);
       if (status.state === PaneState.Loading)
@@ -626,11 +665,16 @@ export class Pages {
         tab.controller.offerPopup(event.address, event.origin, event.hadRecentInput);
     });
     const stopRedirects: () => void = tab.controller.onRefusedRedirect(event => this.followRedirect(tab, place, event));
+    const stopStarts: () => void = NavigationStarts.listen(tab.controller, () => {
+      if (this.starting !== tab)
+        this.leaveEntry(tab);
+    });
     return () => {
       this.renamers.delete(rename);
       stopStatus();
       stopWindows();
       stopRedirects();
+      stopStarts();
       clearWorking?.();
     };
   }
