@@ -24,6 +24,7 @@ import { PageActivityEventMalformedException } from "../exceptions/page-activity
 import { PageInAnotherWindowException } from "../exceptions/page-in-another-window.exception.ts";
 import { PageOnOtherWorkspaceException } from "../exceptions/page-on-other-workspace.exception.ts";
 import { PagesInactiveException } from "../exceptions/pages-inactive.exception.ts";
+import { PageShowing } from "../models/page-showing.ts";
 import type { PaneStatus } from "../models/pane-status.ts";
 import { PaneTab } from "../models/pane-tab.ts";
 import { RefusedPage } from "../models/refused-page.ts";
@@ -57,6 +58,7 @@ export class Pages {
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly lastOpened: WritableSignal<{ readonly instance: string } | null> = signal(null);
   private readonly opening: Map<string, boolean> = new Map<string, boolean>();
+  private readonly showing: Set<PageShowing> = new Set<PageShowing>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
   private readonly renamers: Set<() => void> = new Set<() => void>();
   private readonly agentPages: AgentPages;
@@ -81,6 +83,9 @@ export class Pages {
     this.stopClosing = context.onDocumentClosed(Resources.pageDocument, t => {
       this.markElsewhere(t, false);
       this.pending.delete(t);
+      for (const showing of this.showing)
+        if (showing.instance === t)
+          showing.close();
       this.dismissRefusal(t);
       if (this.current().has(t))
         this.closed.add(t);
@@ -192,18 +197,31 @@ export class Pages {
   }
 
   public async showAsync(instance: string): Promise<PaneTab | null> {
+    const showing: PageShowing = new PageShowing(instance);
+    this.showing.add(showing);
+    try {
+      return await this.showOnceAsync(instance, showing);
+    }
+    finally {
+      this.showing.delete(showing);
+    }
+  }
+
+  private async showOnceAsync(instance: string, showing: PageShowing): Promise<PaneTab | null> {
     const opened: PagePlace | undefined = this.pending.get(instance);
     this.pending.delete(instance);
     if (opened !== undefined)
-      return await this.openViewAsync(instance, opened);
+      return await this.openViewAsync(instance, opened, showing);
     const claim: PageClaim = PageAnswers.readClaim(await this.context.requestAsync(BrowserMethods.claimPage, new PageRequest(instance).toJson()));
+    if (showing.isClosedMeanwhile)
+      return null;
     if (claim.isClaimed) {
       this.agentPages.openTabs([instance]);
       if (claim.agentName !== null)
         this.agentPages.noteAgent(instance, claim.agentName);
-      return await this.openViewAsync(instance, Pages.placeOf(claim.record));
+      return await this.openViewAsync(instance, Pages.placeOf(claim.record), showing);
     }
-    if (await this.readAsync(instance) !== null)
+    if (await this.readAsync(instance) !== null && !showing.isClosedMeanwhile)
       this.markElsewhere(instance, true);
     return null;
   }
@@ -549,7 +567,7 @@ export class Pages {
     landing.catch(log).then(() => this.context.requestAsync(BrowserMethods.endTypedRedirects, new PageRequest(tab.id).toJson())).catch(log);
   }
 
-  private async openViewAsync(instance: string, place: PagePlace | null): Promise<PaneTab | null> {
+  private async openViewAsync(instance: string, place: PagePlace | null, showing: PageShowing): Promise<PaneTab | null> {
     if (place === null || this.isClosed)
       return null;
     const pane: WebViewPane = new WebViewPane(QualifiedName.parse(Resources.pageDocument), instance);
@@ -562,9 +580,9 @@ export class Pages {
     const isTaken: boolean = this.opening.get(instance) === true;
     this.opening.delete(instance);
     const tab: PaneTab = new PaneTab(instance, view);
-    if (this.isClosed || isTaken) {
+    if (this.isClosed || isTaken || showing.isClosedMeanwhile) {
       tab.controller.close();
-      if (isTaken)
+      if (isTaken && !showing.isClosedMeanwhile)
         this.markElsewhere(instance, true);
       return null;
     }

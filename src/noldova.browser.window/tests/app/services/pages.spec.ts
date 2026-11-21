@@ -288,6 +288,66 @@ describe("Pages", () => {
     expect([tab?.id, agentPagesText()]).toEqual([restored, "Scout · 1 page open"]);
   });
 
+  it("opens no view, and counts and remembers nothing, for a restored tab the person closed while its claim was answered", async () => {
+    const [closing, kept]: readonly [string, string] = ["0f8fad5b-d9cb-469f-a165-70867728950e", "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d"];
+    const claims: readonly PromiseWithResolvers<JsonValue>[] = [Promise.withResolvers<JsonValue>(), Promise.withResolvers<JsonValue>()];
+    let asked: number = 0;
+    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? claims[asked++]?.promise ?? declared(method, parameters) : declared(method, parameters);
+    const showing: readonly Promise<PaneTab | null>[] = [pages.showAsync(closing), pages.showAsync(kept)];
+
+    context.closeByPerson(closing);
+    claims[0]?.resolve({ agentName: "Scout", isClaimed: true, isHere: false, record: { instance: closing, profileKey: "workspace-1", url: "" } });
+    claims[1]?.resolve({ agentName: "Helper", isClaimed: true, isHere: false, record: { instance: kept, profileKey: "workspace-1", url: "" } });
+    const [closed, shown]: (PaneTab | null)[] = await Promise.all(showing);
+
+    expect([closed, shown?.id, agentPagesText(), surface().views.length, requestsOf(BrowserMethods.rememberPage).map(t => PageAnswers.isObject(t) ? t["instance"] : null), requestsOf(BrowserMethods.forgetPage)])
+      .toEqual([null, kept, "Helper · 1 page open", 1, [kept], [{ instance: closing }]]);
+  });
+
+  it("closes the view, and counts and remembers nothing, for a tab the person closed while its view opened", async () => {
+    const instance: string = pages.open("workspace-1", "https://docs.example.com/");
+    const release = surface().holdNextOpen();
+    const showing: Promise<PaneTab | null> = pages.showAsync(instance);
+    context.emit(BrowserEvents.pageActivity, { instance, activity: "call-1", agentName: "Scout", action: "Clicking", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false });
+    const counted: string | undefined = agentPagesText();
+
+    context.closeByPerson(instance);
+    release();
+
+    expect(await showing).toBeNull();
+    expect([counted, agentPagesText(), surface().views.map(t => t.isClosed), requestsOf(BrowserMethods.rememberPage)]).toEqual(["Scout · 1 page open", "", [true], []]);
+  });
+
+  it("doesn't hold apart as elsewhere a restored tab the person closed while its record was read after another window's claim", async () => {
+    const restored: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    context.answerRequest = (method, parameters) => {
+      if (method === BrowserMethods.claimPage)
+        return Promise.resolve({ agentName: null, isClaimed: false, isHere: false, record: null });
+      if (method !== BrowserMethods.readPage)
+        return declared(method, parameters);
+      context.closeByPerson(restored);
+      return Promise.resolve({ instance: restored, profileKey: "workspace-1", url: "https://docs.example.com/" });
+    };
+
+    const shown: PaneTab | null = await pages.showAsync(restored);
+
+    expect([shown, [...pages.elsewhere()], requestsOf(BrowserMethods.readPage)]).toEqual([null, [], [{ instance: restored }]]);
+  });
+
+  it("doesn't hold apart as elsewhere a tab the person closed while its view opened and another window took its page", async () => {
+    const instance: string = pages.open("workspace-1", "https://docs.example.com/");
+    const release = surface().holdNextOpen();
+    const showing: Promise<PaneTab | null> = pages.showAsync(instance);
+    context.openDocuments = [instance];
+    context.answerRequest = (method, parameters) => method === BrowserMethods.holdPages ? Promise.resolve({ agents: [], refused: [instance] }) : declared(method, parameters);
+    await pages.reportOpenAsync();
+
+    context.closeByPerson(instance);
+    release();
+
+    expect([await showing, [...pages.elsewhere()], surface().views.map(t => t.isClosed)]).toEqual([null, [], [true]]);
+  });
+
   it("keeps the address a navigation ended without because the person denied its site, until they answer, and drops it as the page loads", async () => {
     const tab = await openAsync();
     const view: FakeWebView = viewOf(tab);
