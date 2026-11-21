@@ -13,7 +13,7 @@ LICENSE file in the root directory of this source tree.
 }
 @if (isForgotten() || isElsewhere()) {
   <div class="nol-browser-page-state-actions">
-    <button nol-button type="button" class="nol-browser-page-state-action" [nolTooltip]="labels[action.Close]"
+    <button #close nol-button type="button" class="nol-browser-page-state-action" [nolTooltip]="labels[action.Close]"
       [nolTooltipTruncated]="true" (click)="closed.emit()">{{ labels[action.Close] }}</button>
   </div>
 } @else if (refusal(); as refusal) {

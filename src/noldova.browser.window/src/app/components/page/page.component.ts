@@ -54,6 +54,7 @@ export class PageComponent {
   private readonly view: Signal<ElementRef<HTMLElement>> = viewChild.required<ElementRef<HTMLElement>>("view");
   private readonly toolbar: Signal<PaneToolbarComponent | undefined> = viewChild(PaneToolbarComponent);
   private readonly findBar: Signal<FindBarComponent | undefined> = viewChild(FindBarComponent);
+  private readonly pageState: Signal<PageStateComponent | undefined> = viewChild(PageStateComponent);
   private readonly platform: string = PageKeys.platformOf(navigator.platform);
   private tracker: PlaceholderTracker | null = null;
   private trackedView: IWebViewHandle | null = null;
@@ -118,9 +119,12 @@ export class PageComponent {
     effect(() => {
       const isElsewhere: boolean = this.isElsewhere();
       untracked(() => {
-        if (isElsewhere)
+        if (isElsewhere) {
+          const hadFocus: boolean = this.host.contains(this.host.ownerDocument.activeElement);
           this.tab.set(null);
-        else if (wasElsewhere) {
+          if (hadFocus)
+            afterNextRender(() => this.pageState()?.focusClose(), { injector: this.injector });
+        } else if (wasElsewhere) {
           this.isForgotten.set(false);
           this.show(this.instance());
         }
