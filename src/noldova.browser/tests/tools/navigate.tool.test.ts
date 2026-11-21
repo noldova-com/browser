@@ -302,6 +302,18 @@ describe("NavigateTool", () => {
     expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[{ viewId: "view-1", target: WebViewAction.Reload }], 1]);
   });
 
+  it("reloads a page that failed to load at a fragment, which lands there once it loads", async () => {
+    shown = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "chrome-error://chromewebdata/", unreachableUrl: "https://docs.example/guide#setup", securityOrigin: "://" } } };
+    bench.surface.afterNavigation = (viewId: string): void => {
+      shown = frame("https://docs.example/guide#setup", "https://docs.example", "L2");
+      loadNew(viewId);
+    };
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ action: "reload" }));
+
+    expect([bench.surface.navigations, result.content[1]?.value]).toEqual([[{ viewId: "view-1", target: WebViewAction.Reload }], "URL: https://docs.example/guide#setup\nTitle: Next steps"]);
+  });
+
   it("goes back to a blank page as low risk", async () => {
     pages = ["about:blank", "https://docs.example/guide"];
 
