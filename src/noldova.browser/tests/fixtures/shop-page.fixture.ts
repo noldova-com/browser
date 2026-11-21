@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { WebViewFailureException } from "@noldova/desktop.runtime";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
 import { JsonShapes } from "../../src/services/json-shapes.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
@@ -63,6 +65,7 @@ export class ShopPage {
 
   private static readonly SHOWN: WeakMap<ToolBench, ShownDocument> = new WeakMap<ToolBench, ShownDocument>();
   private static readonly NOT_FIELDS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
+  private static readonly FAILING_SELECTIONS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
 
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
@@ -92,6 +95,8 @@ export class ShopPage {
       if (typeof objectId !== "string" || shown === undefined)
         return { result: { type: "boolean", value: true } };
       const backendNodeId: number = Number(objectId.slice("node-".length));
+      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration && ShopPage.FAILING_SELECTIONS.has(bench))
+        throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Gone"));
       if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration)
         return { result: { type: "boolean", value: !ShopPage.NOT_FIELDS.has(bench) } };
       if (params["returnByValue"] === true)
@@ -111,12 +116,17 @@ export class ShopPage {
     bench.surface.answer("DOM.getNodeForLocation", { backendNodeId: hit, frameId: "F1" });
   }
 
-  // The document the element facts function reads from now on, as when the page changes after the person was asked.
   // The field selection then answers that no element is a field it can select in.
   public static treatAsNoField(bench: ToolBench): void {
     ShopPage.NOT_FIELDS.add(bench);
   }
 
+  // The field selection then fails, as when the engine no longer knows the field's object.
+  public static failFieldSelection(bench: ToolBench): void {
+    ShopPage.FAILING_SELECTIONS.add(bench);
+  }
+
+  // The document the element facts function reads from now on, as when the page changes after the person was asked.
   public static showDocument(bench: ToolBench, document: JsonObject): void {
     const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
     if (shown === undefined)

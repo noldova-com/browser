@@ -11,13 +11,13 @@ import { describe, expect, it } from "vitest";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
 
 describe("FieldSelectScript", () => {
-  it("is the one pinned function: it selects what a text field or an editable element holds, reads nothing, and returns only a boolean", () => {
+  it("is the one pinned function: it selects what a text-like field, a text area or an editable element holds, reads nothing, and returns only a boolean", () => {
     expect(FieldSelectScript.functionDeclaration).toBe([
       "function () {",
       "  if (this.nodeType !== 1)",
       "    return false;",
       "  const name = this.nodeName.toUpperCase();",
-      "  if (name === \"INPUT\" || name === \"TEXTAREA\") {",
+      "  if (name === \"TEXTAREA\" || name === \"INPUT\" && [\"text\", \"search\", \"email\", \"url\", \"tel\", \"password\", \"number\"].includes(this.type)) {",
       "    this.select();",
       "    return true;",
       "  }",

@@ -18,6 +18,7 @@ import { NotSubmittedException } from "../../src/exceptions/not-submitted.except
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
@@ -210,6 +211,16 @@ describe("TypeTool", () => {
     expect([bench.methods.slice(pressed - 2, pressed + 2), sent("Input.insertText"), sent("Input.dispatchKeyEvent").map(t => [t["type"], t["key"], t["windowsVirtualKeyCode"]])]).toEqual([
       ["Runtime.callFunctionOn", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["rawKeyDown", "Delete", 46], ["keyUp", "Delete", 46]]
     ]);
+  });
+
+  it("reports a failed field selection, inserts nothing, and still releases the field's object", async () => {
+    ShopPage.failFieldSelection(bench);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), ProtocolFailedException, { moduleCode: "browser.protocol" });
+
+    const selecting: number = bench.surface.calls.findLastIndex(t => t.params["functionDeclaration"] === FieldSelectScript.functionDeclaration);
+    expect([sent("Input.insertText"), sent("Input.dispatchKeyEvent"), bench.surface.calls.slice(selecting + 1, selecting + 2).map(t => [t.method, t.params])])
+      .toEqual([[], [], [["Runtime.releaseObject", { objectId: `node-${String(ShopPage.SEARCH)}` }]]]);
   });
 
   it("inserts the text at the caret, and deletes nothing for an empty text, when the element isn't a field it can select in", async () => {

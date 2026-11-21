@@ -51,8 +51,13 @@ const PREFILLED = `<!doctype html><title>${START_TITLE}</title>
 <input id="email" type="text" autocomplete="email" aria-label="Email" value="a@x.com">
 <textarea id="notes" aria-label="Notes">old notes</textarea>
 <div id="bio" role="textbox" aria-label="Bio" contenteditable="true">old bio</div>
+<input id="agree" type="checkbox" aria-label="Agree" checked>
+<input id="level" type="range" aria-label="Level" value="30">
 <script>for (const id of ["email", "notes"])
-  document.getElementById(id).setSelectionRange(0, 0);</script>`;
+  document.getElementById(id).setSelectionRange(0, 0);
+window.keys = [];
+for (const id of ["agree", "level"])
+  document.getElementById(id).addEventListener("keydown", event => window.keys.push(id + " " + event.key));</script>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -213,6 +218,20 @@ test.describe("the agent tools on a real page", () => {
     await typeAsync(fields[0] ?? "", "");
 
     expect([typed, await app.viewPages.runAtAsync(docs.url("/"), values)]).toEqual([JSON.stringify(["b@y.com", "new notes", "new bio"]), JSON.stringify(["", "new notes", "new bio"])]);
+  });
+
+  test("an empty text sends no key to a checkbox or a slider, which hold no text to select", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": PREFILLED });
+    const bindings = await openAsync(app, docs);
+    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
+
+    for (const reference of [/- checkbox "Agree" .*\[(e\d+)\]$/u, /- slider "Level" .*\[(e\d+)\]$/u].map(t => referenceOf(snapshot, t))) {
+      await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
+      await callAsync(app, bindings, "browser_type", { reference, text: "" });
+    }
+
+    expect(await app.viewPages.runAtAsync(docs.url("/"), "JSON.stringify([window.keys, document.getElementById('agree').checked, document.getElementById('level').value])"))
+      .toBe(JSON.stringify([[], true, "30"]));
   });
 
   // An element under a cover doesn't show at its centre, so the click scrolls to it first; the scroll can run the page's handlers, so the
