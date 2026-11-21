@@ -50,8 +50,9 @@ describe("NavigateTool", () => {
     shown = frame(url, new URL(url).origin, "L2");
   }
 
-  // The main frame takes the new document, then that document loads.
+  // The move's navigation starts in the main frame, which then takes its document, and that document loads.
   function loadNew(viewId: string): void {
+    bench.surface.emitProtocolEvent(viewId, "Page.frameStartedNavigating", { frameId: "F1", loaderId: "L2", navigationType: "differentDocument" });
     bench.surface.emitProtocolEvent(viewId, "Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } });
     bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
   }
@@ -309,9 +310,14 @@ describe("NavigateTool", () => {
     expect(bench.sendingMarks).toBe(1);
   });
 
-  it("waits past the load of the document it leaves, still loading from an earlier move, and says the page is still loading", async () => {
+  it("waits past the load of the document it leaves, and of one an earlier move left loading, and says the page is still loading", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+    bench.surface.afterNavigation = (viewId: string): void => {
+      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+      bench.surface.emitProtocolEvent(viewId, "Page.frameStartedNavigating", { frameId: "F1", loaderId: "L2", navigationType: "differentDocument" });
+      bench.surface.emitProtocolEvent(viewId, "Page.frameNavigated", { frame: { id: "F1", loaderId: "L9" } });
+      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 2 });
+    };
 
     const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }, new AbortController(), ToolBench.SESSION, 2_050));
     await ToolBench.settleAsync();

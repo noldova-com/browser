@@ -9,7 +9,6 @@
 import type { IWebViewRelay, WebViewProtocolEvent } from "@noldova/desktop.runtime";
 
 import { Resources } from "../resources.ts";
-import type { FrameFacts } from "../models/frame-facts.ts";
 import type { WithinDocumentMove } from "../models/within-document-move.ts";
 import type { JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
@@ -21,18 +20,25 @@ export class LoadWaiter implements Disposable {
 
   // `within` is a move that may stay in its document, such as back to an entry a page pushed or to a fragment: such a move fires no load, so its
   // frame's navigation to its URL ends the wait too, unless the frame took a new document first, whose load the wait is for.
-  // `left` is the document a move leaves: its load counts only once its frame took another document, so the load of a document still loading
-  // from an earlier move doesn't end the wait. With none, as for a wait for the page's next load, any load counts.
-  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null, left: FrameFacts | null) {
+  // `frameId` is the main frame a move navigates: a load counts only once that frame committed the document of the newest navigation that
+  // started in it after the wait began, so neither the load of the document the move leaves nor that of one an earlier move left loading,
+  // which started before, ends the wait. With none, as for a wait for the page's next load, any load counts.
+  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null, frameId: string | null) {
     let isNewDocument: boolean = false;
-    let isLeft: boolean = left === null;
+    let started: JsonValue | undefined;
+    let isCommitted: boolean = frameId === null;
     this.stop = relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
-      if (event.method === Resources.loadEvent && isLeft)
+      if (event.method === Resources.loadEvent && isCommitted)
         this.loaded.resolve();
+      else if (event.method === Resources.frameStartedNavigatingEvent && event.params[Resources.frameIdField] === frameId
+        && !Resources.sameDocumentNavigationTypes.includes(String(event.params[Resources.navigationTypeField]))) {
+        started = event.params[Resources.loaderIdField];
+        isCommitted = false;
+      }
       else if (event.method === Resources.frameNavigatedEvent) {
         const frame: JsonValue | undefined = event.params[Resources.frameField];
         isNewDocument ||= within !== null && LoadWaiter.idOf(frame) === within.frameId;
-        isLeft ||= left !== null && LoadWaiter.isAnotherDocument(frame, left);
+        isCommitted ||= started !== undefined && LoadWaiter.isCommit(frame, frameId, started);
       }
       else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && within !== null && event.params[Resources.frameIdField] === within.frameId
         && event.params[Resources.urlField] === within.url)
@@ -70,9 +76,9 @@ export class LoadWaiter implements Disposable {
     return JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
   }
 
-  // Whether the navigated frame is the one the move leaves, now with another document.
-  private static isAnotherDocument(frame: JsonValue | undefined, left: FrameFacts): boolean {
-    return JsonShapes.isObject(frame) && frame[Resources.idField] === left.frameId && frame[Resources.loaderIdField] !== left.documentId;
+  // Whether the navigated frame is the move's, committing the document of its newest navigation.
+  private static isCommit(frame: JsonValue | undefined, frameId: string | null, loaderId: JsonValue | undefined): boolean {
+    return JsonShapes.isObject(frame) && frame[Resources.idField] === frameId && frame[Resources.loaderIdField] === loaderId;
   }
 
   public [Symbol.dispose](): void {

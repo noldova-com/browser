@@ -97,6 +97,7 @@ describe("the risk table", () => {
     bench.surface.answer("Page.captureScreenshot", { data: "iVBORw0KGgo=" });
     bench.surface.answer("Page.getNavigationHistory", { currentIndex: 1, entries: [{ url: "https://shop.test/" }, { url: "https://shop.test/cart/" }, { url: "https://shop.test/next" }] });
     bench.surface.afterNavigation = (viewId: string): void => {
+      bench.surface.emitProtocolEvent(viewId, "Page.frameStartedNavigating", { frameId: "F1", loaderId: "L2", navigationType: "differentDocument" });
       bench.surface.emitProtocolEvent(viewId, "Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } });
       bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", {});
     };

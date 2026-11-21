@@ -10,7 +10,6 @@ import { ToolAbortReason } from "@noldova/desktop.runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
-import { FrameFacts } from "../../src/models/frame-facts.ts";
 import { WithinDocumentMove } from "../../src/models/within-document-move.ts";
 import { LoadWaiter } from "../../src/services/load-waiter.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
@@ -113,26 +112,41 @@ describe("LoadWaiter", () => {
     expect(await waiting).toBe(false);
   });
 
-  const LEFT: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1");
+  const STARTED: readonly [string, JsonObject] = ["Page.frameStartedNavigating", { frameId: "F1", url: "https://docs.example/next", loaderId: "L2", navigationType: "differentDocument" }];
 
-  it("counts a load only once the frame it leaves took a new document", async () => {
+  it("counts a load once its frame committed the document of the navigation that started in it after the wait began", async () => {
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
-    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", null, LEFT);
+    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", null, "F1");
+    surface.emitProtocolEvent("view-1", ...STARTED);
     surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } });
     surface.emitProtocolEvent("view-1", "Page.loadEventFired", { timestamp: 1 });
 
     expect(await loads.waitAsync(Date.now() + 5_000, new AbortController().signal)).toBe(true);
   });
 
-  it.each<[string, readonly [string, JsonObject][]]>([
+  it.each<[string, readonly (readonly [string, JsonObject])[]]>([
     ["the load of the document it leaves, as one still loading from an earlier move", [["Page.loadEventFired", { timestamp: 1 }]]],
-    ["a load after another frame took a new document", [["Page.frameNavigated", { frame: { id: "F2", loaderId: "L3" } }], ["Page.loadEventFired", { timestamp: 1 }]]],
-    ["a load after its frame navigated in the same document", [["Page.frameNavigated", { frame: { id: "F1", loaderId: "L1" } }], ["Page.loadEventFired", { timestamp: 1 }]]],
-    ["a load after a navigation with no frame", [["Page.frameNavigated", {}], ["Page.loadEventFired", { timestamp: 1 }]]]
-  ])("doesn't count %s", async (_case: string, events: readonly [string, JsonObject][]) => {
+    ["the commit and load of another document, as one an earlier move left loading", [
+      STARTED, ["Page.frameNavigated", { frame: { id: "F1", loaderId: "L9" } }], ["Page.loadEventFired", { timestamp: 1 }]
+    ]],
+    ["a commit with no navigation started since the wait began", [["Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } }], ["Page.loadEventFired", { timestamp: 1 }]]],
+    ["the document of a navigation a newer one replaced", [
+      STARTED, ["Page.frameStartedNavigating", { frameId: "F1", loaderId: "L3", navigationType: "differentDocument" }],
+      ["Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } }], ["Page.loadEventFired", { timestamp: 1 }]
+    ]],
+    ["another frame's navigation", [
+      STARTED, ["Page.frameStartedNavigating", { frameId: "F2", loaderId: "L2", navigationType: "differentDocument" }], ["Page.frameNavigated", { frame: { id: "F2", loaderId: "L2" } }],
+      ["Page.loadEventFired", { timestamp: 1 }]
+    ]],
+    ["a navigation that started within its document", [
+      ["Page.frameStartedNavigating", { frameId: "F1", loaderId: "L1", navigationType: "sameDocument" }], ["Page.frameNavigated", { frame: { id: "F1", loaderId: "L1" } }],
+      ["Page.loadEventFired", { timestamp: 1 }]
+    ]],
+    ["a commit with no frame", [STARTED, ["Page.frameNavigated", {}], ["Page.loadEventFired", { timestamp: 1 }]]]
+  ])("doesn't count %s", async (_case: string, events: readonly (readonly [string, JsonObject])[]) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
-    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", null, LEFT);
+    using loads: LoadWaiter = new LoadWaiter(surface.relay, "view-1", null, "F1");
     events.forEach(([method, params]) => surface.emitProtocolEvent("view-1", method, params));
 
     const waiting: Promise<boolean> = loads.waitAsync(Date.now() + 1_000, new AbortController().signal);
