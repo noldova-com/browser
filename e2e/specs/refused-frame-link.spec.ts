@@ -18,7 +18,7 @@ const PAGE = (frame: string): string => `<!doctype html><title>${TITLE}</title><
   + `<iframe src="${frame}" style="display:block;width:320px;height:160px;border:0"></iframe>`;
 const FRAME = (target: string): string => "<!doctype html><title>Frame</title><body style=\"margin:0\">"
   + `<a id="a" href="${target}" style="display:inline-block;width:100px;height:40px" onpointerover="document.getElementById('r').textContent='Over'">Out</a>`
-  + "<p id=\"r\" style=\"margin:0\"></p>";
+  + "<div id=\"r\"></div>";
 
 test.describe("a refused link in a frame", () => {
   test("the person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it", async ({ app, servers }) => {
