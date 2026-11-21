@@ -389,7 +389,6 @@ export class Pages {
       const last: string | undefined = this.lastAsked.get(opener.id);
       const after: string = last !== undefined && this.holds(last) ? last : opener.id;
       const marker: IDocumentMarker = { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) };
-      // A background tab opens behind the page that asked, as a browser opens a middle-clicked link, so the focus stays there.
       return isBehind ? { after, marker, activate: false } : { after, marker };
     }
     return {};
@@ -613,8 +612,7 @@ export class Pages {
       }
     });
     const stopWindows: () => void = tab.controller.onNewWindow((event: ViewNewWindowEvent) => {
-      // The person's middle or Ctrl click on a link opens its tab every time; any other request opens one page per recent input.
-      if (event.hadRecentInput && (event.isBackgroundTab || Date.now() - openedAt >= Resources.recentInputMilliseconds)) {
+      if (event.hadRecentInput && ((event.isBackgroundTab && event.isFromPress) || Date.now() - openedAt >= Resources.recentInputMilliseconds)) {
         try {
           this.open(place.profileKey, event.address, null, tab, event.isBackgroundTab);
           openedAt = Date.now();

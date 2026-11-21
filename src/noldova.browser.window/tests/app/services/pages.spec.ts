@@ -961,17 +961,20 @@ describe("Pages", () => {
     expect(context.opened.slice(4).map(t => t.title)).toEqual(["https://docs.example.com/next"]);
   });
 
-  it("opens a tab behind the page for each middle or Ctrl click on a link at once, while a page's other requests in the same 5 seconds wait in its notice", async () => {
+  it("opens a tab behind the page at once for each of the person's middle or Ctrl clicks on a link, while the same click's second request and a page's other requests in the same 5 seconds wait in its notice", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-06T12:00:00Z"));
     const tab = await openAsync(null, "workspace-2");
 
-    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/a", true, null, true));
-    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/b", true, null, true));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/a", true, null, true, true));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/b", true, null, true, true));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/second", true, null, true, false));
+    const second: PopupOffer | null = tab.controller.status.popup;
     viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/", true, null));
-    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/c", false, null, true));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/c", false, null, true, true));
 
     expect(context.opened.map(t => [t.title, t.activate])).toEqual([["New tab", undefined], ["https://docs.example.com/a", false], ["https://docs.example.com/b", false]]);
+    expect(second).toStrictEqual(new PopupOffer("https://ads.example.com/second", null, true));
     expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://docs.example.com/c", null, false));
   });
 

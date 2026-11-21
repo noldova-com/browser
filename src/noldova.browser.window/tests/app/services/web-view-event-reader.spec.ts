@@ -85,6 +85,17 @@ describe("WebViewEventReader", () => {
     ]);
   });
 
+  it("reads whether a new window used the person's press, and takes an event without it as one that didn't", () => {
+    const read = (fromPress: boolean | undefined): unknown => WebViewEventReader.read(event(WebViewEventKind.NewWindowRequested,
+      { address: "https://two.example/", hadRecentInput: true, origin: null, disposition: "background-tab", ...(fromPress === undefined ? {} : { fromPress }) }));
+
+    expect([true, false, undefined].map(read)).toStrictEqual([
+      new ViewNewWindowEvent("https://two.example/", true, null, true, true),
+      new ViewNewWindowEvent("https://two.example/", true, null, true, false),
+      new ViewNewWindowEvent("https://two.example/", true, null, true, false)
+    ]);
+  });
+
   it("reads the name of the pane's key the person pressed in the page", () => {
     expect(WebViewEventReader.read(event(WebViewEventKind.Key, { name: "reload" }))).toStrictEqual(new ViewKeyEvent("reload"));
   });
@@ -114,8 +125,9 @@ describe("WebViewEventReader", () => {
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: "yes", origin: null }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: 1 }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, disposition: 1 }),
+      malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, fromPress: "yes" }),
       malformed(WebViewEventKind.Key, { name: 1 }),
       malformed(WebViewEventKind.Zoom, { factor: "125%" })
-    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null, null]);
+    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null, null, null]);
   });
 });

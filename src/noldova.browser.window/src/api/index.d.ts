@@ -536,12 +536,20 @@ export declare class ViewNewWindowEvent extends ViewEvent {
   public readonly isBackgroundTab: boolean;
 
   /**
+   * Whether the request used the activation of the person's own press in the view, Noldova Desktop's `fromPress`: one request per press,
+   * within 5 seconds, as a browser's popup rule allows; false for the second request of the same press, for input an agent relayed and
+   * for an event without it.
+   */
+  public readonly isFromPress: boolean;
+
+  /**
    * Makes the event.
    *
    * @param address The address the page asked for.
    * @param hadRecentInput Whether the person's own input reached the view in the last 5 seconds.
    * @param origin The origin of the referrer, or `null`.
    * @param isBackgroundTab Whether the engine asked for a background tab; false when left out.
+   * @param isFromPress Whether the request used the person's press; false when left out.
    * @example
    * ```ts
    * import { ViewNewWindowEvent } from "@noldova/browser.window";
@@ -549,7 +557,7 @@ export declare class ViewNewWindowEvent extends ViewEvent {
    * const asked: ViewNewWindowEvent = new ViewNewWindowEvent("https://www.example.com/", true, "https://docs.example.com");
    * ```
    */
-  public constructor(address: string, hadRecentInput: boolean, origin: string | null, isBackgroundTab?: boolean);
+  public constructor(address: string, hadRecentInput: boolean, origin: string | null, isBackgroundTab?: boolean, isFromPress?: boolean);
 
   /**
    * Gives the status unchanged: the pane offers a new window only through {@link PaneController.offerPopup}.

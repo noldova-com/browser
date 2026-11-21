@@ -56,10 +56,10 @@ export class WebViewEventReader {
         return refused !== null && typeof origin === "string" ? new ViewRequestRefusalEvent(refused, origin) : null;
       }
       case WebViewEventKind.NewWindowRequested: {
-        const { address, hadRecentInput, origin, disposition } = event.details;
+        const { address, hadRecentInput, origin, disposition, fromPress } = event.details;
         return typeof address === "string" && typeof hadRecentInput === "boolean" && (typeof origin === "string" || origin === null)
-          && (typeof disposition === "string" || disposition === undefined)
-          ? new ViewNewWindowEvent(address, hadRecentInput, origin, disposition === Resources.backgroundTabDisposition)
+          && (typeof disposition === "string" || disposition === undefined) && (typeof fromPress === "boolean" || fromPress === undefined)
+          ? new ViewNewWindowEvent(address, hadRecentInput, origin, disposition === Resources.backgroundTabDisposition, fromPress === true)
           : null;
       }
       case WebViewEventKind.Key: {

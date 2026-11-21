@@ -22,7 +22,6 @@ interface IOpenedDocument {
   readonly title: string;
   readonly after: string | null;
   readonly marker: IDocumentMarker | null;
-  // Only what the call gave, so a record of an open that didn't set it equals one written without it.
   readonly activate: boolean | undefined;
 }
 

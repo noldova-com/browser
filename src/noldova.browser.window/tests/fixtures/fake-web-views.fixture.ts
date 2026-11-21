@@ -152,14 +152,12 @@ export class FakeWebView implements IWebViewHandle {
     this.send(new WebViewEvent(FakeWebView.MODULE, this.id, FakeWebView.KINDS[kind], FakeWebView.write(event, details)));
   }
 
-  // Writes an event's details as Noldova Desktop sends them: a refused request by its name, and a new window's request with its
-  // disposition, `background-tab` for a middle or Ctrl click on a link and `foreground-tab` otherwise.
   private static write(event: ViewEvent, details: WebViewDetails): WebViewDetails {
     if (event instanceof ViewRequestRefusalEvent)
       return { ...details, request: Resources.refusedRequestNames[event.request] };
     if (event instanceof ViewNewWindowEvent)
       return { address: event.address, hadRecentInput: event.hadRecentInput, origin: event.origin,
-        disposition: event.isBackgroundTab ? Resources.backgroundTabDisposition : FakeWebView.FOREGROUND_TAB };
+        disposition: event.isBackgroundTab ? Resources.backgroundTabDisposition : FakeWebView.FOREGROUND_TAB, fromPress: event.isFromPress };
     return details;
   }
 
