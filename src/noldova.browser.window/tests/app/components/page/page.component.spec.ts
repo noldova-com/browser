@@ -700,7 +700,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expect(view.calls.filter(t => t.startsWith("navigate")).at(-1)).toBe("navigate https://example.com/pricing"));
     expect([requestsOf(BrowserMethods.allowTypedAddress), element.querySelector(".nol-browser-page-state")]).toEqual([
-      [{ profileKey: "workspace-1", url: "https://example.com/pricing" }], null
+      [{ profileKey: "workspace-1", url: "https://example.com/pricing", instance: expect.any(String) }], null
     ]);
   });
 
@@ -722,7 +722,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expect(field().value).toBe("https://example.com/docs"));
     expect([requestsOf(BrowserMethods.allowTypedAddress), view.calls.filter(t => t.startsWith("navigate"))]).toEqual([
-      [{ profileKey: "workspace-1", url: "https://example.com/docs" }], ["navigate https://example.com/docs"]
+      [{ profileKey: "workspace-1", url: "https://example.com/docs", instance: expect.any(String) }], ["navigate https://example.com/docs"]
     ]);
   });
 

@@ -1143,7 +1143,7 @@ describe("Pages", () => {
       const second = await openAsync();
 
       expect(await pages.goToAsync(first, "  example.com/docs ")).toBe(EntryAnswer.Gone);
-      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://example.com/docs" }]);
+      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://example.com/docs", instance: first.id }]);
       expect([viewOf(first).calls, viewOf(second).calls]).toEqual([["navigate https://example.com/docs"], []]);
       expect(first.controller.status.url).toBe("https://example.com/docs");
     });
@@ -1357,7 +1357,7 @@ describe("Pages", () => {
       answer = { kind: "Refused", reason: "Local" };
 
       expect(await pages.goToAsync(tab, "localhost:3000")).toBe(EntryAnswer.Stayed);
-      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "http://localhost:3000/" }]);
+      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "http://localhost:3000/", instance: tab.id }]);
       expect([viewOf(tab).calls, tab.controller.status.state, tab.controller.status.refusedAddress]).toEqual([[], PaneState.Empty, "Local"]);
     });
 
@@ -1481,17 +1481,51 @@ describe("Pages", () => {
         expect([await gone, view.calls.filter(t => t.startsWith("navigate"))]).toEqual([EntryAnswer.Gone, ["navigate https://kept.example/"]]);
       });
 
-      it("isn't left by a loading page's news at the same address, and is left once that load moves to another address", async () => {
+      it("isn't left by a loading page's news, even its own redirect to another address, so it goes once allowed", async () => {
         const tab = await openAsync();
         const view: FakeWebView = viewOf(tab);
         loading(view, "https://slow.example/", true);
 
         const going = pages.goToAsync(tab, "new.example");
         loading(view, "https://slow.example/", true, "Slow");
-        const early: EntryAnswer | null = await Promise.race([going, Promise.resolve(null)]);
         loading(view, "https://slow.example/next", true, "Slow");
+        await vi.waitFor(() => expect(typedAddresses()).toHaveLength(1));
+        allow({ kind: "Allowed", origin: "https://new.example" });
 
-        expect([early, await going]).toEqual([null, EntryAnswer.Left]);
+        expect([await going, view.calls.filter(t => t.startsWith("navigate"))]).toEqual([EntryAnswer.Gone, ["navigate https://new.example/"]]);
+      });
+
+      it("answers at once that the person left it when the runtime part's answer says an agent's call started on the page, and goes nowhere", async () => {
+        const tab = await openAsync();
+
+        const going = pages.goToAsync(tab, "new.example");
+        await vi.waitFor(() => expect(typedAddresses()).toHaveLength(1));
+        allow({ kind: "Left" });
+
+        expect([await going, typedAddresses(), viewOf(tab).calls, tab.controller.status.refusedAddress])
+          .toEqual([EntryAnswer.Left, [{ profileKey: "workspace-1", url: "https://new.example/", instance: tab.id }], [], null]);
+      });
+
+      it("logs a failure of its request that comes after the person left it, while one that came before goes to its caller alone", async () => {
+        const failures: ((error: Error) => void)[] = [];
+        context.answerRequest = (method, parameters) => method === BrowserMethods.allowTypedAddress
+          ? new Promise<JsonValue>((_resolve, reject) => failures.push(reject))
+          : declared(method, parameters);
+        const tab = await openAsync();
+
+        const failed = pages.goToAsync(tab, "first.example");
+        await vi.waitFor(() => expect(failures).toHaveLength(1));
+        failures[0]?.(new Error("The runtime part stopped."));
+        const caught: unknown = await failed.catch((error: unknown) => error);
+        pages.leaveEntry(tab);
+        const left = pages.goToAsync(tab, "second.example");
+        await vi.waitFor(() => expect(failures).toHaveLength(2));
+        pages.leaveEntry(tab);
+        const answer: EntryAnswer = await left;
+        failures[1]?.(new TypeError("The runtime part stopped."));
+
+        await vi.waitFor(() => expect(context.logs).toHaveLength(1));
+        expect([caught, answer, context.logs]).toEqual([new Error("The runtime part stopped."), EntryAnswer.Left, ["A typed address the person left failed after it: TypeError."]]);
       });
     });
 

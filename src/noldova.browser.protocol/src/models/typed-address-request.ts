@@ -12,23 +12,26 @@ import { Resources } from "../resources.ts";
 import { WireContract } from "../services/wire-contract.ts";
 
 export class TypedAddressRequest {
-  private static readonly FIELDS: readonly string[] = [Resources.profileKeyField, Resources.urlField];
+  private static readonly FIELDS: readonly string[] = [Resources.profileKeyField, Resources.urlField, Resources.instanceField];
 
   public readonly profileKey: string;
   public readonly url: string;
+  public readonly instance: string | null;
 
-  public constructor(profileKey: string, url: string) {
+  public constructor(profileKey: string, url: string, instance: string | null = null) {
     this.profileKey = profileKey;
     this.url = url;
+    this.instance = instance;
   }
 
   public static fromJson(value: unknown, path?: string): TypedAddressRequest {
     const reader: JsonReader = JsonReader.fromValue(value, path);
     WireContract.requireKnownFields(reader, TypedAddressRequest.FIELDS);
-    return new TypedAddressRequest(reader.readString(Resources.profileKeyField), reader.readString(Resources.urlField));
+    return new TypedAddressRequest(reader.readString(Resources.profileKeyField), reader.readString(Resources.urlField), reader.readOptionalString(Resources.instanceField) ?? null);
   }
 
   public toJson(): JsonObject {
-    return { [Resources.profileKeyField]: this.profileKey, [Resources.urlField]: this.url };
+    const json: JsonObject = { [Resources.profileKeyField]: this.profileKey, [Resources.urlField]: this.url };
+    return this.instance === null ? json : { ...json, [Resources.instanceField]: this.instance };
   }
 }

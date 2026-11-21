@@ -888,28 +888,35 @@ export declare class TypedAddressRequest {
   public readonly url: string;
 
   /**
+   * The instance of the page document the pane shows, or `null` when the pane shows none.
+   * When an agent's call to that page starts while the request waits, the runtime part answers {@link TypedAddressLeft}.
+   */
+  public readonly instance: string | null;
+
+  /**
    * Creates the request.
    *
    * @param profileKey The pane's profile key.
    * @param url The whole address the person typed.
+   * @param instance The instance of the page document the pane shows; `null` by default.
    *
    * @example
    * ```ts
    * import { TypedAddressRequest } from "@noldova/browser.protocol";
    *
-   * const request: TypedAddressRequest = new TypedAddressRequest("folder-1", "https://example.com/docs");
+   * const request: TypedAddressRequest = new TypedAddressRequest("folder-1", "https://example.com/docs", "page-1");
    * ```
    */
-  public constructor(profileKey: string, url: string);
+  public constructor(profileKey: string, url: string, instance?: string | null);
 
   /**
-   * Reads the request from its wire form, `{ profileKey, url }`.
+   * Reads the request from its wire form, `{ profileKey, url, instance? }`.
    *
    * @param value The parsed JSON value.
    * @param path The JSON path a rejection reports; `$` by default.
-   * @returns The request.
-   * @throws JsonException synchronously when the value isn't an object, a field is missing, isn't a string or isn't one of these two,
-   * with the path of the field.
+   * @returns The request, its instance `null` when the wire form has none.
+   * @throws JsonException synchronously when the value isn't an object, `profileKey` or `url` is missing, a field isn't a string or
+   * isn't one of these three, with the path of the field.
    *
    * @example
    * ```ts
@@ -923,7 +930,7 @@ export declare class TypedAddressRequest {
   /**
    * Writes the request in its wire form.
    *
-   * @returns A new JSON object with `profileKey` and `url`.
+   * @returns A new JSON object with `profileKey` and `url`, and `instance` when it isn't `null`.
    *
    * @example
    * ```ts
@@ -1068,6 +1075,62 @@ export declare class TypedAddressAllowed {
 }
 
 /**
+ * The runtime part's answer to a {@link TypedAddressRequest} whose pane's page an agent's call started on while the request waited: the
+ * person's address is left, and the pane goes nowhere.
+ */
+export declare class TypedAddressLeft {
+  /**
+   * Marks this answer in a {@link TypedAddressAnswer}, always `Left`.
+   */
+  public readonly kind: typeof TypedAddressAnswerKind.Left;
+
+  /**
+   * Creates the answer.
+   *
+   * @example
+   * ```ts
+   * import { TypedAddressLeft } from "@noldova/browser.protocol";
+   *
+   * const answer: TypedAddressLeft = new TypedAddressLeft();
+   * ```
+   */
+  public constructor();
+
+  /**
+   * Reads the answer from its wire form, `{ kind: "Left" }`.
+   *
+   * @param value The parsed JSON value.
+   * @param path The JSON path a rejection reports; `$` by default.
+   * @returns The answer.
+   * @throws JsonException synchronously when the value isn't an object, its kind is missing or isn't `Left`, or it holds another field,
+   * with the path of the field.
+   *
+   * @example
+   * ```ts
+   * import { TypedAddressLeft } from "@noldova/browser.protocol";
+   *
+   * const answer: TypedAddressLeft = TypedAddressLeft.fromJson({ kind: "Left" });
+   * ```
+   */
+  public static fromJson(value: unknown, path?: string): TypedAddressLeft;
+
+  /**
+   * Writes the answer in its wire form.
+   *
+   * @returns A new JSON object with `kind`.
+   *
+   * @example
+   * ```ts
+   * import type { JsonObject } from "@noldova/context.json";
+   * import { TypedAddressLeft } from "@noldova/browser.protocol";
+   *
+   * const json: JsonObject = new TypedAddressLeft().toJson();
+   * ```
+   */
+  public toJson(): JsonObject;
+}
+
+/**
  * The runtime part refused the typed address, allowed nothing, and the pane doesn't go there.
  */
 export declare class TypedAddressRefused {
@@ -1137,7 +1200,9 @@ export declare class TypedAddressRefused {
  * import { TypedAddressAnswerKind, type TypedAddressAnswer } from "@noldova/browser.protocol";
  *
  * function describe(answer: TypedAddressAnswer): string {
- *   return answer.kind === TypedAddressAnswerKind.Allowed ? answer.origin : answer.reason;
+ *   if (answer.kind === TypedAddressAnswerKind.Allowed)
+ *     return answer.origin;
+ *   return answer.kind === TypedAddressAnswerKind.Refused ? answer.reason : "left";
  * }
  * ```
  */
@@ -1151,39 +1216,48 @@ export declare const TypedAddressAnswerKind: {
    * The address is refused: an {@link TypedAddressRefused}, wire value `"Refused"`.
    */
   readonly Refused: "Refused";
+
+  /**
+   * An agent's call to the pane's page started while the request waited, so the person's address is left: an {@link TypedAddressLeft},
+   * wire value `"Left"`.
+   */
+  readonly Left: "Left";
 };
 
 /**
- * One of {@link TypedAddressAnswerKind}'s wire values: `"Allowed"` or `"Refused"`.
+ * One of {@link TypedAddressAnswerKind}'s wire values: `"Allowed"`, `"Refused"` or `"Left"`.
  */
 export type TypedAddressAnswerKind = (typeof TypedAddressAnswerKind)[keyof typeof TypedAddressAnswerKind];
 
 /**
- * The runtime part's answer to a {@link TypedAddressRequest}: allowed with the origin, or refused with the reason.
+ * The runtime part's answer to a {@link TypedAddressRequest}: allowed with the origin, refused with the reason, or left to an agent's call.
  *
  * @example
  * ```ts
  * import { TypedAddressAnswerKind, type TypedAddressAnswer } from "@noldova/browser.protocol";
  *
  * function describe(answer: TypedAddressAnswer): string {
- *   return answer.kind === TypedAddressAnswerKind.Allowed ? answer.origin : answer.reason;
+ *   if (answer.kind === TypedAddressAnswerKind.Allowed)
+ *     return answer.origin;
+ *   return answer.kind === TypedAddressAnswerKind.Refused ? answer.reason : "left";
  * }
  * ```
  */
-export declare type TypedAddressAnswer = TypedAddressAllowed | TypedAddressRefused;
+export declare type TypedAddressAnswer = TypedAddressAllowed | TypedAddressRefused | TypedAddressLeft;
 
 /**
  * Reads a {@link TypedAddressAnswer} from its wire form, by its kind.
  */
 export declare class TypedAddressAnswerReader {
   /**
-   * Reads the answer, a {@link TypedAddressAllowed} for the kind `Allowed` and a {@link TypedAddressRefused} for `Refused`.
+   * Reads the answer, a {@link TypedAddressAllowed} for the kind `Allowed`, a {@link TypedAddressRefused} for `Refused` and a
+   * {@link TypedAddressLeft} for `Left`.
    *
    * @param value The parsed JSON value.
    * @param path The JSON path a rejection reports; `$` by default.
    * @returns The answer of its kind.
-   * @throws JsonException synchronously when the value isn't an object, its kind is missing or neither `Allowed` nor `Refused`, or it
-   * isn't an answer of that kind, with the path of the field.
+   * @throws JsonException synchronously when the value isn't an object, its kind is missing or none of `Allowed`, `Refused` and `Left`,
+   * or it isn't an answer of that kind, with the path of the field.
    *
    * @example
    * ```ts

@@ -454,6 +454,58 @@ describe("RuntimePart", () => {
     ]]);
   });
 
+  it("answers Left to a typed address whose pane's page an agent's call started on while it waited, though its origin joins the workspace", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const surface: ScriptedViews = pageViews(instance);
+    const context: BrowserContext = new BrowserContext(surface);
+    await new RuntimePart().activateAsync(context);
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" });
+    const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    surface.allowing = () => {
+      surface.allowing = async () => undefined;
+      holding.resolve();
+      return held.promise;
+    };
+
+    const answer: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance });
+    await holding.promise;
+    const called: unknown = await session.callAsync("browser_snapshot", {});
+    held.resolve();
+
+    expect([await answer, called, surface.allowedOrigins.get("view-1")]).toEqual([{ kind: "Left" }, expect.objectContaining({ isFailure: false }), ["https://one.example"]]);
+  });
+
+  it("answers a typed address as before when the agent's call starts after the answer, or on another page, or the request names no page", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const other: string = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const surface: ScriptedViews = pageViews(instance, other);
+    const context: BrowserContext = new BrowserContext(surface);
+    await new RuntimePart().activateAsync(context);
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: other, profileKey: "workspace-1", agentName: "Scout" });
+    const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+
+    const first: JsonValue = await typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance: other });
+    await session.callAsync("browser_snapshot", {});
+    surface.allowing = () => {
+      surface.allowing = async () => undefined;
+      holding.resolve();
+      return held.promise;
+    };
+    const answers: Promise<JsonValue[]> = Promise.all([
+      typeAsync(context, { profileKey: "workspace-1", url: "https://two.example/", instance }),
+      typeAsync(context, { profileKey: "workspace-1", url: "https://three.example/" })
+    ]);
+    await holding.promise;
+    await session.callAsync("browser_snapshot", {});
+    held.resolve();
+
+    expect([first, ...await answers]).toEqual([
+      { kind: "Allowed", origin: "https://one.example" }, { kind: "Allowed", origin: "https://two.example" }, { kind: "Allowed", origin: "https://three.example" }
+    ]);
+  });
+
   it("answers a typed address: its origin joins the workspace's views and the database, which a later run reads", async () => {
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);

@@ -1354,26 +1354,6 @@ export declare class PaneController {
   public onChange(listener: (status: PaneStatus) => void): () => void;
 
   /**
-   * Tells the listener each time the controller starts a navigation, by {@link PaneController.navigateAsync}, back, forward or reload, before
-   * the view gets it, until it stops listening or the controller closes; a page's own loads and the person's stops aren't navigations it starts.
-   *
-   * @param listener Called once for each navigation it starts; it must not throw.
-   * @returns A function that stops the listening; calling it again does nothing.
-   * @example
-   * ```ts
-   * import type { PaneController } from "@noldova/browser.window";
-   *
-   * function count(controller: PaneController): () => void {
-   *   let started: number = 0;
-   *   return controller.onNavigationStart(() => {
-   *     started++;
-   *   });
-   * }
-   * ```
-   */
-  public onNavigationStart(listener: () => void): () => void;
-
-  /**
    * Tells the listener of each new window the page asks for, until it stops listening or the controller closes.
    *
    * @param listener Called with each request.

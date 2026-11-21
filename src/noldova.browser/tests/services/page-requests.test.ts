@@ -28,6 +28,8 @@ describe("PageRequests", () => {
     expect(PageRequests.readRedirect({ instance, profileKey: "workspace-1", url: "https://www.example.com/" }))
       .toEqual({ instance, profileKey: "workspace-1", url: "https://www.example.com/" });
     expect(PageRequests.readPage({ instance })).toEqual({ instance });
+    expect([PageRequests.readTypedAddress({ profileKey: "workspace-1", url: "https://example.com/", instance }), PageRequests.readTypedAddress({ profileKey: "workspace-1", url: "" })])
+      .toEqual([{ profileKey: "workspace-1", url: "https://example.com/", instance }, { profileKey: "workspace-1", url: "", instance: null }]);
     expect([PageRequests.readOpenPages({ instances: [instance] }), PageRequests.readOpenPages({ instances: [] })]).toEqual([{ instances: [instance] }, { instances: [] }]);
     expect(PageRequests.readBrowsingData({ profileKey: "workspace-1" })).toEqual({ profileKey: "workspace-1" });
     expect([PageRequests.readStop({ instance, isTakingOver: true }), PageRequests.readStop({ instance, isTakingOver: false })])
@@ -72,6 +74,8 @@ describe("PageRequests", () => {
       expect(() => PageRequests.readRedirect(params), JSON.stringify(params)).toThrow(failure);
     }
     expect(() => PageRequests.readPage({ instance: "page" })).toThrow(PageInstanceInvalidException);
+    expect(() => PageRequests.readTypedAddress({ profileKey: "workspace-1", url: "", instance: "page" })).toThrow(PageInstanceInvalidException);
+    expect(() => PageRequests.readTypedAddress({ profileKey: "Workspace", url: "", instance })).toThrow(ProfileKeyInvalidException);
     expect(() => PageRequests.readBrowsingData({ profileKey: "-workspace" })).toThrow(ProfileKeyInvalidException);
     expect(() => PageRequests.readStop({ instance: "page", isTakingOver: true })).toThrow(PageInstanceInvalidException);
     expect(() => PageRequests.readOpenPages({ instances: [instance, "page"] })).toThrow(PageInstanceInvalidException);

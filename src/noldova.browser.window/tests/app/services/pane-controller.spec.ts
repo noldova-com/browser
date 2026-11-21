@@ -26,6 +26,7 @@ import { ViewRefusalEvent } from "../../../src/app/models/view-refusal-event.ts"
 import { ViewRequestRefusalEvent } from "../../../src/app/models/view-request-refusal-event.ts";
 import { ViewStateEvent } from "../../../src/app/models/view-state-event.ts";
 import { ViewZoomEvent } from "../../../src/app/models/view-zoom-event.ts";
+import { NavigationStarts } from "../../../src/app/services/navigation-starts.ts";
 import { PaneController } from "../../../src/app/services/pane-controller.ts";
 import { FakeWebView, FakeWebViews, WebViewValues } from "../../fixtures/fake-web-views.fixture.ts";
 
@@ -74,8 +75,8 @@ describe("PaneController", () => {
   it("tells each navigation it starts before the view gets it, not a stop or a page's own load, until the listener stops or it closes", async () => {
     const { view, controller } = open();
     const seen: string[] = [];
-    const stop: () => void = controller.onNavigationStart(() => seen.push(`start after ${String(view.calls.length)} calls`));
-    controller.onNavigationStart(() => seen.push("other"));
+    const stop: () => void = NavigationStarts.listen(controller, () => seen.push(`start after ${String(view.calls.length)} calls`));
+    NavigationStarts.listen(controller, () => seen.push("other"));
 
     await controller.navigateAsync("https://one.example/");
     await controller.navigateAsync("https://two.example/");

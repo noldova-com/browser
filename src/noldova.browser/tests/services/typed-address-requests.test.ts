@@ -17,7 +17,7 @@ describe("TypedAddressRequests", () => {
     expect([
       TypedAddressRequests.read({ profileKey: "folder-1", url: "https://example.com/" }),
       TypedAddressRequests.read({ profileKey: "0", url: "" })
-    ]).toEqual([{ profileKey: "folder-1", url: "https://example.com/" }, { profileKey: "0", url: "" }]);
+    ]).toEqual([{ profileKey: "folder-1", url: "https://example.com/", instance: null }, { profileKey: "0", url: "", instance: null }]);
   });
 
   it("fails a request that isn't an object, or has a field it doesn't name", () => {

@@ -18,13 +18,13 @@ import type { ViewEvent } from "../models/view-event.ts";
 import type { ViewKeyEvent } from "../models/view-key-event.ts";
 import type { ViewNewWindowEvent } from "../models/view-new-window-event.ts";
 import type { ViewRefusalEvent } from "../models/view-refusal-event.ts";
+import { NavigationStarts } from "./navigation-starts.ts";
 import { PaneHearing } from "./pane-hearing.ts";
 import { WebViewEventReader } from "./web-view-event-reader.ts";
 
 export class PaneController {
   private readonly view: IWebViewHandle | null;
   private readonly listeners: Set<(status: PaneStatus) => void> = new Set<(status: PaneStatus) => void>();
-  private readonly starts: Set<() => void> = new Set<() => void>();
   private readonly hearing: PaneHearing;
   private readonly unsubscribe: () => void;
   private current: PaneStatus;
@@ -48,11 +48,6 @@ export class PaneController {
   public onChange(listener: (status: PaneStatus) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
-  }
-
-  public onNavigationStart(listener: () => void): () => void {
-    this.starts.add(listener);
-    return () => this.starts.delete(listener);
   }
 
   public onNewWindow(listener: (event: ViewNewWindowEvent) => void): () => void {
@@ -164,7 +159,7 @@ export class PaneController {
     this.isClosed = true;
     this.unsubscribe();
     this.listeners.clear();
-    this.starts.clear();
+    NavigationStarts.forget(this);
     this.hearing.clear();
     this.view?.close();
   }
@@ -183,8 +178,7 @@ export class PaneController {
   private startNavigation(): IWebViewHandle {
     const view: IWebViewHandle = this.requireView();
     this.followNavigation();
-    for (const listener of [...this.starts])
-      listener();
+    NavigationStarts.tell(this);
     return view;
   }
 
