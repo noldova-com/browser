@@ -78,11 +78,11 @@ describe("PressKeyTool", () => {
       details: [{ label: "Page" }, { label: "Key", value: "Enter" }, { label: "Field", value: "textbox" }, { label: "Sends", value: "coupon" }] });
   });
 
-  it("sends a shortcut with its modifiers and no text", async () => {
+  it("sends a shortcut with its modifiers and no text, its letter capital under Shift", async () => {
     await bench.runAsync(tool, bench.call({ key: "a", modifiers: ["Control", "Shift"] }));
 
     expect([bench.permissions.requests[0]?.title, bench.permissions.requests[0]?.details[1]?.value]).toEqual(["Press Control+Shift+a on shop.test", "Control+Shift+a"]);
-    expect(keyEvents()[0]).toEqual({ type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 10 });
+    expect(keyEvents()[0]).toEqual({ type: "rawKeyDown", key: "A", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 10 });
   });
 
   it("releases the key it pressed when the person stops the page during the press", async () => {
