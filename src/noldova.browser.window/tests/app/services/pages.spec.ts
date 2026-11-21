@@ -494,6 +494,36 @@ describe("Pages", () => {
     expect(context.opened.map(t => t.title)).toEqual(["https://docs.example.com/", "https://docs.example.com/"]);
   });
 
+  it("refuses a run on another workspace for a page whose view is opening, without a claim, and brings the page forward on its own workspace", async () => {
+    const instance: string = pages.open("workspace-1", "https://docs.example.com/");
+    const release = surface().holdNextOpen();
+    const showing: Promise<PaneTab | null> = pages.showAsync(instance);
+
+    await expect(pages.openAsync("workspace-2", null, instance)).rejects.toThrow(PageOnOtherWorkspaceException);
+    const forward: string = await pages.openAsync("workspace-1", null, instance);
+    release();
+    const tab: PaneTab | null = await showing;
+
+    expect([forward, tab?.id, requestsOf(BrowserMethods.claimPage), context.opened.map(t => [t.instance, t.title])])
+      .toEqual([instance, instance, [], [[instance, "https://docs.example.com/"], [instance, "https://docs.example.com/"]]]);
+    expect(() => pages.open("workspace-2", null, instance)).toThrow(PageOnOtherWorkspaceException);
+  });
+
+  it("claims a page another window took while its view was opening, and fails a run on it, rather than bringing forward a page it no longer holds", async () => {
+    const instance: string = pages.open("workspace-1", "https://docs.example.com/");
+    const release = surface().holdNextOpen();
+    const showing: Promise<PaneTab | null> = pages.showAsync(instance);
+    context.openDocuments = [instance];
+    context.answerRequest = (method, parameters) => method === BrowserMethods.holdPages ? Promise.resolve({ agents: [], refused: [instance] })
+      : method === BrowserMethods.claimPage ? Promise.resolve({ agentName: null, isClaimed: false, isHere: false, record: null }) : declared(method, parameters);
+    await pages.reportOpenAsync();
+
+    await expect(pages.openAsync("workspace-1", null, instance)).rejects.toThrow(PageInAnotherWindowException);
+    release();
+
+    expect([await showing, requestsOf(BrowserMethods.claimPage), context.opened.map(t => t.instance)]).toEqual([null, [{ instance }], [instance]]);
+  });
+
   it("refuses the app's instance when this window doesn't hold it and the runtime part's claim says another window has it, shown or not", async () => {
     const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? Promise.resolve({ agentName: null, isClaimed: false, isHere: false, record: null }) : declared(method, parameters);

@@ -24,6 +24,7 @@ import { PageActivityEventMalformedException } from "../exceptions/page-activity
 import { PageInAnotherWindowException } from "../exceptions/page-in-another-window.exception.ts";
 import { PageOnOtherWorkspaceException } from "../exceptions/page-on-other-workspace.exception.ts";
 import { PagesInactiveException } from "../exceptions/pages-inactive.exception.ts";
+import { OpeningPage } from "../models/opening-page.ts";
 import { PageShowing } from "../models/page-showing.ts";
 import type { PaneStatus } from "../models/pane-status.ts";
 import { PaneTab } from "../models/pane-tab.ts";
@@ -57,7 +58,7 @@ export class Pages {
   private readonly heldElsewhere: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly lastOpened: WritableSignal<{ readonly instance: string } | null> = signal(null);
-  private readonly opening: Map<string, boolean> = new Map<string, boolean>();
+  private readonly opening: Map<string, OpeningPage> = new Map<string, OpeningPage>();
   private readonly showing: Set<PageShowing> = new Set<PageShowing>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
   private readonly renamers: Set<() => void> = new Set<() => void>();
@@ -172,7 +173,7 @@ export class Pages {
   public open(profileKey: string, url: string | null, picked: string | null = null, opener: PaneTab | null = null, isBehind: boolean = false): string {
     const instance: string = picked ?? crypto.randomUUID();
     const shown: [PaneTab, { readonly place: PagePlace }] | undefined = [...this.shown.entries()].find(t => t[0].id === instance);
-    const place: PagePlace | undefined = shown === undefined ? this.pending.get(instance) : shown[1].place;
+    const place: PagePlace | undefined = shown === undefined ? this.pending.get(instance) ?? this.heldOpening(instance)?.place : shown[1].place;
     if (place !== undefined) {
       if (place.profileKey !== profileKey)
         throw new PageOnOtherWorkspaceException(instance, profileKey);
@@ -471,14 +472,18 @@ export class Pages {
   }
 
   private holds(instance: string): boolean {
-    return this.pending.has(instance) || [...this.shown.keys()].some(t => t.id === instance);
+    return this.pending.has(instance) || this.heldOpening(instance) !== undefined || [...this.shown.keys()].some(t => t.id === instance);
+  }
+
+  private heldOpening(instance: string): OpeningPage | undefined {
+    const opening: OpeningPage | undefined = this.opening.get(instance);
+    return opening?.isTaken === false ? opening : undefined;
   }
 
   private yieldPage(instance: string): void {
     this.pending.delete(instance);
     this.agentPages.leaveTab(instance);
-    if (this.opening.has(instance))
-      this.opening.set(instance, true);
+    this.opening.get(instance)?.take();
     for (const [tab, held] of this.shown) {
       if (tab.id !== instance)
         continue;
@@ -571,13 +576,14 @@ export class Pages {
     if (place === null || this.isClosed)
       return null;
     const pane: WebViewPane = new WebViewPane(QualifiedName.parse(Resources.pageDocument), instance);
-    this.opening.set(instance, false);
+    const opening: OpeningPage = new OpeningPage(place);
+    this.opening.set(instance, opening);
     const options: IWebViewOpenOptions = { name: Resources.formatBrowserStart(this.appName()) };
     const view: IWebViewHandle | null = await this.context.webViews.openAsync(pane, place.profileKey, options).catch((error: unknown) => {
       this.context.log(Resources.formatViewNotOpened(error));
       return null;
     });
-    const isTaken: boolean = this.opening.get(instance) === true;
+    const isTaken: boolean = opening.isTaken;
     this.opening.delete(instance);
     const tab: PaneTab = new PaneTab(instance, view);
     if (this.isClosed || isTaken || showing.isClosedMeanwhile) {
