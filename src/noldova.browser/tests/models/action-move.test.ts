@@ -22,7 +22,7 @@ import type { JsonObject } from "../../src/types/json-value.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
 describe("ActionMove", () => {
-  const FRAME: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1");
+  const FRAME: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1", null);
   const HISTORY: JsonObject = { currentIndex: 1, entries: [{ url: "https://docs.example/" }, { url: "https://docs.example/guide" }, { url: "https://docs.example/next" }] };
   let bench: ToolBench;
 
@@ -80,18 +80,25 @@ describe("ActionMove", () => {
     await expect(new ActionMove(action).readTargetAsync(bench.kit.calls, ToolBench.VIEW, FRAME, options())).rejects.toBeInstanceOf(MalformedReplyException);
   });
 
-  it("says a reload landed at the address it left, and back or forward at its target's, without reading the history", async () => {
-    const target: HistoryTarget = new HistoryTarget(0, "https://docs.example/");
-    function isLandedAsync(action: WebViewAction, url: string): Promise<boolean> {
-      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, target, new FrameFacts(url, "https://docs.example", "L2", "F1"));
+  it("targets the address that failed to load for a reload of the engine's error page", async () => {
+    const failed: FrameFacts = new FrameFacts("chrome-error://chromewebdata/", "browser:opaque", "L1", "F1", "https://docs.example/guide");
+
+    expect(await new ActionMove(WebViewAction.Reload).readTargetAsync(bench.kit.calls, ToolBench.VIEW, failed, options())).toStrictEqual(new HistoryTarget(null, "https://docs.example/guide"));
+  });
+
+  it("says a move landed at its target's address, a reload's being the address it left or failed to load, failing again too, without reading the history", async () => {
+    function isLandedAsync(action: WebViewAction, target: string, url: string, failedUrl: string | null = null): Promise<boolean> {
+      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, new HistoryTarget(null, target), new FrameFacts(url, "https://docs.example", "L2", "F1", failedUrl));
     }
 
     expect(await Promise.all([
-      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide"),
-      isLandedAsync(WebViewAction.Reload, "https://docs.example/moved"),
-      isLandedAsync(WebViewAction.Back, "https://docs.example/"),
-      isLandedAsync(WebViewAction.Back, "https://docs.example/guide")
-    ])).toEqual([true, false, true, false]);
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "https://docs.example/guide"),
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "https://docs.example/moved"),
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "chrome-error://chromewebdata/", "https://docs.example/guide"),
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "chrome-error://chromewebdata/", "https://docs.example/moved"),
+      isLandedAsync(WebViewAction.Back, "https://docs.example/", "https://docs.example/"),
+      isLandedAsync(WebViewAction.Back, "https://docs.example/", "https://docs.example/guide")
+    ])).toEqual([true, false, true, false, true, false]);
     expect(bench.methods).toEqual([]);
   });
 

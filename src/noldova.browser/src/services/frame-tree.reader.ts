@@ -23,9 +23,10 @@ export class FrameTreeReader {
     const origin: JsonValue | undefined = frame[Resources.securityOriginField];
     const documentId: JsonValue | undefined = frame[Resources.loaderIdField];
     const frameId: JsonValue | undefined = frame[Resources.idField];
+    const failed: JsonValue | undefined = frame[Resources.unreachableUrlField];
     if (typeof url !== "string" || typeof origin !== "string" || typeof documentId !== "string" || typeof frameId !== "string")
       throw new MalformedReplyException();
-    return new FrameFacts(url, PageOrigin.of(origin), documentId, frameId);
+    return new FrameFacts(url, PageOrigin.of(origin), documentId, frameId, typeof failed === "string" ? failed : null);
   }
 
   // A frame's whole URL: the protocol gives its fragment apart, in `urlFragment`, with its "#".

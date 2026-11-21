@@ -361,6 +361,7 @@ export class Resources {
   public static readonly frameTreeField: string = "frameTree";
   public static readonly securityOriginField: string = "securityOrigin";
   public static readonly loaderIdField: string = "loaderId";
+  public static readonly unreachableUrlField: string = "unreachableUrl";
   public static readonly cssContentSizeField: string = "cssContentSize";
   public static readonly clientWidthField: string = "clientWidth";
   public static readonly visualViewportField: string = "visualViewport";
