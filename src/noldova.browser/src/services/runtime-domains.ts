@@ -34,13 +34,16 @@ export class RuntimeDomains {
       return starting;
     if (this.views.has(viewId))
       return Promise.resolve();
-    this.views.set(viewId, new RuntimeView(track => this.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => track(event.method, event.params))));
+    const view: RuntimeView = new RuntimeView(track => this.relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => track(event.method, event.params)));
+    this.views.set(viewId, view);
     const started: Promise<void> = RuntimeDomains.enableAsync(sendAsync, () => this.consoles.start(viewId, origin), () => [...this.keptOf(viewId)]);
     this.starts.set(viewId, started);
-    const forget = (): void => {
+    started.then(() => {
       this.starts.delete(viewId);
-    };
-    started.then(forget, forget);
+    }, () => {
+      this.starts.delete(viewId);
+      this.stop(viewId, view);
+    });
     return started;
   }
 

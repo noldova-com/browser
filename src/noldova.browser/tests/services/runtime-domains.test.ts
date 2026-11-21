@@ -136,7 +136,7 @@ describe("RuntimeDomains", () => {
     expect(domains.consoles.read("view-1", 0).entries.map(t => t.text)).toEqual(["Cart loaded", "Cart saved"]);
   });
 
-  it("starts no ring when the start fails before the disable", async () => {
+  it("starts no ring, and leaves the view not started, when the start fails before the disable", async () => {
     const failure: WebViewFailure = new WebViewFailure(WebViewFailureKind.TimedOut);
     surface.fail("Page.enable", failure);
 
@@ -145,7 +145,25 @@ describe("RuntimeDomains", () => {
     report(1);
 
     expect([sent, domains.consoles.read("view-1", 0).next, await domains.findContextAsync("view-1", 1, "frame-1", WORLD, 1_000, UNSTOPPED)])
-      .toEqual([["Page.enable"], 0, "unique-1"]);
+      .toEqual([["Page.enable"], 0, null]);
+  });
+
+  it("leaves a view whose first Runtime.enable failed not started, so a lookup gives null at once and the next start enables the domains again", async () => {
+    const before: number = surface.protocolListenerCount;
+    const failure: WebViewFailure = new WebViewFailure(WebViewFailureKind.TimedOut);
+    surface.fail("Runtime.enable", failure);
+    await expect(domains.startAsync("view-1", "https://shop.test", sendAsync)).rejects.toMatchObject({ failure });
+    const listening: number = surface.protocolListenerCount - before;
+    const lookup: string | null = await domains.findContextAsync("view-1", 1, "frame-1", WORLD, 1_000, UNSTOPPED);
+    take();
+    surface.answerWith("Runtime.enable", () => {
+      report(1);
+      return {};
+    });
+
+    await domains.startAsync("view-1", "https://shop.test", sendAsync);
+
+    expect([listening, lookup, take(), await domains.findContextAsync("view-1", 1, "frame-1", WORLD, 1_000, UNSTOPPED)]).toEqual([0, null, ENABLES, "unique-1"]);
   });
 
   it("stops hearing a dropped view and starts it again in full, keeping what its ring heard, and forgets a closed view's ring, or one never started", async () => {
