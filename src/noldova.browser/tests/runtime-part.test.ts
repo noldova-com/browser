@@ -483,6 +483,37 @@ describe("RuntimePart", () => {
     expect([answered, await kitOf(create).origins.isAllowedAsync("workspace-1", "https://one.example")]).toEqual([{ kind: "Left" }, true]);
   });
 
+  it("answers Left and keeps no origin for a typed address whose pane's page an agent's call that can move it started on while it waited for its turn", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const surface: ScriptedViews = pageViews(instance);
+    const context: BrowserContext = new BrowserContext(surface);
+    const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
+    const given: Promise<readonly string[]> = surface.allowedAsync("view-1");
+    await new RuntimePart().activateAsync(context);
+    await given;
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" });
+    const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    surface.allowing = () => {
+      surface.allowing = async () => undefined;
+      holding.resolve();
+      return held.promise;
+    };
+
+    const first: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://zero.example/" });
+    await holding.promise;
+    const answer: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance });
+    const moving: Promise<unknown> = session.callAsync("browser_navigate", { url: "https://two.example/" });
+    await vi.waitFor(() => expect(kitOf(create).stops.movesOn(instance)).toBe(1));
+    held.resolve();
+    const answered: JsonValue[] = [await first, await answer];
+    await requestAsync(context, BrowserMethods.stopPage, { instance, isTakingOver: false });
+    await moving;
+
+    expect([answered, await kitOf(create).origins.isAllowedAsync("workspace-1", "https://one.example")])
+      .toEqual([[{ kind: "Allowed", origin: "https://zero.example" }, { kind: "Left" }], false]);
+  });
+
   it("answers a typed address as before when the agent's calls only read the page, start after the answer or on another page, or the request names no page",
     async () => {
       const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
