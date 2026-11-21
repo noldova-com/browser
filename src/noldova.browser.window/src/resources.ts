@@ -203,6 +203,10 @@ export class Resources {
   public static readonly schemeEnd: string = ":";
   public static readonly defaultScheme: string = "https://";
   public static readonly localScheme: string = "http://";
+  public static readonly typedSchemes: readonly string[] = [Resources.localScheme, Resources.defaultScheme];
+  public static readonly trailingDotsPattern: RegExp = /\.+$/u;
+  public static readonly httpAddressKinds: readonly AddressKind[] = [AddressKind.Loopback, AddressKind.Private];
+  public static readonly networkNameSuffix: string = ".local";
   public static readonly localName: string = "localhost";
   public static readonly hostLabelSeparator: string = ".";
   public static readonly ipv6Opening: string = "[";
@@ -479,10 +483,6 @@ export class Resources {
 
   public static formatHostAddress(host: string): string {
     return `${Resources.defaultScheme}${host}/`;
-  }
-
-  public static formatLocalAddress(typed: string): string {
-    return `${Resources.localScheme}${typed}`;
   }
 
   public static formatLoaded(page: string): string {

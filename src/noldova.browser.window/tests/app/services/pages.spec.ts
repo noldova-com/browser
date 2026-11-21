@@ -1166,6 +1166,15 @@ describe("Pages", () => {
       expect(first.controller.status.url).toBe("https://example.com/docs");
     });
 
+    it("reads a typed address without a scheme with the scheme of the single site the setting Sites on this computer or network names there", async () => {
+      context.settings.set("browser.localSites", "https://192.168.1.5:8006, http://127.0.0.1:4173");
+      const tab = await openAsync();
+
+      await pages.goToAsync(tab, "192.168.1.5:8006");
+
+      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://192.168.1.5:8006/", instance: tab.id }]);
+    });
+
     it("answers that Noldova Desktop refused when it refuses the typed address's navigation, which the pane shows as refused", async () => {
       surface().script("https://example.com/docs", { kind: "refuse" });
       const tab = await openAsync();
