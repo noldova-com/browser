@@ -13,7 +13,7 @@ import { ReadAddress } from "../models/read-address.ts";
 import type { AddressReading } from "../types/address-reading.ts";
 
 export class AddressReader {
-  public static read(text: string): AddressReading {
+  public static read(text: string, localSites: readonly string[]): AddressReading {
     const typed: string = text.trim();
     if (typed === "" || Resources.spacePattern.test(typed))
       return new TypedAddressRefused(TypedAddressRefusal.NotAnAddress);
@@ -25,9 +25,16 @@ export class AddressReader {
     const url: URL | null = URL.parse(name === null ? Resources.formatDefaultSchemeAddress(typed) : typed);
     if (url === null || (name === null && !AddressReader.isHost(url.hostname)))
       return new TypedAddressRefused(TypedAddressRefusal.NotAnAddress);
-    if (name === null && AddressReader.isLocal(url.hostname))
-      return new ReadAddress(new URL(Resources.formatLocalAddress(typed)).href);
-    return new ReadAddress(url.href);
+    return new ReadAddress(name === null ? new URL(`${AddressReader.schemeOf(typed, url.hostname, localSites)}${typed}`).href : url.href);
+  }
+
+  // The scheme of the single site the setting Sites on this computer or network names at the typed host and port, so a local server on https
+  // isn't asked over http; otherwise http for a host browsers don't upgrade, and https for any other.
+  private static schemeOf(typed: string, hostname: string, localSites: readonly string[]): string {
+    const [named, ...others]: readonly string[] = Resources.typedSchemes.filter(t => localSites.includes(new URL(`${t}${typed}`).origin));
+    if (named !== undefined && others.length === 0)
+      return named;
+    return AddressReader.isLocal(hostname) ? Resources.localScheme : Resources.defaultScheme;
   }
 
   private static isHost(hostname: string): boolean {
@@ -37,6 +44,6 @@ export class AddressReader {
   // A host on this computer or its network, which browsers don't upgrade to https: a loopback or private address, or a name in `.local`.
   // A single-label name other than `localhost` isn't read as an address at all.
   private static isLocal(hostname: string): boolean {
-    return Resources.httpAddressKinds.includes(AddressKinds.ofHost(hostname)) || hostname.endsWith(Resources.networkNameSuffix);
+    return Resources.httpAddressKinds.includes(AddressKinds.ofHost(hostname)) || hostname.replace(Resources.trailingDotsPattern, "").endsWith(Resources.networkNameSuffix);
   }
 }

@@ -7,7 +7,7 @@
  */
 
 import { type Signal, type WritableSignal, signal } from "@angular/core";
-import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
+import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, LocalSites, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { QualifiedName, type WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
 import { DocumentTone, type IDocumentMarker, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWebViewOpenOptions,
@@ -219,7 +219,7 @@ export class Pages {
 
   private async goAsync(tab: PaneTab, place: PagePlace, entry: TypedEntry, text: string): Promise<EntryAnswer> {
     const isLatest = (): boolean => this.shown.has(tab) && tab.controller.status.state !== PaneState.Unavailable && this.entries.get(tab) === entry;
-    const reading: AddressReading = AddressReader.read(text);
+    const reading: AddressReading = AddressReader.read(text, LocalSites.read(String(this.context.readSetting(Resources.localSitesSetting))).origins);
     if (reading.kind === TypedAddressAnswerKind.Refused) {
       tab.controller.refuseAddress(reading.reason);
       return EntryAnswer.Stayed;
