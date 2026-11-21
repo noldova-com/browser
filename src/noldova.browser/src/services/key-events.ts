@@ -38,12 +38,21 @@ export class KeyEvents {
     return modifiers.reduce((bits, t) => bits | (Resources.modifierBits.get(t) ?? 0), 0);
   }
 
-  public static press(definition: KeyDefinition, bits: number): KeyPress {
+  public static press(pressed: KeyDefinition, bits: number): KeyPress {
+    const definition: KeyDefinition = (bits & Resources.shiftBit) === 0 ? pressed : KeyEvents.shifted(pressed);
     const fields: { key: string; code: string; windowsVirtualKeyCode: number; modifiers: number } = {
       key: definition.key, code: definition.code, windowsVirtualKeyCode: definition.keyCode, modifiers: bits
     };
     const text: string = (bits & Resources.shortcutBits) === 0 ? definition.text : "";
     const down: KeyEvent = text === "" ? { type: Resources.rawKeyDownType, ...fields } : { type: Resources.keyDownType, ...fields, text, unmodifiedText: text };
     return new KeyPress(down, { type: Resources.keyUpType, ...fields });
+  }
+
+  // Shift gives a letter its capital, as a keyboard does, in the key and the text it types, when the capital is one other code point, as for
+  // ñ, ж or α. Any other key stays as it is: a digit's or a sign's shifted form depends on the keyboard's layout.
+  private static shifted(definition: KeyDefinition): KeyDefinition {
+    const upper: string = definition.key.toUpperCase();
+    const isLetter: boolean = upper !== definition.key && [...definition.key].length === 1 && [...upper].length === 1;
+    return isLetter ? new KeyDefinition(upper, definition.code, definition.keyCode, upper) : definition;
   }
 }
