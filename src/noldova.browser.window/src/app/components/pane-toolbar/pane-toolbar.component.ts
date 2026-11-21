@@ -71,7 +71,6 @@ export class PaneToolbarComponent {
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
   protected readonly isAvailable: Signal<boolean> = computed(() => this.status().state !== PaneState.Unavailable);
   protected readonly shown: Signal<string> = computed(() => this.shownAddress() ?? this.status().url);
-  // The lock and "Not secure" tell the state of the page the pane holds, so they show only while the field shows that page's address.
   private readonly shownPage: Signal<string> = computed(() => this.shown() === this.status().url ? this.shown() : "");
   protected readonly isInsecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.insecureScheme));
   protected readonly isSecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.secureScheme));
@@ -293,7 +292,6 @@ export class PaneToolbarComponent {
     this.conceal();
   }
 
-  // Another navigation, or Escape, takes the place of an entered address still waiting to go, so the field shows the page's address again.
   private leaveEntry(): void {
     if (this.isEntered)
       this.restore();
