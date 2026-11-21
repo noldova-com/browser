@@ -271,7 +271,7 @@ The redirect row also asserts that the allowed server received each first hop, a
 | `navigation.spec.ts` | Allowed origins load; the bridge's navigate, back, forward and reload check the allow list before loading, including a history entry whose origin has since left the list. |
 | `blocked-origins.spec.ts` | Each navigation row of the [blocked-origin table](#blocked-origins). |
 | `schemes.spec.ts` | A navigation loads only `https:`, `http:` and `about:blank`. |
-| `refused-frame-link.spec.ts` | The person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it, and leaves the page and the pane as they were ([#48](https://github.com/noldova-com/browser/issues/48)); it fails until Noldova Desktop reports the frame's refusal ([desktop#285](https://github.com/noldova-com/desktop/issues/285)). |
+| `refused-frame-link.spec.ts` | The person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it, and leaves the page and the pane as they were, naming the app's browser ([#48](https://github.com/noldova-com/browser/issues/48)). |
 | `subresources.spec.ts` | Each subresource row of the [blocked-origin table](#blocked-origins), the no-cache and service-worker cases. |
 | `relay-refusals.spec.ts` | The relay refuses each [refused call](#calls-on-the-view), a child target's session, a foreign view id and `DOM.describeNode` at a depth the file doesn't declare, and holds its time and size limits. |
 | `isolation.spec.ts` | The view is isolated from the app, from other profiles and from the runtime. |
