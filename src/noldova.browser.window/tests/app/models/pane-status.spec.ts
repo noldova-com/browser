@@ -309,6 +309,28 @@ describe("PaneStatus", () => {
     expect(offered.dismissAddress()).toBe(offered);
   });
 
+  it("keeps a pop-up stopped during a load through that load's commit, same-document move, title, stop and failure, and drops it for a new load or a navigation", () => {
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example", false);
+    const offered: PaneStatus = PaneStatus.empty.apply(state("https://one.example/", "", true)).offerPopup(popup);
+    const committed: PaneStatus = offered.apply(state("https://one.example/", "", true));
+    const moved: PaneStatus = committed.apply(state("https://one.example/#part", "", true));
+    const titled: PaneStatus = moved.apply(state("https://one.example/#part", "One", true));
+
+    expect([committed.popup, moved.popup, titled.popup, titled.apply(state("https://one.example/#part", "One", false)).popup,
+      titled.apply(new ViewLoadFailureEvent("https://one.example/", -2, "ERR_FAILED")).popup]).toEqual([popup, popup, popup, popup, popup]);
+    expect([titled.apply(state("https://one.example/#part", "One", false)).apply(state("https://two.example/", "", true)).popup, titled.navigate().popup,
+      titled.navigate().apply(state("https://two.example/", "", true)).popup, titled.navigate().state]).toEqual([null, null, null, PaneState.Loading]);
+  });
+
+  it("keeps a pop-up and a typed address's refusal on a loaded page through a navigation the person or an agent starts, the same status or beside a refusal's held load", () => {
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example", false);
+    const offered: PaneStatus = loaded.offerPopup(popup);
+    const refused: PaneStatus = loaded.refuseAddress(TypedAddressRefusal.NotWeb);
+    const holding: PaneStatus = offered.refuse("https://refused.example", true);
+
+    expect([offered.navigate() === offered, refused.navigate() === refused, holding.navigate().popup, holding.navigate() === holding]).toEqual([true, true, popup, false]);
+  });
+
   it("dismisses its pop-up with the refused request's notice, and keeps the rest", () => {
     expect(shown(loaded.offerPopup(new PopupOffer("https://ads.example/", null, false)).dismissRequest())).toEqual(shown(loaded));
   });
@@ -398,6 +420,22 @@ describe("PaneStatus", () => {
       .toEqual(["https://status.example/", target, request]);
     expect([target.apply(new ViewCrashEvent()).refusedTarget, target.refuse("https://refused.example").refusedTarget, target.dismissRequest().refusedTarget])
       .toEqual(["https://status.example/", "https://status.example/", null]);
+  });
+
+  it("keeps a typed address's refusal during a load through that load's commit, same-document move, title, stop and failure, and drops it for a new load or a navigation", () => {
+    const loading: PaneStatus = PaneStatus.empty.apply(state("https://one.example/", "", true));
+    const refused: PaneStatus = loading.refuseAddress(TypedAddressRefusal.NotWeb);
+    const committed: PaneStatus = refused.apply(state("https://one.example/", "", true));
+    const moved: PaneStatus = committed.apply(state("https://one.example/#part", "", true));
+    const titled: PaneStatus = moved.apply(state("https://one.example/#part", "One", true));
+
+    expect([committed.refusedAddress, moved.refusedAddress, titled.refusedAddress, titled.apply(state("https://one.example/#part", "One", false)).refusedAddress,
+      titled.apply(new ViewLoadFailureEvent("https://one.example/", -2, "ERR_FAILED")).refusedAddress]).toEqual([
+      TypedAddressRefusal.NotWeb, TypedAddressRefusal.NotWeb, TypedAddressRefusal.NotWeb, TypedAddressRefusal.NotWeb, TypedAddressRefusal.NotWeb
+    ]);
+    expect([titled.apply(state("https://one.example/#part", "One", false)).apply(state("https://two.example/", "", true)).refusedAddress, titled.navigate().refusedAddress,
+      titled.navigate().apply(state("https://two.example/", "", true)).refusedAddress]).toEqual([null, null, null]);
+    expect(loading.navigate()).toBe(loading);
   });
 
   it("refuses the same origin again once a typed address's refusal shows, so the refusal goes", () => {

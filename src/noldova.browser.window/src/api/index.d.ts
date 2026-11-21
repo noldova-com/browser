@@ -1167,9 +1167,11 @@ export declare class PaneStatus {
   public refuse(origin: string, holdsRefusedLoad?: boolean, address?: string | null, mayBeUnlisted?: boolean): PaneStatus;
 
   /**
-   * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads and a refused request's notice goes.
+   * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads, a refused request's notice goes, and so do
+   * a stopped pop-up's notice and a refused address while the page loads.
    *
-   * @returns The new status, which holds no load and has no refused request; this same status when it held none and had none.
+   * @returns The new status, which holds no load and has no refused request, nor, while the page loads, a pop-up or a refused address; this same status when it
+   * held none of the four.
    * @example
    * ```ts
    * import { PaneStatus } from "@noldova/browser.window";
