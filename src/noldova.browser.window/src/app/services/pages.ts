@@ -74,6 +74,7 @@ export class Pages {
     this.stopActivities = context.onEvent(BrowserEvents.pageActivity, t => this.receiveActivity(t));
     this.stopClosing = context.onDocumentClosed(Resources.pageDocument, t => {
       this.markElsewhere(t, false);
+      this.pending.delete(t);
       this.agentPages.closeTab(t);
       this.request(BrowserMethods.forgetPage, new PageRequest(t).toJson(), Resources.formatNotKept);
     });
