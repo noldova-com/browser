@@ -84,7 +84,7 @@ describe("NavigateTool", () => {
     }]);
     expect(bench.sendingMarks).toBe(1);
     expect(bench.methods).toEqual(["Page.enable", "Page.getFrameTree", "Page.getFrameTree", "Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree"]);
-    expect(bench.surface.calls[3]?.params).toEqual({ depth: 1 });
+    expect(bench.surface.calls[4]?.params).toEqual({ depth: 1 });
   });
 
   it("asks the person as medium risk for an origin the workspace doesn't allow, offering to allow it for good, and on that allow keeps it, gives it to the views and loads", async () => {
