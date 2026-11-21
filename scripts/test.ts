@@ -18,9 +18,10 @@ class Test {
   private static readonly root: string = path.dirname(import.meta.dirname);
   private static readonly window: string = path.join(Test.root, Resources.windowFolder);
   private static readonly angularCli: string = path.join(Test.root, ...Resources.angularCliEntry);
+  private static readonly pinnedEnvironment: NodeJS.ProcessEnv = Object.fromEntries(Object.entries(process.env).filter(([t]) => t !== Resources.chromeVariable));
   private static readonly windowEnvironment: NodeJS.ProcessEnv = process.env[Resources.ciVariable] === undefined || process.env[Resources.debugVariable] !== undefined
-    ? process.env
-    : { ...process.env, [Resources.debugVariable]: Resources.browserSessionDebug };
+    ? Test.pinnedEnvironment
+    : { ...Test.pinnedEnvironment, [Resources.debugVariable]: Resources.browserSessionDebug };
 
   public static run(values: readonly string[]): number {
     const options: readonly string[] = values.filter(t => t.startsWith(Resources.optionPrefix));

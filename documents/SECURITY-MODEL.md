@@ -178,6 +178,9 @@ A web link the person opens elsewhere in the app, which Noldova Desktop's open-l
 - A page's request for a new window never opens one: the window part opens its address as a new page document in the same workspace, through the origin check, only right after the person's own input in the page.
 - Any other request only offers the address in the page's notice, and nothing opens until the person chooses Open as a tab.
 - A tab opens at most one page while Noldova Desktop counts the person's input as recent, so a page that asks for many windows in one click gets one; its further requests in those 5 seconds only offer their address in the notice, which says a new tab opened a moment ago.
+- A middle or Ctrl click on a link, or Cmd click on macOS, opens its page each time: Noldova Desktop gives such a request the disposition `background-tab`.
+  It opens only the request that used the person's own press, Noldova Desktop's `fromPress`, one per press, and only through the origin check.
+  A second request from the same press, such as a page's handler calling `window.open` twice, and input an agent relayed, which never gives `fromPress`, keep the rule above.
 - The new page's view is the module's own, with the page's isolation and defaults; the opener keeps no reference to it, so neither page can script the other.
 
 ### Clearing browsing data

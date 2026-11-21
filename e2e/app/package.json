@@ -52,17 +52,17 @@
     "desktop-tools": "noldova-desktop-build desktop-tools"
   },
   "dependencies": {
-    "@noldova/context.core": "0.0.9",
-    "@noldova/context.exceptions": "0.0.9",
-    "@noldova/context.json": "0.0.9",
-    "@noldova/context.text": "0.0.9",
-    "@noldova/desktop.cli": "0.0.9",
-    "@noldova/desktop.electron": "0.0.9",
-    "@noldova/desktop.protocol": "0.0.9",
-    "@noldova/desktop.runtime": "0.0.9"
+    "@noldova/context.core": "0.0.10",
+    "@noldova/context.exceptions": "0.0.10",
+    "@noldova/context.json": "0.0.10",
+    "@noldova/context.text": "0.0.10",
+    "@noldova/desktop.cli": "0.0.11",
+    "@noldova/desktop.electron": "0.0.11",
+    "@noldova/desktop.protocol": "0.0.11",
+    "@noldova/desktop.runtime": "0.0.11"
   },
   "devDependencies": {
-    "@noldova/desktop.build": "0.0.9",
+    "@noldova/desktop.build": "0.0.11",
     "@types/node": "26.6.6",
     "electron": "44.9.1",
     "electron-builder": "26.16.1",

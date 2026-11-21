@@ -15,6 +15,7 @@ import { AddressRefusedException } from "../exceptions/address-refused.exception
 import { ArgumentNotOneOfException } from "../exceptions/argument-not-one-of.exception.ts";
 import { CallDeniedException } from "../exceptions/call-denied.exception.ts";
 import type { CallFailureException } from "../exceptions/call-failure.exception.ts";
+import { LandedElsewhereException } from "../exceptions/landed-elsewhere.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import { ActionMove } from "../models/action-move.ts";
@@ -61,6 +62,9 @@ export class NavigateTool implements IBrowserTool {
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
       const target: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
       await this.askAsync(activity, call, page, frame.url, target.url, progress);
+      const granted: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      if (granted.documentId !== frame.documentId || granted.url !== frame.url)
+        throw new PageChangedAfterGrantException();
       if (target.index !== null) {
         const now: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
         if (now.index !== target.index || now.url !== target.url)
@@ -82,6 +86,8 @@ export class NavigateTool implements IBrowserTool {
       }
 
       const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      if (isLoaded && !await move.isLandedAsync(this.kit.calls, page.viewId, granted, target, now, options))
+        throw new LandedElsewhereException();
       const title: string = await this.kit.readTitleOfAsync(page.viewId, now.documentId, options);
       const content: ToolContent[] = [ToolContent.fromText(Resources.formatNavigated(now.url, title), now.origin)];
       if (!isLoaded)
@@ -123,5 +129,7 @@ export class NavigateTool implements IBrowserTool {
       throw error;
     }
     await this.kit.origins.allowTypedAsync(new TypedAddressRequest(page.profileKey, target));
+    if (activity.signal.aborted)
+      throw ToolFailures.fromAbort(activity.signal.reason);
   }
 }

@@ -15,7 +15,7 @@ import { NavigationMove } from "../../src/models/navigation-move.ts";
 import type { WithinDocumentMove } from "../../src/models/within-document-move.ts";
 
 describe("NavigationMove", () => {
-  it("is the base of each way the navigate tool moves the page, which reads its target, whether it may stay in its document, and goes there", async () => {
+  it("is the base of each way the navigate tool moves the page, which reads its target, whether it may stay in its document, goes there, and says whether it landed as asked", async () => {
     class StayMove extends NavigationMove {
       public readTargetAsync(): Promise<HistoryTarget> {
         return Promise.resolve(new HistoryTarget(null, "about:blank"));
@@ -28,10 +28,15 @@ describe("NavigationMove", () => {
       public goAsync(webViews: IRuntimeWebViews, viewId: string): Promise<WebViewNavigation> {
         return webViews.navigateAsync(viewId, "about:blank");
       }
+
+      public isLandedAsync(): Promise<boolean> {
+        return Promise.resolve(true);
+      }
     }
 
     const move: StayMove = new StayMove();
 
-    expect([move instanceof NavigationMove, await move.readTargetAsync(), move.readWithinDocument()]).toStrictEqual([true, new HistoryTarget(null, "about:blank"), null]);
+    expect([move instanceof NavigationMove, await move.readTargetAsync(), move.readWithinDocument(), await move.isLandedAsync()])
+      .toStrictEqual([true, new HistoryTarget(null, "about:blank"), null, true]);
   });
 });
