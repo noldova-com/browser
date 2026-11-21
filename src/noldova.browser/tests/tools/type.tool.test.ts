@@ -18,8 +18,10 @@ import { NotSubmittedException } from "../../src/exceptions/not-submitted.except
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
+import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
+import { FieldSelectScript } from "../../src/models/field-select-script.ts";
 import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { ToolFailures } from "../../src/services/tool-failures.ts";
 import { TypeTool } from "../../src/tools/type.tool.ts";
@@ -51,7 +53,7 @@ describe("TypeTool", () => {
     tool = new TypeTool(bench.kit);
   });
 
-  it("types into a search field as medium risk: it focuses the field, inserts the text, and returns the URL after it", async () => {
+  it("types into a search field as medium risk: it focuses the field, selects what it holds, inserts the text in its place, and returns the URL after it", async () => {
     bench.failHearing();
     const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red shoes" }));
 
@@ -69,8 +71,11 @@ describe("TypeTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods.slice(17, 28)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
-      "Input.insertText"]);
+    expect(bench.methods.slice(17, 33)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
+      "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Runtime.releaseObject", "Input.insertText"]);
+    expect(sent("Runtime.callFunctionOn").filter(t => t["functionDeclaration"] === FieldSelectScript.functionDeclaration))
+      .toEqual([{ functionDeclaration: FieldSelectScript.functionDeclaration, objectId: `node-${String(ShopPage.SEARCH)}`, returnByValue: true, silent: true }]);
+    expect(sent("Runtime.releaseObject").at(-1)).toEqual({ objectId: `node-${String(ShopPage.SEARCH)}` });
     expect([sent("DOM.focus"), sent("Input.insertText"), sent("Input.dispatchKeyEvent")]).toEqual([[{ backendNodeId: ShopPage.SEARCH }], [{ text: "red shoes" }], []]);
     expect(result.content[0]?.value).toBe("Typed.");
     expect(result.structured).toEqual({ page: { url: "https://shop.test/cart/", title: "Cart" }, element: { role: "searchbox", name: "Search", isSecret: false } });
@@ -197,6 +202,34 @@ describe("TypeTool", () => {
     const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(99), text: "red shoes" }));
 
     expect(result.structured).toEqual({ page: { url: "https://shop.test/cart/", title: "Cart" }, element: { role: "generic", name: "", isSecret: true } });
+  });
+
+  it("clears the field for an empty text: it selects what the field holds and presses Delete, inserting nothing", async () => {
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "" }));
+
+    const pressed: number = bench.methods.indexOf("Input.dispatchKeyEvent");
+    expect([bench.methods.slice(pressed - 2, pressed + 2), sent("Input.insertText"), sent("Input.dispatchKeyEvent").map(t => [t["type"], t["key"], t["windowsVirtualKeyCode"]])]).toEqual([
+      ["Runtime.callFunctionOn", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["rawKeyDown", "Delete", 46], ["keyUp", "Delete", 46]]
+    ]);
+  });
+
+  it("reports a failed field selection, inserts nothing, and still releases the field's object", async () => {
+    ShopPage.failFieldSelection(bench);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), ProtocolFailedException, { moduleCode: "browser.protocol" });
+
+    const selecting: number = bench.surface.calls.findLastIndex(t => t.params["functionDeclaration"] === FieldSelectScript.functionDeclaration);
+    expect([sent("Input.insertText"), sent("Input.dispatchKeyEvent"), bench.surface.calls.slice(selecting + 1, selecting + 2).map(t => [t.method, t.params])])
+      .toEqual([[], [], [["Runtime.releaseObject", { objectId: `node-${String(ShopPage.SEARCH)}` }]]]);
+  });
+
+  it("inserts the text at the caret, and deletes nothing for an empty text, when the element isn't a field it can select in", async () => {
+    ShopPage.treatAsNoField(bench);
+
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" }));
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "" }));
+
+    expect([sent("Input.insertText"), sent("Input.dispatchKeyEvent")]).toEqual([[{ text: "red" }], []]);
   });
 
   it("types into a field with no box on the page, with no ring", async () => {
