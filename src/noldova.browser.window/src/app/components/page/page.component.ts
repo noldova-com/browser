@@ -229,6 +229,10 @@ export class PageComponent {
     }).catch((error: unknown) => this.errors.handleError(error));
   }
 
+  protected leaveEntry(tab: PaneTab): void {
+    this.pages.leaveEntry(tab);
+  }
+
   protected openPopup(tab: PaneTab, url: string): void {
     this.pages.openPopup(tab, url);
   }

@@ -29,7 +29,7 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [PaneToolbarComponent],
   template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" refusalId="refusal-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
-    (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
+    (entryLeft)="left = left + 1" (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
     <div class="probe" style="background: var(--nol-input); border: 1px solid var(--nol-input-border); color: var(--nol-text-strong); outline: 1px solid var(--nol-accent)"></div>
     <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>
     <div class="error" style="border: 1px solid var(--nol-error)"></div><h2 id="refusal-1">This workspace doesn't allow refused.example</h2>`
@@ -41,6 +41,7 @@ class HostComponent {
   public readonly shownAddress: WritableSignal<string | null> = signal(null);
   public readonly entered: string[] = [];
   public cleared: number = 0;
+  public left: number = 0;
   public findings: number = 0;
   public readonly toolbar: Signal<PaneToolbarComponent> = viewChild.required(PaneToolbarComponent);
 }
@@ -797,6 +798,64 @@ describe("PaneToolbarComponent", () => {
     await fixture.whenStable();
 
     expect(fixture.componentInstance.entered).toEqual(["  example.com/docs "]);
+  });
+
+  it("enters the address once while Enter is held, ignoring its repeats", async () => {
+    await loadAsync("https://one.example/");
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("two.example");
+    field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    for (let i = 0; i < 3; i++)
+      field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true }));
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.entered).toEqual(["two.example"]);
+  });
+
+  it("leaves an entered address for Back, Forward, Reload, Stop and Escape, and shows the page's address again", async () => {
+    await commitAsync("https://one.example/");
+    await showAsync(state("https://one.example/", false, true, true));
+    const seen: [number, string][] = [];
+    const leaveAsync = async (leave: () => void): Promise<void> => {
+      await userEvent.click(field());
+      field().select();
+      await userEvent.keyboard("two.example{Enter}");
+      await fixture.whenStable();
+      const entered: string = field().value;
+      leave();
+      await fixture.whenStable();
+      seen.push([fixture.componentInstance.left, `${entered} > ${field().value}`]);
+    };
+
+    await leaveAsync(() => button("Back").click());
+    await leaveAsync(() => button("Forward").click());
+    await leaveAsync(() => button("Reload").click());
+    await showAsync(state("https://one.example/", true, true, true));
+    await leaveAsync(() => button("Stop").click());
+    await showAsync(state("https://one.example/", false, true, true));
+    await leaveAsync(() => field().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+
+    expect(seen).toEqual([1, 2, 3, 4, 5].map(t => [t, "two.example > https://one.example/"]));
+    expect(view.calls).toEqual(["back", "forward", "reload", "stop"]);
+  });
+
+  it("shows the lock or \"Not secure\" only while the field shows the page's own address, and neither beside an address the pane gives in its place", async () => {
+    const marks = (): [string | undefined, boolean] => [element.querySelector(".nol-browser-toolbar-address > .nol-browser-toolbar-glyph")?.textContent?.trim(),
+      element.querySelector(".nol-browser-toolbar-security") !== null];
+    const seen: [string | undefined, boolean][] = [];
+    const pairs: [string, string][] = [["https://one.example/", "http://plain.example/"], ["http://plain.example/", "https://one.example/"], ["https://one.example/", "https://one.example/"]];
+    for (const [page, given] of pairs) {
+      await loadAsync(page);
+      fixture.componentInstance.shownAddress.set(given);
+      await fixture.whenStable();
+      seen.push(marks());
+      fixture.componentInstance.shownAddress.set(null);
+      await fixture.whenStable();
+      seen.push(marks());
+    }
+
+    expect(seen).toEqual([[undefined, false], ["lock", false], [undefined, false], [undefined, true], ["lock", false], ["lock", false]]);
   });
 
   it("shows the address it's given in place of the page's own, until the person edits it, again after Escape, and the page's once it's taken away", async () => {

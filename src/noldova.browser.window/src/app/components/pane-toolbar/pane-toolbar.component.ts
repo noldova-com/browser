@@ -70,9 +70,11 @@ export class PaneToolbarComponent {
   protected readonly isLoading: Signal<boolean> = computed(() => this.status().state === PaneState.Loading);
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
   protected readonly isAvailable: Signal<boolean> = computed(() => this.status().state !== PaneState.Unavailable);
-  protected readonly isInsecure: Signal<boolean> = computed(() => this.status().url.startsWith(Resources.insecureScheme));
-  protected readonly isSecure: Signal<boolean> = computed(() => this.status().url.startsWith(Resources.secureScheme));
   protected readonly shown: Signal<string> = computed(() => this.shownAddress() ?? this.status().url);
+  // The lock and "Not secure" tell the state of the page the pane holds, so they show only while the field shows that page's address.
+  private readonly shownPage: Signal<string> = computed(() => this.shown() === this.status().url ? this.shown() : "");
+  protected readonly isInsecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.insecureScheme));
+  protected readonly isSecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.secureScheme));
   protected readonly shownHost: Signal<string | null> = computed(() => {
     const url: string = this.shown();
     if (this.draft() !== null || !URL.canParse(url))
@@ -111,6 +113,7 @@ export class PaneToolbarComponent {
   public readonly refusalId = input<string | null>(null);
   public readonly shownAddress = input<string | null>(null);
   public readonly addressEntered = output<string>();
+  public readonly entryLeft = output<void>();
   public readonly clearBrowsingData = output<void>();
   public readonly findRequested = output<void>();
 
@@ -172,13 +175,16 @@ export class PaneToolbarComponent {
   }
 
   public reloadPage(): void {
-    if (this.hasPage())
-      this.run(this.controller().reloadAsync());
+    if (!this.hasPage())
+      return;
+    this.leaveEntry();
+    this.run(this.controller().reloadAsync());
   }
 
   public stopPage(): boolean {
     if (!this.isLoading())
       return false;
+    this.leaveEntry();
     const press: number = ++this.stopPresses;
     this.standingStop = press;
     this.run(this.controller().stopAsync().catch((error: unknown) => {
@@ -221,7 +227,7 @@ export class PaneToolbarComponent {
   }
 
   protected pressFieldKey(event: KeyboardEvent): void {
-    if (event.isComposing || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)
+    if (event.isComposing || event.repeat || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)
       return;
     if (event.key === Resources.enterKey)
       this.enter();
@@ -230,10 +236,12 @@ export class PaneToolbarComponent {
   }
 
   protected goBack(): void {
+    this.leaveEntry();
     this.run(this.controller().goBackAsync());
   }
 
   protected goForward(): void {
+    this.leaveEntry();
     this.run(this.controller().goForwardAsync());
   }
 
@@ -280,8 +288,16 @@ export class PaneToolbarComponent {
 
   private cancel(): void {
     this.restore();
+    this.entryLeft.emit();
     this.controller().dismissAddress();
     this.conceal();
+  }
+
+  // Another navigation, or Escape, takes the place of an entered address still waiting to go, so the field shows the page's address again.
+  private leaveEntry(): void {
+    if (this.isEntered)
+      this.restore();
+    this.entryLeft.emit();
   }
 
   private announceZoom(factor: number): void {

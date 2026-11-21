@@ -767,6 +767,24 @@ describe("PageComponent", () => {
     expect(field().getAttribute("aria-invalid")).toBeNull();
   });
 
+  it("goes nowhere once Escape leaves an entered address that still waits for its answer", async () => {
+    const view: FakeWebView = await placeAsync();
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await typeAsync("two.example");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(1));
+    await userEvent.keyboard("{Escape}");
+    allow({ kind: "Allowed", origin: "https://two.example" });
+    await stableAsync();
+
+    expect([view.calls.filter(t => t.startsWith("navigate")), field().value]).toEqual([["navigate https://one.example/"], "https://one.example/"]);
+  });
+
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {
     await openAsync();
 

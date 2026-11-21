@@ -232,6 +232,10 @@ export class Pages {
     return navigation.kind === WebViewNavigationKind.Started ? EntryAnswer.Gone : EntryAnswer.Refused;
   }
 
+  public leaveEntry(tab: PaneTab): void {
+    this.entries.delete(tab);
+  }
+
   public openPopup(tab: PaneTab, url: string): void {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place !== undefined)

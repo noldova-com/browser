@@ -1424,6 +1424,20 @@ describe("Pages", () => {
       expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/"], null]);
     });
 
+    it("goes nowhere for an entry the person left while its address waited for its answer", async () => {
+      let allow: (answer: JsonValue) => void = () => undefined;
+      context.answerRequest = (method, parameters) => method === BrowserMethods.allowTypedAddress
+        ? new Promise<JsonValue>(resolve => allow = resolve)
+        : declared(method, parameters);
+      const tab = await openAsync();
+
+      const going = pages.goToAsync(tab, "new.example");
+      pages.leaveEntry(tab);
+      allow({ kind: "Allowed", origin: "https://new.example" });
+
+      expect([await going, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, [], null]);
+    });
+
     it("answers that the page stayed for an earlier entry whose navigation Noldova Desktop refuses after a later entry went", async () => {
       surface().script("https://new.example/", { kind: "refuse" });
       const tab = await openAsync();
