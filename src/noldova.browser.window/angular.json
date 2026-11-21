@@ -31,6 +31,7 @@
             ],
             "providersFile": "tests/test-providers.ts",
             "setupFiles": [
+              "tests/context-core.setup.ts",
               "tests/browser-matchers.setup.ts",
               "tests/kit-stylesheet.setup.ts"
             ],
@@ -72,6 +73,7 @@
             "browserViewport": "1280x800",
             "providersFile": "tests/test-providers.ts",
             "setupFiles": [
+              "tests/context-core.setup.ts",
               "tests/browser-matchers.setup.ts",
               "tests/kit-stylesheet.setup.ts"
             ],

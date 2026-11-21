@@ -170,7 +170,10 @@ export class ArchiveCheck {
     if (isWindow) {
       const peers = manifest[Resources.peersField];
       const meta = manifest[Resources.peersMetaField];
-      for (const peer of typeof peers === "object" && peers !== null ? Object.keys(peers) : []) {
+      const named: readonly string[] = typeof peers === "object" && peers !== null ? Object.keys(peers) : [];
+      for (const peer of Resources.windowPeersNeeded.filter(t => !named.includes(t)))
+        findings.push(Resources.formatArchiveWindowPeerMissing(archiveName, peer));
+      for (const peer of named) {
         const entry: unknown = typeof meta === "object" && meta !== null ? Object.fromEntries(Object.entries(meta))[peer] : undefined;
         if (typeof entry !== "object" || entry === null || Object.fromEntries(Object.entries(entry))[Resources.optionalField] !== true)
           findings.push(Resources.formatArchivePeerNotOptional(archiveName, peer));

@@ -149,6 +149,7 @@ export class Resources {
   public static readonly moduleEntryName: string = `${Resources.archiveFolder}/${Resources.moduleFile}`;
   public static readonly partExports: readonly string[] = ["./runtime", "./window"];
   public static readonly windowSuffix: string = ".window";
+  public static readonly windowPeersNeeded: readonly string[] = ["@noldova/context.core"];
   public static readonly archiveBlock: number = 512;
   public static readonly archiveNameEnd: number = 100;
   public static readonly archiveSizeStart: number = 124;
@@ -464,6 +465,10 @@ export class Resources {
 
   public static formatArchiveUnreadable(archive: string): string {
     return `${archive} could not be read as a gzipped archive.`;
+  }
+
+  public static formatArchiveWindowPeerMissing(archiveName: string, peer: string): string {
+    return `${archiveName} doesn't name ${peer} among its peers, so the window part's entry no longer imports it, and its type and absence checks aren't loaded.`;
   }
 
   public static formatCdkCopiesFound(count: number): string {

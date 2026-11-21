@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
 import type { IWindowPart } from "@noldova/desktop.window";
 
 import { BrowserWindowPart } from "../app/services/browser-window-part.ts";
