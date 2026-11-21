@@ -13,7 +13,8 @@ export const RefusedRequest = {
   FileChooser: "FileChooser",
   Authentication: "Authentication",
   Certificate: "Certificate",
-  NestedView: "NestedView"
+  NestedView: "NestedView",
+  PopupSites: "PopupSites"
 } as const;
 
 export type RefusedRequest = (typeof RefusedRequest)[keyof typeof RefusedRequest];

@@ -10,6 +10,7 @@ import { Component, ElementRef, type Signal, type WritableSignal, computed, effe
 import { AnnouncementPoliteness, Announcer, ButtonComponent, ButtonVariant } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../../resources.ts";
+import { RefusedRequest } from "../../enums/refused-request.ts";
 import { PaneStatus } from "../../models/pane-status.ts";
 import { RequestNotice } from "../../models/request-notice.ts";
 import type { PaneController } from "../../services/pane-controller.ts";
@@ -34,22 +35,18 @@ export class RequestNoticeComponent {
   protected readonly secondary: ButtonVariant = ButtonVariant.Secondary;
   protected readonly notice: Signal<RequestNotice | null> = computed(() => {
     const status = this.current();
-    if (status.popup !== null) {
-      const host: string = Resources.hostOf(status.url);
-      return new RequestNotice(Resources.popupGlyph, status.popup.hadRecentInput ? Resources.formatHeldWindow(host) : Resources.formatPopup(host), Resources.openAsTab);
-    }
     if (status.refusedAddress !== null)
       return new RequestNotice(Resources.refusedAddressGlyph, Resources.formatRefusedAddress(status.refusedAddress, this.appName()), null);
     return status.refusedRequest === null
       ? null
-      : new RequestNotice(Resources.refusedRequestGlyphs[status.refusedRequest], Resources.formatRefusedRequest(status.refusedRequest, this.appName()), Resources.openExternal);
+      : new RequestNotice(Resources.refusedRequestGlyphs[status.refusedRequest], Resources.formatRefusedRequest(status.refusedRequest, this.appName()),
+        status.refusedRequest === RefusedRequest.PopupSites ? null : Resources.openExternal);
   });
 
   public readonly controller = input.required<PaneController>();
   public readonly appName = input<string | null>(null);
   public readonly messageId = input<string | null>(null);
   public readonly focusLeaving = output<void>();
-  public readonly popupOpened = output<string>();
   public readonly externalOpened = output<string>();
 
   public constructor() {
@@ -69,9 +66,6 @@ export class RequestNoticeComponent {
 
   protected act(): void {
     const status = this.current();
-    if (status.popup !== null)
-      this.popupOpened.emit(status.popup.address);
-    else
-      this.externalOpened.emit(status.refusedTarget ?? status.url);
+    this.externalOpened.emit(status.refusedTarget ?? status.url);
   }
 }

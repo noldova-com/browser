@@ -10,20 +10,25 @@ import {
   Component, DestroyRef, ElementRef, ErrorHandler, Injector, type Signal, type WritableSignal, afterNextRender, afterRenderEffect, computed, effect, inject, input, output, signal, untracked, viewChild
 } from "@angular/core";
 import {
-  AnnouncementPoliteness, Announcer, ClipboardWriter, MenuComponent, MenuItemComponent, MenuTriggerDirective, OverlayAlignment, OverlaySide, ProgressComponent,
-  ToolbarButtonComponent, ToolbarDirective, ToolbarItemDirective, TooltipDirective
+  AnnouncementPoliteness, Announcer, ClipboardWriter, IconButtonComponent, MenuComponent, MenuGroupComponent, MenuItemComponent, MenuTriggerDirective, OverlayAlignment,
+  OverlaySide, ProgressComponent, ToolbarButtonComponent, ToolbarDirective, ToolbarItemDirective, TooltipDirective
 } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../../resources.ts";
 import { PaneState } from "../../enums/pane-state.ts";
 import { ZoomStep } from "../../enums/zoom-step.ts";
 import { PaneStatus } from "../../models/pane-status.ts";
+import type { PopupOffer } from "../../models/popup-offer.ts";
+import { SiteList } from "../../models/site-list.ts";
 import { PageKeys } from "../../services/page-keys.ts";
 import type { PaneController } from "../../services/pane-controller.ts";
 
 @Component({
   selector: "nol-browser-toolbar",
-  imports: [MenuComponent, MenuItemComponent, MenuTriggerDirective, ProgressComponent, ToolbarButtonComponent, ToolbarDirective, ToolbarItemDirective, TooltipDirective],
+  imports: [
+    IconButtonComponent, MenuComponent, MenuGroupComponent, MenuItemComponent, MenuTriggerDirective, ProgressComponent, ToolbarButtonComponent, ToolbarDirective,
+    ToolbarItemDirective, TooltipDirective
+  ],
   templateUrl: "./pane-toolbar.component.html",
   styleUrl: "./pane-toolbar.component.css",
   host: {
@@ -66,6 +71,8 @@ export class PaneToolbarComponent {
   protected readonly zoomPercent: Signal<string> = computed(() => Resources.formatZoom(this.zoom()));
   protected readonly zoomKeys: Readonly<Record<ZoomStep, string>> = PageKeys.zoomKeysOf(PageKeys.platformOf(navigator.platform));
   protected readonly findKey: string = PageKeys.findKeyOf(PageKeys.platformOf(navigator.platform));
+  protected readonly popup: Signal<PopupOffer | null> = computed(() => this.status().popup);
+  protected readonly popupSite: Signal<string | null> = computed(() => SiteList.siteOf(this.status().url));
   protected readonly status: Signal<PaneStatus> = this.current.asReadonly();
   protected readonly isLoading: Signal<boolean> = computed(() => this.status().state === PaneState.Loading);
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
@@ -115,6 +122,8 @@ export class PaneToolbarComponent {
   public readonly entryLeft = output<void>();
   public readonly clearBrowsingData = output<void>();
   public readonly findRequested = output<void>();
+  public readonly popupOpened = output<string>();
+  public readonly popupsAllowed = output<string>();
 
   public constructor() {
     const resizes: ResizeObserver = new ResizeObserver(() => this.measure());
@@ -136,6 +145,7 @@ export class PaneToolbarComponent {
       this.restore();
       onCleanup(controller.onChange(t => {
         this.announceLoad(this.current(), t);
+        this.announcePopup(this.current(), t);
         if (t.state !== PaneState.Refused)
           this.isAnswerRefused.set(false);
         this.current.set(t);
@@ -290,6 +300,11 @@ export class PaneToolbarComponent {
 
   private announceZoom(factor: number): void {
     this.announcer.announce(Resources.formatZoomed(factor), AnnouncementPoliteness.Polite, { group: this.zoomGroup });
+  }
+
+  private announcePopup(was: PaneStatus, status: PaneStatus): void {
+    if (status.popup !== null && status.popup.address !== was.popup?.address)
+      this.announcer.announce(Resources.formatPopupBlocked(Resources.hostOf(status.url)), AnnouncementPoliteness.Polite);
   }
 
   private announceLoad(was: PaneStatus, status: PaneStatus): void {

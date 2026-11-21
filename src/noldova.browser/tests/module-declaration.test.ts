@@ -42,9 +42,9 @@ describe("module.json", () => {
 });
 
 describe("settings.json", () => {
-  it("declares the settings that module.json lists, the links' on the Browser page's Links group with the values the window part reads and the list it checks, and the agents' switch on its Agents group, on by default", async () => {
+  it("declares the settings that module.json lists, the links' on the Browser page's Links group with the values the window part reads and the list it checks, the agents' switch on its Agents group, on by default, and the sites on this computer or network and the sites allowed pop-ups on its Sites group", async () => {
     expect(await readDeclarationAsync("../module.json")).toMatchObject({ contributes: { settings: ["browser.linkClick", "browser.linkMiddleClick", "browser.systemSites",
-      "browser.agentTools", "browser.localSites"] } });
+      "browser.agentTools", "browser.localSites", "browser.popupSites"] } });
     expect(await readDeclarationAsync("../settings.json")).toMatchObject({ settings: [
       expect.objectContaining({ name: "browser.linkClick", default: "InApp", page: "Browser", group: "Links",
         type: { kind: "Choice", options: [{ value: "InApp", title: "In the app's browser" }, { value: "System", title: "In your browser" }] } }),
@@ -52,7 +52,9 @@ describe("settings.json", () => {
         type: { kind: "Choice", options: [{ value: "Modified", title: "Like Ctrl+click" }, { value: "Plain", title: "Like a click" }] } }),
       expect.objectContaining({ name: "browser.systemSites", type: { kind: "Text", maxLength: 4000, checked: true }, default: "", page: "Browser", group: "Links" }),
       expect.objectContaining({ name: "browser.agentTools", type: { kind: "Boolean" }, default: true, page: "Browser", group: "Agents" }),
-      expect.objectContaining({ name: "browser.localSites", type: { kind: "Text", maxLength: 4000, checked: true }, default: "", page: "Browser", group: "Sites" })
+      expect.objectContaining({ name: "browser.localSites", type: { kind: "Text", maxLength: 4000, checked: true }, default: "", page: "Browser", group: "Sites" }),
+      expect.objectContaining({ name: "browser.popupSites", title: "Allow pop-ups", type: { kind: "Text", maxLength: 4000, checked: true }, default: "", page: "Browser",
+        group: "Sites" })
     ] });
   });
 });

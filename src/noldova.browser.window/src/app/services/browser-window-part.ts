@@ -36,6 +36,7 @@ export class BrowserWindowPart implements IWindowPart {
     const places: LinkPlaces = new LinkPlaces(context);
     context.registerInAppBrowser({ placeFor: (url, gesture) => places.placeFor(url, gesture), openAsync: url => pages.openLinkAsync(url) });
     context.provideSettingCheck(Resources.systemSitesSetting, t => LinkPlaces.checkSites(t));
+    context.provideSettingCheck(Resources.popupSitesSetting, t => LinkPlaces.checkSites(t));
     context.provideSettingCheck(Resources.localSitesSetting, t => LocalSiteCheck.check(t));
     this.pages = pages;
     void pages.reportOpenAsync();

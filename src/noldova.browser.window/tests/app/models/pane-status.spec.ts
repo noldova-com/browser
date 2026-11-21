@@ -138,7 +138,7 @@ describe("PaneStatus", () => {
       byEvent.navigate(),
       byEvent.refuseAddress(TypedAddressRefusal.NotWeb).dismissAddress(),
       byEvent.refuseRequest(RefusedRequest.Download).dismissRequest(),
-      byEvent.offerPopup(new PopupOffer("https://ads.example/", "https://one.example", false))
+      byEvent.offerPopup(new PopupOffer("https://ads.example/", "https://one.example"))
     ];
     const ended: PaneStatus[] = [
       byEvent.refuse("https://refused.example", true),
@@ -286,15 +286,20 @@ describe("PaneStatus", () => {
     expect(loaded.dismissRequest()).toBe(loaded);
   });
 
-  it("offers a pop-up beside the page, in place of a refused request or a typed address's refusal, the page and its state kept", () => {
-    const popup: PopupOffer = new PopupOffer("https://ads.example/", null, false);
-    const offered: PaneStatus = loaded.apply(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example")).refuseAddress(TypedAddressRefusal.NotWeb).offerPopup(popup);
+  it("offers a pop-up apart from the tab's notice, keeping a refused request or a typed address's refusal, the page and its state, and the latest offer in place of an earlier one", () => {
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", null);
+    const later: PopupOffer = new PopupOffer("https://more-ads.example/", null);
+    const requested: PaneStatus = loaded.apply(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example")).offerPopup(popup);
+    const addressed: PaneStatus = loaded.refuseAddress(TypedAddressRefusal.NotWeb).offerPopup(popup);
 
-    expect([offered.popup, offered.refusedRequest, offered.refusedAddress, offered.state, offered.url, offered.title]).toEqual([popup, null, null, PaneState.Loaded, "https://one.example/", "One"]);
+    expect([requested.popup, requested.refusedRequest, requested.refusedTarget, requested.state, requested.url, requested.title])
+      .toEqual([popup, RefusedRequest.Download, null, PaneState.Loaded, "https://one.example/", "One"]);
+    expect([addressed.popup, addressed.refusedAddress, requested.offerPopup(later).popup, requested.offerPopup(popup) === requested])
+      .toEqual([popup, TypedAddressRefusal.NotWeb, later, true]);
   });
 
-  it("keeps a pop-up through a loaded state, a crash, a refused navigation and a dismissed address, until a load starts or fails or another notice takes its place", () => {
-    const offered: PaneStatus = loaded.offerPopup(new PopupOffer("https://ads.example/", "https://one.example", false));
+  it("keeps a pop-up through a loaded state, a crash, a refused navigation, a refused request, a typed address's refusal and a dismissed address, until a load starts or fails", () => {
+    const offered: PaneStatus = loaded.offerPopup(new PopupOffer("https://ads.example/", "https://one.example"));
 
     expect([
       offered.apply(state("https://one.example/#part", "One", false)).popup?.address,
@@ -303,14 +308,14 @@ describe("PaneStatus", () => {
       offered.dismissAddress().popup?.address,
       offered.apply(state("https://two.example/", "", true)).popup,
       offered.apply(new ViewLoadFailureEvent("https://gone.example/", -2, "ERR_FAILED")).popup,
-      offered.apply(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example")).popup,
-      offered.refuseAddress(TypedAddressRefusal.Local).popup
-    ]).toEqual(["https://ads.example/", "https://ads.example/", "https://ads.example/", "https://ads.example/", null, null, null, null]);
+      offered.apply(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example")).popup?.address,
+      offered.refuseAddress(TypedAddressRefusal.Local).popup?.address
+    ]).toEqual(["https://ads.example/", "https://ads.example/", "https://ads.example/", "https://ads.example/", null, null, "https://ads.example/", "https://ads.example/"]);
     expect(offered.dismissAddress()).toBe(offered);
   });
 
   it("keeps a pop-up stopped during a load through that load's commit, same-document move, title, stop and failure, and drops it for a new load or a navigation", () => {
-    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example", false);
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example");
     const offered: PaneStatus = PaneStatus.empty.apply(state("https://one.example/", "", true)).offerPopup(popup);
     const committed: PaneStatus = offered.apply(state("https://one.example/", "", true));
     const moved: PaneStatus = committed.apply(state("https://one.example/#part", "", true));
@@ -323,7 +328,7 @@ describe("PaneStatus", () => {
   });
 
   it("keeps a pop-up and a typed address's refusal on a loaded page through a navigation the person or an agent starts, the same status or beside a refusal's held load", () => {
-    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example", false);
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", "https://one.example");
     const offered: PaneStatus = loaded.offerPopup(popup);
     const refused: PaneStatus = loaded.refuseAddress(TypedAddressRefusal.NotWeb);
     const holding: PaneStatus = offered.refuse("https://refused.example", true);
@@ -331,8 +336,13 @@ describe("PaneStatus", () => {
     expect([offered.navigate() === offered, refused.navigate() === refused, holding.navigate().popup, holding.navigate() === holding]).toEqual([true, true, popup, false]);
   });
 
-  it("dismisses its pop-up with the refused request's notice, and keeps the rest", () => {
-    expect(shown(loaded.offerPopup(new PopupOffer("https://ads.example/", null, false)).dismissRequest())).toEqual(shown(loaded));
+  it("keeps its pop-up when the refused request's notice goes, and drops only the pop-up once the person opens it", () => {
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", null);
+    const both: PaneStatus = loaded.apply(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example")).offerPopup(popup);
+
+    expect([both.dismissRequest().popup, both.dismissRequest().refusedRequest, both.dismissPopup().popup, both.dismissPopup().refusedRequest])
+      .toEqual([popup, null, null, RefusedRequest.Download]);
+    expect([shown(loaded.offerPopup(popup).dismissPopup()), loaded.dismissPopup() === loaded]).toEqual([shown(loaded), true]);
   });
 
   it("is unavailable once the host closes the view", () => {
@@ -393,13 +403,16 @@ describe("PaneStatus", () => {
     ]).toEqual([PaneState.Loading, "https://down.example/", "https://refused.example", PaneState.Crashed]);
   });
 
-  it("puts back the state a refused address replaced when a refused request or a pop-up takes its notice's place", () => {
+  it("puts back the state a refused address replaced when a refused request takes its notice's place, and keeps a pop-up offered before or after it", () => {
     const failed: PaneStatus = loaded.apply(new ViewLoadFailureEvent("https://gone.example/", -105, "ERR_NAME_NOT_RESOLVED"));
     const swapped: PaneStatus = failed.refuseAddress(TypedAddressRefusal.Local, "http://192.168.1.1");
-    const popup: PopupOffer = new PopupOffer("https://ads.example/", null, false);
+    const popup: PopupOffer = new PopupOffer("https://ads.example/", null);
+    const earlier: PaneStatus = failed.offerPopup(popup).refuseAddress(TypedAddressRefusal.Local, "http://192.168.1.1");
 
     expect(shown(swapped.refuseRequest(RefusedRequest.Download))).toEqual({ ...shown(failed), refusedRequest: RefusedRequest.Download });
-    expect(shown(swapped.offerPopup(popup))).toEqual({ ...shown(failed), popup });
+    expect([swapped.offerPopup(popup).refusedAddress, earlier.popup, earlier.state]).toEqual([TypedAddressRefusal.Local, popup, PaneState.Refused]);
+    expect([shown(swapped.offerPopup(popup).dismissAddress()), shown(earlier.dismissAddress()), shown(swapped.offerPopup(popup).refuseRequest(RefusedRequest.Download))])
+      .toEqual([{ ...shown(failed), popup }, { ...shown(failed), popup }, { ...shown(failed), refusedRequest: RefusedRequest.Download, popup }]);
   });
 
   it("keeps a typed address's refusal through a loaded state and a crash, until a load starts or fails, a navigation is refused or a request takes its place", () => {

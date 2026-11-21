@@ -35,6 +35,21 @@ export class SiteList {
     return new SiteList(hosts, ignored, ignoredEntries);
   }
 
+  public static siteOf(url: string): string | null {
+    const parsed: URL | null = URL.parse(url);
+    if (parsed === null || !Resources.siteSchemes.includes(parsed.protocol))
+      return null;
+    const host: string = parsed.hostname.replace(Resources.trailingDotPattern, "");
+    return SiteList.read(host).hosts.includes(host) ? host : null;
+  }
+
+  public static append(text: string, host: string): string {
+    const kept: string = text.trim();
+    if (SiteList.read(kept).hosts.includes(host))
+      return text;
+    return kept === "" ? host : `${kept}${Resources.siteJoiner}${host}`;
+  }
+
   public matches(url: string): boolean {
     const parsed: URL | null = URL.parse(url);
     if (parsed === null)

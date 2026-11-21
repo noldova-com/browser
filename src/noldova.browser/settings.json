@@ -76,6 +76,21 @@
       "scopes": [],
       "page": "Browser",
       "group": "Sites"
+    },
+    {
+      "name": "browser.popupSites",
+      "title": "Allow pop-ups",
+      "description": "Sites whose pages may open pop-ups and new windows without your click: hosts separated by commas, such as example.com, each with its subdomains. A pop-up from any other site is blocked, and the address bar offers to open it.",
+      "type": {
+        "kind": "Text",
+        "maxLength": 4000,
+        "checked": true
+      },
+      "default": "",
+      "locality": "Shared",
+      "scopes": [],
+      "page": "Browser",
+      "group": "Sites"
     }
   ]
 }

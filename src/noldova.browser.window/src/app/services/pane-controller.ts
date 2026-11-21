@@ -139,9 +139,9 @@ export class PaneController {
       this.update(this.current.refuseAddress(reason, origin));
   }
 
-  public offerPopup(address: string, origin: string | null, hadRecentInput: boolean = false): void {
+  public offerPopup(address: string, origin: string | null): void {
     if (!this.isClosed && this.current !== PaneStatus.unavailable)
-      this.update(this.current.offerPopup(new PopupOffer(address, origin, hadRecentInput)));
+      this.update(this.current.offerPopup(new PopupOffer(address, origin)));
   }
 
   public refuseRequest(request: RefusedRequest, target: string | null = null): void {
@@ -151,6 +151,10 @@ export class PaneController {
 
   public dismissAddress(): void {
     this.update(this.current.dismissAddress());
+  }
+
+  public dismissPopup(): void {
+    this.update(this.current.dismissPopup());
   }
 
   public close(): void {

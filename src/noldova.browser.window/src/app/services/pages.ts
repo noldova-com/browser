@@ -39,6 +39,7 @@ import { AddressReader } from "./address-reader.ts";
 import { AgentPages } from "./agent-pages.ts";
 import { NavigationStarts } from "./navigation-starts.ts";
 import { PageAnswers } from "./page-answers.ts";
+import { PopupSites } from "./popup-sites.ts";
 
 export class Pages {
   private static readonly registry: WeakMap<IWindowPartContext, Pages> = new WeakMap<IWindowPartContext, Pages>();
@@ -63,6 +64,7 @@ export class Pages {
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
   private readonly renamers: Set<() => void> = new Set<() => void>();
   private readonly agentPages: AgentPages;
+  private readonly popupSites: PopupSites;
   private readonly stopActivities: () => void;
   private readonly stopClosing: () => void;
   private isClosed: boolean = false;
@@ -80,6 +82,7 @@ export class Pages {
     this.context = context;
     Pages.registry.set(context, this);
     this.agentPages = new AgentPages(context);
+    this.popupSites = new PopupSites(context);
     this.stopActivities = context.onEvent(BrowserEvents.pageActivity, t => this.receiveActivity(t));
     this.stopClosing = context.onDocumentClosed(Resources.pageDocument, t => {
       this.markElsewhere(t, false);
@@ -293,7 +296,15 @@ export class Pages {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     if (place !== undefined)
       this.open(place.profileKey, url, null, tab);
-    tab.controller.dismissRequest();
+    tab.controller.dismissPopup();
+  }
+
+  public allowPopups(tab: PaneTab, url: string): void {
+    this.popupSites.allowAsync(tab.controller.status.url).catch((error: unknown) => {
+      this.context.log(Resources.formatPopupsNotAllowed(error));
+      tab.controller.refuseRequest(RefusedRequest.PopupSites);
+    });
+    this.openPopup(tab, url);
   }
 
   public openNew(tab: PaneTab): void {
@@ -652,7 +663,6 @@ export class Pages {
 
   private follow(tab: PaneTab, place: PagePlace): () => void {
     let title: string = "";
-    let openedAt: number = Number.NEGATIVE_INFINITY;
     let url: string = place.url;
     let clearWorking: (() => void) | null = null;
     let shownStatus: IDocumentStatus | null = null;
@@ -693,10 +703,9 @@ export class Pages {
       }
     });
     const stopWindows: () => void = tab.controller.onNewWindow((event: ViewNewWindowEvent) => {
-      if (event.hadRecentInput && ((event.isBackgroundTab && event.isFromPress) || Date.now() - openedAt >= Resources.recentInputMilliseconds)) {
+      if (event.isFromPress || this.popupSites.allows(tab.controller.status.url)) {
         try {
           this.open(place.profileKey, event.address, null, tab, event.isBackgroundTab);
-          openedAt = Date.now();
         }
         catch (error) {
           this.context.log(Resources.formatNewWindowNotOpened(error));
@@ -704,7 +713,7 @@ export class Pages {
         }
       }
       else
-        tab.controller.offerPopup(event.address, event.origin, event.hadRecentInput);
+        tab.controller.offerPopup(event.address, event.origin);
     });
     const stopRedirects: () => void = tab.controller.onRefusedRedirect(event => this.followRedirect(tab, place, event));
     const stopStarts: () => void = NavigationStarts.listen(tab.controller, () => {

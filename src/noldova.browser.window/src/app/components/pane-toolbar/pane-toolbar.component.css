@@ -163,6 +163,11 @@
   color: transparent;
 }
 
+.nol-browser-toolbar-popup {
+  flex: none;
+  margin-inline-end: calc((var(--nol-icon) - var(--nol-icon-button-target)) / 2);
+}
+
 .nol-browser-toolbar-progress {
   flex: none;
   block-size: var(--nol-browser-progress-height);
@@ -183,6 +188,7 @@
 
 .nol-browser-toolbar-revealed .nol-browser-toolbar-buttons,
 .nol-browser-toolbar-revealed .nol-browser-toolbar-mark,
+.nol-browser-toolbar-revealed .nol-browser-toolbar-popup-mark,
 .nol-browser-toolbar-revealed .nol-browser-toolbar-more {
   display: none;
 }

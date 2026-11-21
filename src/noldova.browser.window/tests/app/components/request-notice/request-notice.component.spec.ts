@@ -25,13 +25,12 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [RequestNoticeComponent],
   template: `<div class="frame" style="width: 640px"><nol-browser-request-notice [controller]="controller()" [appName]="appName()" (focusLeaving)="leaves = leaves + 1"
-    (popupOpened)="popups.push($event); controller().dismissRequest()" (externalOpened)="links.push($event)" /></div>
+    (externalOpened)="links.push($event)" /></div>
     <div class="probe" style="background: var(--nol-raised); border: 1px solid var(--nol-card-border); color: var(--nol-warning)"></div>`
 })
 class HostComponent {
   public readonly controller: WritableSignal<PaneController> = signal(new PaneController(null));
   public readonly appName: WritableSignal<string | null> = signal("Fixture App");
-  public readonly popups: string[] = [];
   public readonly links: string[] = [];
   public leaves: number = 0;
 }
@@ -67,13 +66,12 @@ describe("RequestNoticeComponent", () => {
     await fixture.whenStable();
   }
 
+  // The pane's own refusal comes from the window part, never from a view's event.
   async function refuseAsync(request: RefusedRequest): Promise<void> {
-    view.emit(new ViewRequestRefusalEvent(request, "https://one.example"));
-    await fixture.whenStable();
-  }
-
-  async function popupAsync(): Promise<void> {
-    fixture.componentInstance.controller().offerPopup("https://ads.example.com/", null);
+    if (request === RefusedRequest.PopupSites)
+      fixture.componentInstance.controller().refuseRequest(request);
+    else
+      view.emit(new ViewRequestRefusalEvent(request, "https://one.example"));
     await fixture.whenStable();
   }
 
@@ -118,7 +116,7 @@ describe("RequestNoticeComponent", () => {
     for (const request of Object.values(RefusedRequest)) {
       await refuseAsync(request);
       const [glyph, message, buttons] = shown();
-      expect(buttons).toEqual(["Open in external browser"]);
+      expect(buttons).toEqual(request === RefusedRequest.PopupSites ? [] : ["Open in external browser"]);
       notices.push([glyph, message]);
     }
 
@@ -129,8 +127,10 @@ describe("RequestNoticeComponent", () => {
       ["upload_file", "Opening files from this computer isn't available in Fixture App's browser yet."],
       ["key_off", "Sign-in dialogs aren't available in Fixture App's browser yet."],
       ["gpp_bad", "This page's certificate wasn't accepted, so Fixture App's browser didn't open it."],
-      ["web_asset_off", "Pages shown inside other pages aren't available in Fixture App's browser yet."]
+      ["web_asset_off", "Pages shown inside other pages aren't available in Fixture App's browser yet."],
+      ["block", "Settings didn't add this site to Allow pop-ups, so Fixture App's browser still blocks its pop-ups."]
     ]);
+    await refuseAsync(RefusedRequest.Download);
     find("button").click();
     expect(fixture.componentInstance.links).toEqual(["https://docs.example.com/pricing"]);
   });
@@ -168,26 +168,16 @@ describe("RequestNoticeComponent", () => {
     expect([starts.length, starts.filter(t => !/^[A-Z]/.test(t))]).toEqual([Object.values(RefusedRequest).length, []]);
   });
 
-  it("says a pop-up was stopped, names the page's host, and opens its address as a tab, which takes the notice away", async () => {
+  it("shows no notice for a blocked pop-up, which the address bar offers, and keeps a refused request's notice beside it", async () => {
     await loadAsync();
-    await popupAsync();
-
-    expect(shown()).toEqual(["tab", "docs.example.com tried to open a pop-up window and was stopped.", ["Open as a tab"]]);
-    find("button").focus();
-    find("button").click();
+    fixture.componentInstance.controller().offerPopup("https://ads.example.com/", null);
+    await fixture.whenStable();
+    const alone: ReturnType<typeof shown> = shown();
+    await refuseAsync(RefusedRequest.Download);
+    fixture.componentInstance.controller().offerPopup("https://more-ads.example.com/", null);
     await fixture.whenStable();
 
-    expect([fixture.componentInstance.popups, shown(), fixture.componentInstance.leaves]).toEqual([["https://ads.example.com/"], [undefined, undefined, []], 1]);
-  });
-
-  it("says a window the person's input asked for waits, once the tab opened a page for that input, and opens it as a tab", async () => {
-    await loadAsync();
-    fixture.componentInstance.controller().offerPopup("https://status.example.com/", null, true);
-    await fixture.whenStable();
-
-    expect(shown()).toEqual(["tab", "docs.example.com opened a new tab a moment ago, so this window waits here.", ["Open as a tab"]]);
-    find("button").click();
-    expect(fixture.componentInstance.popups).toEqual(["https://status.example.com/"]);
+    expect([alone, shown()[1]]).toEqual([[undefined, undefined, []], "Downloads aren't available in Fixture App's browser yet."]);
   });
 
   it("says why the pane didn't go to a typed address, each reason in its own words, with no action, in place of a refused request", async () => {
@@ -290,7 +280,7 @@ describe("RequestNoticeComponent", () => {
 
   it("keeps the notice under forced colours: its place and insets, an edge all round and its glyph and message in the system's text colour", async () => {
     await loadAsync();
-    await popupAsync();
+    await refuseAsync(RefusedRequest.Download);
     await ForcedColorsFixture.activateAsync();
     const frame: DOMRect = find(".frame").getBoundingClientRect();
     const bar: HTMLElement = find(".nol-browser-request-notice-bar");
@@ -311,7 +301,7 @@ describe("RequestNoticeComponent", () => {
     it(`lays out the notice in rem, on the raised surface with its glyph in the warning colour, in the ${mode} theme`, async () => {
       AppearanceFixture.apply(DefaultTheme.theme, mode);
       await loadAsync();
-      await popupAsync();
+      await refuseAsync(RefusedRequest.Download);
       const frame: DOMRect = find(".frame").getBoundingClientRect();
       const bar: HTMLElement = find(".nol-browser-request-notice-bar");
       const box: DOMRect = bar.getBoundingClientRect();

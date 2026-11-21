@@ -908,6 +908,12 @@ export declare const RefusedRequest: {
    * A page shown inside another page, named `nestedView`; value `"NestedView"`.
    */
   readonly NestedView: "NestedView";
+
+  /**
+   * The page's site, which the person chose to always allow pop-ups from, when Settings didn't take it; the pane's own, which no `RequestRefused`
+   * event names; value `"PopupSites"`.
+   */
+  readonly PopupSites: "PopupSites";
 };
 
 /**
@@ -916,7 +922,7 @@ export declare const RefusedRequest: {
 export declare type RefusedRequest = (typeof RefusedRequest)[keyof typeof RefusedRequest];
 
 /**
- * A new window a page asked for without the person's own input, which the tab's notice offers to open as a tab.
+ * A new window a page asked for without a press of the person's, which the address bar's Pop-up blocked offers to open as a tab.
  */
 export declare class PopupOffer {
   /**
@@ -930,25 +936,18 @@ export declare class PopupOffer {
   public readonly origin: string | null;
 
   /**
-   * Whether the person's own input came just before: true when the tab had already opened a new page for that input, so the notice
-   * says this window waits rather than that a pop-up was stopped.
-   */
-  public readonly hadRecentInput: boolean;
-
-  /**
    * Makes the offer.
    *
    * @param address The address the page asked for.
    * @param origin The origin of the referrer, or `null`.
-   * @param hadRecentInput Whether the person's own input came just before.
    * @example
    * ```ts
    * import { PopupOffer } from "@noldova/browser.window";
    *
-   * const offer: PopupOffer = new PopupOffer("https://www.example.com/", "https://docs.example.com", false);
+   * const offer: PopupOffer = new PopupOffer("https://www.example.com/", "https://docs.example.com");
    * ```
    */
-  public constructor(address: string, origin: string | null, hadRecentInput: boolean);
+  public constructor(address: string, origin: string | null);
 }
 
 /**
@@ -1065,9 +1064,9 @@ export declare class PaneStatus {
   public readonly refusedAddress: AddressRefusal | null;
 
   /**
-   * A new window the page asked for without the person's own input, until a load starts, the page asks for something the host refuses,
-   * the pane refuses a typed address or the person opens or dismisses it; `null` otherwise.
-   * At most one of it, {@link PaneStatus.refusedRequest} and {@link PaneStatus.refusedAddress} is set: the latest takes the others' place.
+   * The latest new window the page asked for without a press of the person's, which the address bar's Pop-up blocked offers, until a load starts or the
+   * person opens it; `null` otherwise.
+   * It is apart from the tab's notice: a refused request or address leaves it, and it leaves them.
    */
   public readonly popup: PopupOffer | null;
 
@@ -1103,7 +1102,7 @@ export declare class PaneStatus {
   /**
    * Gives the status after the page's state: its address, title and history; while loading it gives `Loading` and clears a failure, a refusal or a crash,
    * unless a refusal holds the load at the page's address, and once loading stops it turns `Loading` into `Loaded` and keeps any other state.
-   * A refused request that came while `Loading` stays through the rest of that load; a load that starts after it clears it.
+   * A refused request, a refused address or a pop-up that came while `Loading` stays through the rest of that load; a load that starts after it clears it.
    *
    * @param state The page's state.
    * @returns The new status.
@@ -1118,7 +1117,7 @@ export declare class PaneStatus {
 
   /**
    * Gives the status after a load failed: `Failed`, with the failed address and the failure's description, and no refusal or pop-up, except a refused
-   * request that came while that load was `Loading`.
+   * request, a refused address or a pop-up that came while that load was `Loading`.
    *
    * @param failure The failed load.
    * @returns The new status.
@@ -1168,7 +1167,7 @@ export declare class PaneStatus {
 
   /**
    * Gives the status once the person or an agent started a navigation, which is new, so a refusal holds none of its loads, a refused request's notice goes, and so do
-   * a stopped pop-up's notice and a refused address while the page loads.
+   * a blocked pop-up's offer and a refused address while the page loads.
    *
    * @returns The new status, which holds no load and has no refused request, nor, while the page loads, a pop-up or a refused address; this same status when it
    * held none of the four.
@@ -1188,7 +1187,8 @@ export declare class PaneStatus {
    * @param origin The refused address's origin, when the runtime part refused its site; `null`, the default, for text that names no site.
    * Over a `Failed` or `Refused` state, an origin gives a `Refused` state of its own, which dismissing the address's notice takes back, so the
    * page never names two addresses.
-   * @returns The new status, with this reason in place of any refused request; this same status when it already had this reason, and this origin.
+   * @returns The new status, with this reason in place of any refused request, and any pop-up kept; this same status when it already had this reason, and this
+   * origin.
    * @example
    * ```ts
    * import { TypedAddressRefusal } from "@noldova/browser.protocol";
@@ -1201,9 +1201,9 @@ export declare class PaneStatus {
   public refuseAddress(reason: AddressRefusal, origin?: string | null): PaneStatus;
 
   /**
-   * Gives the status once the person dismissed or opened the notice of a refused request or a pop-up, with everything else kept.
+   * Gives the status once the person dismissed or acted on the notice of a refused request, with everything else kept.
    *
-   * @returns The new status, with no refused request or pop-up; this same status when it had neither.
+   * @returns The new status, with no refused request; this same status when it had none.
    * @example
    * ```ts
    * import { PaneStatus } from "@noldova/browser.window";
@@ -1214,9 +1214,22 @@ export declare class PaneStatus {
   public dismissRequest(): PaneStatus;
 
   /**
+   * Gives the status once the person opened the pop-up the address bar offered, with everything else kept.
+   *
+   * @returns The new status, with no pop-up; this same status when it had none.
+   * @example
+   * ```ts
+   * import { PaneStatus, PopupOffer } from "@noldova/browser.window";
+   *
+   * const quiet: PaneStatus = PaneStatus.empty.offerPopup(new PopupOffer("https://example.com/", null)).dismissPopup();
+   * ```
+   */
+  public dismissPopup(): PaneStatus;
+
+  /**
    * Gives the status once the person dismissed the notice of a refused address, or put the page's address back in the field, with everything else kept.
    *
-   * @returns The new status, with no refused address; this same status when it had none.
+   * @returns The new status, with no refused address, and the pop-up it had; this same status when it had none.
    * @example
    * ```ts
    * import { TypedAddressRefusal } from "@noldova/browser.protocol";
@@ -1228,21 +1241,21 @@ export declare class PaneStatus {
   public dismissAddress(): PaneStatus;
 
   /**
-   * Gives the status with the notice of a new window the page asked for that didn't open by itself, in place of any other notice.
+   * Gives the status with a new window the page asked for that didn't open, in place of an earlier one, and with the tab's notice kept.
    *
-   * @param popup The address the page asked for, the origin that asked, and whether the person's input came just before.
-   * @returns The new status.
+   * @param popup The address the page asked for and the origin that asked.
+   * @returns The new status; this same status when it already had this offer.
    * @example
    * ```ts
    * import { PaneStatus, PopupOffer } from "@noldova/browser.window";
    *
-   * const offered: PaneStatus = PaneStatus.empty.offerPopup(new PopupOffer("https://example.com/", null, false));
+   * const offered: PaneStatus = PaneStatus.empty.offerPopup(new PopupOffer("https://example.com/", null));
    * ```
    */
   public offerPopup(popup: PopupOffer): PaneStatus;
 
   /**
-   * Gives the status with the notice of a request of the page that got nothing, in place of a typed address's or a pop-up's notice.
+   * Gives the status with the notice of a request of the page that got nothing, in place of a typed address's notice, and with any pop-up kept.
    *
    * @param request The request that got nothing.
    * @param target The address the request was for, such as the new window's; `null`, the default, for the page's own.
@@ -1455,12 +1468,11 @@ export declare class PaneController {
   public refuseNavigation(origin: string, address?: string | null): void;
 
   /**
-   * Offers a new window the page asked for, which didn't open by itself, in the tab's notice; listeners hear of the change.
+   * Offers a new window the page asked for, which didn't open, in the address bar's Pop-up blocked; listeners hear of the change.
    * It does nothing once the controller closed or the tab is unavailable.
    *
    * @param address The address the page asked for.
    * @param origin The origin that asked, or `null`.
-   * @param hadRecentInput Whether the person's input came just before, as the tab had already opened a page for it; false when left out.
    * @example
    * ```ts
    * import type { PaneController } from "@noldova/browser.window";
@@ -1470,7 +1482,7 @@ export declare class PaneController {
    * }
    * ```
    */
-  public offerPopup(address: string, origin: string | null, hadRecentInput?: boolean): void;
+  public offerPopup(address: string, origin: string | null): void;
 
   /**
    * Says in the tab's notice that a request of the page got nothing, such as a new window Noldova Desktop didn't open as a page.
@@ -1734,6 +1746,20 @@ export declare class PaneController {
    * ```
    */
   public dismissAddress(): void;
+
+  /**
+   * Drops the status's pop-up, once the person opened it from the address bar; listeners hear of the change.
+   *
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * function opened(controller: PaneController): void {
+   *   controller.dismissPopup();
+   * }
+   * ```
+   */
+  public dismissPopup(): void;
 
   /**
    * Stops following the page, drops every listener and closes the view, if any, which ends its pending calls; later calls do nothing.

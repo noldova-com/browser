@@ -43,4 +43,16 @@ describe("WindowContext", () => {
     expect(() => item.update(new StatusBarItemState("Scout · 1 page open", { command: "browser.other" }))).toThrow(UnansweredCallException);
     expect(item.state().command).toBe("browser.openPage");
   });
+
+  it("stores a declared setting's written value, which a read gives back, and rejects an undeclared setting or a write it is told to fail", async () => {
+    const context: WindowContext = new WindowContext();
+    const failure: Error = new Error("The runtime refused the value.");
+
+    await context.writeSettingAsync("browser.popupSites", "example.com");
+    await expect(context.writeSettingAsync("browser.other", "example.com")).rejects.toThrow(UnansweredCallException);
+    context.settingFailure = failure;
+    await expect(context.writeSettingAsync("browser.popupSites", "other.example")).rejects.toBe(failure);
+
+    expect(context.readSetting("browser.popupSites")).toBe("example.com");
+  });
 });

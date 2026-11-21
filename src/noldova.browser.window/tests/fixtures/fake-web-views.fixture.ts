@@ -154,7 +154,7 @@ export class FakeWebView implements IWebViewHandle {
 
   private static write(event: ViewEvent, details: WebViewDetails): WebViewDetails {
     if (event instanceof ViewRequestRefusalEvent)
-      return { ...details, request: Resources.refusedRequestNames[event.request] };
+      return { ...details, request: Resources.refusedRequestNames[event.request] ?? null };
     if (event instanceof ViewNewWindowEvent)
       return { address: event.address, hadRecentInput: event.hadRecentInput, origin: event.origin,
         disposition: event.isBackgroundTab ? Resources.backgroundTabDisposition : FakeWebView.FOREGROUND_TAB, fromPress: event.isFromPress };

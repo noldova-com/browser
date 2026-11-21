@@ -63,7 +63,7 @@ describe("WebViewEventReader", () => {
     const requests = ["download", "newWindow", "permission", "fileChooser", "authentication", "certificate", "nestedView"] as const;
 
     expect(requests.map(t => WebViewEventReader.read(event(WebViewEventKind.RequestRefused, { request: t, origin: "https://one.example" }))))
-      .toStrictEqual(Object.values(RefusedRequest).map(t => new ViewRequestRefusalEvent(t, "https://one.example")));
+      .toStrictEqual(Object.values(RefusedRequest).filter(t => t !== RefusedRequest.PopupSites).map(t => new ViewRequestRefusalEvent(t, "https://one.example")));
   });
 
   it("reads a new window the page asked for, with whether the person's input asked and the origin that asked, if any", () => {
@@ -121,6 +121,8 @@ describe("WebViewEventReader", () => {
       malformed(WebViewEventKind.RequestRefused, { request: "camera", origin: "https://one.example" }),
       malformed(WebViewEventKind.RequestRefused, { request: "Download", origin: "https://one.example" }),
       malformed(WebViewEventKind.RequestRefused, { request: "download" }),
+      malformed(WebViewEventKind.RequestRefused, { request: "popupSites", origin: "https://one.example" }),
+      malformed(WebViewEventKind.RequestRefused, { origin: "https://one.example" }),
       malformed(WebViewEventKind.NewWindowRequested, { address: 1, hadRecentInput: true, origin: null }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: "yes", origin: null }),
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: 1 }),
@@ -128,6 +130,6 @@ describe("WebViewEventReader", () => {
       malformed(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, fromPress: "yes" }),
       malformed(WebViewEventKind.Key, { name: 1 }),
       malformed(WebViewEventKind.Zoom, { factor: "125%" })
-    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null, null, null]);
+    ].map(t => WebViewEventReader.read(t))).toEqual([null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]);
   });
 });

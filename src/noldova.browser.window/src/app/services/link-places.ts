@@ -6,20 +6,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonValue } from "@noldova/context.json";
 import { type IWindowPartContext, LinkPlace } from "@noldova/desktop.window";
 import { LinkGesture } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../resources.ts";
 import { SiteList } from "../models/site-list.ts";
+import { SiteSetting } from "./site-setting.ts";
 
 export class LinkPlaces {
   private readonly context: IWindowPartContext;
-  private sitesText: string = "";
-  private sites: SiteList = SiteList.read("");
+  private readonly sites: SiteSetting;
 
   public constructor(context: IWindowPartContext) {
     this.context = context;
+    this.sites = new SiteSetting(context, Resources.systemSitesSetting, t => Resources.formatIgnoredSites(t));
   }
 
   public static checkSites(text: string): string | null {
@@ -28,7 +28,7 @@ export class LinkPlaces {
   }
 
   public placeFor(url: string, gesture: LinkGesture): LinkPlace {
-    if (this.readSites().matches(url))
+    if (this.sites.read().matches(url))
       return LinkPlace.System;
     const click: LinkPlace = this.context.readSetting(Resources.linkClickSetting) === LinkPlace.System ? LinkPlace.System : LinkPlace.InApp;
     const other: LinkPlace = click === LinkPlace.InApp ? LinkPlace.System : LinkPlace.InApp;
@@ -40,17 +40,5 @@ export class LinkPlaces {
       case LinkGesture.Middle:
         return this.context.readSetting(Resources.linkMiddleClickSetting) === LinkGesture.Plain ? click : other;
     }
-  }
-
-  private readSites(): SiteList {
-    const stored: JsonValue | undefined = this.context.readSetting(Resources.systemSitesSetting);
-    const text: string = typeof stored === "string" ? stored : "";
-    if (text !== this.sitesText) {
-      this.sitesText = text;
-      this.sites = SiteList.read(text);
-      if (this.sites.ignored.length > 0)
-        this.context.log(Resources.formatIgnoredSites(this.sites.ignored));
-    }
-    return this.sites;
   }
 }

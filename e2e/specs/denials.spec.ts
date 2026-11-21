@@ -54,7 +54,7 @@ const DOWNLOAD_NOTICE = /^Downloads aren't available in .+ yet\.$/;
 const FILE_CHOOSER_NOTICE = /^Opening files from this computer isn't available in .+ yet\.$/;
 const AUTHENTICATION_NOTICE = /^Sign-in dialogs aren't available in .+ yet\.$/;
 const CERTIFICATE_NOTICE = /^This page's certificate wasn't accepted, so .+ didn't open it\.$/;
-const POPUP_NOTICE = /^.+ tried to open a pop-up window and was stopped\.$/;
+const POPUP_SIGN = "button.nol-browser-toolbar-popup";
 
 const PAGE_SCRIPT = `
   window.outcomeAsync = async (attempt) => {
@@ -197,12 +197,13 @@ test.describe("denied by default", () => {
     const before = await beforeAsync(app);
 
     expect(await app.viewPages.runAsync(`String(window.open("/opened"))`), "window.open gave the page a window.").toBe("null");
-    await expect(app.window.locator(NOTICE_MESSAGE), "The pane never offered the window.open address.").toHaveText(POPUP_NOTICE);
+    await expect(app.window.locator(POPUP_SIGN), "The address bar never offered the window.open address.").toHaveAccessibleName("Pop-up blocked");
+    await expect(app.window.locator(NOTICE_MESSAGE), "A blocked pop-up showed a notice.").toHaveCount(0);
     expect(await app.viewPages.listAsync(), "window.open opened a page.").toEqual([new ViewPage(allowed.url("/"), PAGE_TITLE)]);
     await openAgainAsync(app, allowed);
 
     expect(await app.viewPages.runAsync(`window.clickAsync({ href: "/targeted", target: "_blank" })`)).toBe("clicked");
-    await expect(app.window.locator(NOTICE_MESSAGE), "The pane never offered the targeted link's address.").toHaveText(POPUP_NOTICE);
+    await expect(app.window.locator(POPUP_SIGN), "The address bar never offered the targeted link's address.").toHaveAccessibleName("Pop-up blocked");
     expect(await app.viewPages.listAsync(), "The targeted link opened a page.").toEqual([new ViewPage(allowed.url("/again"), AGAIN_TITLE)]);
 
     expect(pathsOf(allowed), "A refused window asked for its address.").toEqual(["/", "/again"]);

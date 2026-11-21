@@ -36,6 +36,7 @@ export class Resources {
   public static readonly linkMiddleClickSetting: string = "browser.linkMiddleClick";
   public static readonly systemSitesSetting: string = "browser.systemSites";
   public static readonly localSitesSetting: string = "browser.localSites";
+  public static readonly popupSitesSetting: string = "browser.popupSites";
   public static readonly linkProfile: string = "links";
   public static readonly openPageArguments: string = "browser.openPage needs { profileKey, url?, instance? }: a profile key of lowercase letters, digits and hyphens, the address as text, and the instance as a lowercase UUID.";
   public static readonly profileKeyPattern: RegExp = /^[a-z0-9][a-z0-9-]{0,63}$/u;
@@ -49,7 +50,6 @@ export class Resources {
   public static readonly pageActivityEvent: string = "The runtime part's activity event isn't one.";
   public static readonly answerRootPath: string = "$";
   public static readonly paneUnavailable: string = "The pane has no embedded view, or the host closed it.";
-  public static readonly recentInputMilliseconds: number = 5_000;
   public static readonly backgroundTabDisposition: string = "background-tab";
   public static readonly redirectLimit: number = 10;
   public static readonly readyPageLimitMilliseconds: number = 5_000;
@@ -164,7 +164,7 @@ export class Resources {
     [PageStateAction.TryAgain]: "Try again", [PageStateAction.CopyAddress]: "Copy address", [PageStateAction.Back]: "Back", [PageStateAction.Reload]: "Reload",
     [PageStateAction.Close]: "Close", [PageStateAction.AllowSite]: "Allow this site for the workspace", [PageStateAction.NotNow]: "Not now"
   };
-  public static readonly refusedRequestNames: Readonly<Record<RefusedRequest, string>> = {
+  public static readonly refusedRequestNames: Readonly<Partial<Record<RefusedRequest, string>>> = {
     [RefusedRequest.Download]: "download",
     [RefusedRequest.NewWindow]: "newWindow",
     [RefusedRequest.Permission]: "permission",
@@ -180,11 +180,16 @@ export class Resources {
     [RefusedRequest.FileChooser]: "upload_file",
     [RefusedRequest.Authentication]: "key_off",
     [RefusedRequest.Certificate]: "gpp_bad",
-    [RefusedRequest.NestedView]: "web_asset_off"
+    [RefusedRequest.NestedView]: "web_asset_off",
+    [RefusedRequest.PopupSites]: "block"
   };
   public static readonly refusedAddressGlyph: string = "error";
-  public static readonly popupGlyph: string = "tab";
-  public static readonly openAsTab: string = "Open as a tab";
+  public static readonly popupBlocked: string = "Pop-up blocked";
+  public static readonly popupBlockedGlyph: string = "open_in_new_off";
+  public static readonly openPopup: string = "Open the pop-up";
+  public static readonly openPopupGlyph: string = "open_in_new";
+  public static readonly allowPopupsGlyph: string = "check_circle";
+  public static readonly allowPopupsDescription: string = "Adds the site to Allow pop-ups in Settings, and opens this one";
   public static readonly openerGlyph: string = "subdirectory_arrow_right";
   public static readonly pageErrorGlyph: string = "error";
   public static readonly pageBlockedGlyph: string = "block";
@@ -211,6 +216,8 @@ export class Resources {
   public static readonly hostLabelSeparator: string = ".";
   public static readonly ipv6Opening: string = "[";
   public static readonly siteSeparator: string = ",";
+  public static readonly siteJoiner: string = ", ";
+  public static readonly siteSchemes: readonly string[] = [Resources.insecureScheme, Resources.secureScheme];
   public static readonly wildcardPattern: RegExp = /^([^:/?#]+:\/\/)?\*\./u;
   public static readonly wildcardReplacement: string = "$1";
   public static readonly trailingDotPattern: RegExp = /\.$/u;
@@ -241,7 +248,8 @@ export class Resources {
     [RefusedRequest.FileChooser]: t => `Opening files from this computer isn't available in ${t} yet.`,
     [RefusedRequest.Authentication]: t => `Sign-in dialogs aren't available in ${t} yet.`,
     [RefusedRequest.Certificate]: t => `This page's certificate wasn't accepted, so ${t} didn't open it.`,
-    [RefusedRequest.NestedView]: t => `Pages shown inside other pages aren't available in ${t} yet.`
+    [RefusedRequest.NestedView]: t => `Pages shown inside other pages aren't available in ${t} yet.`,
+    [RefusedRequest.PopupSites]: t => `Settings didn't add this site to Allow pop-ups, so ${t} still blocks its pop-ups.`
   };
 
   // The pane names the module as the app's browser wherever it speaks of it, or as this browser while the app's name is unknown.
@@ -375,12 +383,16 @@ export class Resources {
     return `The page ${instance} is open on another workspace.`;
   }
 
-  public static formatPopup(host: string): string {
-    return `${host} tried to open a pop-up window and was stopped.`;
+  public static formatPopupBlocked(host: string): string {
+    return `${host} tried to open a pop-up, which was blocked. The address bar's Pop-up blocked can open it.`;
   }
 
-  public static formatHeldWindow(host: string): string {
-    return `${host} opened a new tab a moment ago, so this window waits here.`;
+  public static formatAllowPopups(host: string): string {
+    return `Always allow pop-ups from ${host}`;
+  }
+
+  public static formatPopupsNotAllowed(error: unknown): string {
+    return `The site wasn't added to the sites allowed to open pop-ups: ${Resources.kindOf(error)}.`;
   }
 
   public static formatRefusedRequest(request: RefusedRequest, appName: string | null): string {
@@ -461,6 +473,10 @@ export class Resources {
 
   public static formatIgnoredSites(places: readonly number[]): string {
     return `The sites that always open in the system's browser ignore the entries that aren't hosts, at ${places.join(", ")} in the list.`;
+  }
+
+  public static formatIgnoredPopupSites(places: readonly number[]): string {
+    return `The sites allowed to open pop-ups ignore the entries that aren't hosts, at ${places.join(", ")} in the list.`;
   }
 
   public static formatRefusedSites(entries: readonly string[]): string {

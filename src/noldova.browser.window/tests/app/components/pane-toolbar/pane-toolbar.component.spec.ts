@@ -29,7 +29,8 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [PaneToolbarComponent],
   template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" refusalId="refusal-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
-    (entryLeft)="left = left + 1" (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
+    (entryLeft)="left = left + 1" (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" (popupOpened)="opened.push($event)"
+    (popupsAllowed)="allowed.push($event)" /></div>
     <div class="probe" style="background: var(--nol-input); border: 1px solid var(--nol-input-border); color: var(--nol-text-strong); outline: 1px solid var(--nol-accent)"></div>
     <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>
     <div class="error" style="border: 1px solid var(--nol-error)"></div><h2 id="refusal-1">This workspace doesn't allow refused.example</h2>`
@@ -40,6 +41,8 @@ class HostComponent {
   public readonly openLink: WritableSignal<((url: string) => Promise<void>) | null> = signal(null);
   public readonly shownAddress: WritableSignal<string | null> = signal(null);
   public readonly entered: string[] = [];
+  public readonly opened: string[] = [];
+  public readonly allowed: string[] = [];
   public cleared: number = 0;
   public left: number = 0;
   public findings: number = 0;
@@ -1355,6 +1358,103 @@ describe("PaneToolbarComponent", () => {
 
     expect([hidden, element.querySelector(".nol-browser-toolbar-mark")]).toEqual([false, null]);
   });
+
+  function popupItems(): HTMLButtonElement[] {
+    return [...document.querySelectorAll<HTMLButtonElement>(".nol-browser-toolbar-popup-menu button[nol-menu-item]")];
+  }
+
+  async function openPopupMenuAsync(sign: string = ".nol-browser-toolbar-popup"): Promise<HTMLButtonElement[]> {
+    find(sign).click();
+    await vi.waitFor(() => expect(popupItems().length).toBeGreaterThan(0));
+    return popupItems();
+  }
+
+  it("shows Pop-up blocked at the field's end for a pop-up the page asked for, named and with a tooltip below, and says so politely once for each address it blocks", async () => {
+    await loadAsync("https://docs.example.com/pricing");
+    controller.offerPopup("https://ads.example.com/", "https://docs.example.com");
+    await fixture.whenStable();
+    controller.offerPopup("https://ads.example.com/", "https://docs.example.com");
+    await showAsync(state("https://docs.example.com/pricing"));
+    const sign: HTMLButtonElement = button("Pop-up blocked");
+    await PointerFixture.hoverAsync(sign);
+
+    await vi.waitFor(() => expect(tooltipNamed("Pop-up blocked").getBoundingClientRect().top).toBeGreaterThanOrEqual(sign.getBoundingClientRect().bottom));
+    expect([sign.parentElement === find(".nol-browser-toolbar-address"), said.slice(2)]).toEqual([true,
+      [["docs.example.com tried to open a pop-up, which was blocked. The address bar's Pop-up blocked can open it.", AnnouncementPoliteness.Polite]]]);
+    controller.offerPopup("https://more-ads.example.com/", null);
+    await fixture.whenStable();
+    expect(said.length).toBe(4);
+  });
+
+  it("opens the pop-up's menu from the sign, under its heading, with Open the pop-up showing its address and Always allow naming the page's site, and hands each choice its address", async () => {
+    await loadAsync("https://docs.example.com./pricing");
+    controller.offerPopup("https://ads.example.com/", null);
+    await fixture.whenStable();
+    const shown: HTMLButtonElement[] = await openPopupMenuAsync();
+
+    expect([labels(shown), shown.map(t => t.textContent?.includes(t === shown[0] ? "https://ads.example.com/" : "Adds the site to Allow pop-ups in Settings")),
+      find(".nol-browser-toolbar-popup-menu nol-menu-group").textContent?.includes("Pop-up blocked")])
+      .toEqual([[["open_in_new", "Open the pop-up", null], ["check_circle", "Always allow pop-ups from docs.example.com", null]], [true, true], true]);
+    shown[0]?.click();
+    await openPopupMenuAsync();
+    popupItems()[1]?.click();
+    await fixture.whenStable();
+
+    expect([fixture.componentInstance.opened, fixture.componentInstance.allowed]).toEqual([["https://ads.example.com/"], ["https://ads.example.com/"]]);
+  });
+
+  it("offers only Open the pop-up for a page that isn't a web page's or whose host the sites allowed pop-ups can't hold, and no sign without a pop-up", async () => {
+    await loadAsync("http://[::1]:4173/");
+    const before: boolean = element.querySelector(".nol-browser-toolbar-popup") === null;
+    controller.offerPopup("https://ads.example.com/", null);
+    await fixture.whenStable();
+
+    expect([before, labels(await openPopupMenuAsync())]).toEqual([true, [["open_in_new", "Open the pop-up", null]]]);
+  });
+
+  it("moves Pop-up blocked onto the narrow row beside More, named, with a tooltip and the same menu, and hides it while the field shows", async () => {
+    await loadAsync("https://docs.example.com/pricing");
+    controller.offerPopup("https://ads.example.com/", null);
+    await fixture.whenStable();
+    await sizeAsync(10);
+    const mark: HTMLElement = find(".nol-browser-toolbar-popup-mark");
+    const [box, more] = [mark.getBoundingClientRect(), button("More").getBoundingClientRect()];
+    const others = [button("Back"), button("Forward"), button("Reload", "Stop"), button("More")].map(t => t.getBoundingClientRect());
+
+    expect([mark.getAttribute("aria-label"), element.querySelector(".nol-browser-toolbar-popup") === null, rem(more.left - box.right), others.some(t => overlaps(t, box))])
+      .toEqual(["Pop-up blocked", true, 0.125, false]);
+    await PointerFixture.hoverAsync(mark);
+    await vi.waitFor(() => expect(tooltipNamed("Pop-up blocked")).toBeDefined());
+    expect(labels(await openPopupMenuAsync(".nol-browser-toolbar-popup-mark")).map(t => t[1])).toEqual(["Open the pop-up", "Always allow pop-ups from docs.example.com"]);
+    await userEvent.keyboard("{Escape}");
+    await revealAsync();
+
+    expect(isShown(mark)).toBe(false);
+  });
+
+  for (const [mode, isForced] of [[ThemeMode.Light, false], [ThemeMode.Dark, false], [ThemeMode.Dark, true]] as const) {
+    it(`draws Pop-up blocked inside the field's end, its glyph as far in as the lock's, centred and clear of the address, in the ${isForced ? "forced colours" : mode} look`, async () => {
+      AppearanceFixture.apply(DefaultTheme.theme, mode);
+      if (isForced)
+        await ForcedColorsFixture.activateAsync();
+      await showAsync(state(LONG));
+      controller.offerPopup("https://ads.example.com/", null);
+      await fixture.whenStable();
+      await measuredAsync();
+      const address: HTMLElement = find(".nol-browser-toolbar-address");
+      const box: DOMRect = address.getBoundingClientRect();
+      const sign: DOMRect = button("Pop-up blocked").getBoundingClientRect();
+      const lock: DOMRect = find(".nol-browser-toolbar-address > .nol-browser-toolbar-glyph").getBoundingClientRect();
+      const place: DOMRect = find(".nol-browser-toolbar-place").getBoundingClientRect();
+      const border: number = Number.parseFloat(getComputedStyle(address).borderLeftWidth);
+      const glyph: number = AppearanceFixture.toPixels(1);
+
+      AppearanceFixture.expectPixels(box.right - border - ((sign.left + sign.right + glyph) / 2), lock.left - box.left - border);
+      AppearanceFixture.expectPixels((sign.top + sign.bottom) / 2, (box.top + box.bottom) / 2);
+      expect([rem(lock.left - box.left - border), rem(sign.width), place.right <= sign.left + 0.5, sign.top >= box.top, sign.bottom <= box.bottom])
+        .toEqual([0.5, 1.5, true, true, true]);
+    });
+  }
 
   it("keeps the field's edges under forced colours: a Highlight ring twice the border's width while edited, and a dashed edge in the system's text colour on a refused address, whose contents keep their place", async () => {
     await loadAsync("https://one.example/");

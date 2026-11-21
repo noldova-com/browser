@@ -73,10 +73,19 @@ describe("BrowserWindowPart", () => {
     await new BrowserWindowPart().activateAsync(context);
     const check = context.settingChecks.get("browser.systemSites");
 
-    expect([...context.settingChecks.keys()]).toEqual(["browser.systemSites", "browser.localSites"]);
+    expect([...context.settingChecks.keys()]).toEqual(["browser.systemSites", "browser.popupSites", "browser.localSites"]);
     expect([check?.(""), check?.("code.example, *.example.org"), check?.("https://example.com, http://code.example/team")]).toEqual([null, null, null]);
     expect(check?.("code.example, code example")).toBe("\"code example\" isn't a host. Enter hosts separated by commas, such as example.com.");
     expect(check?.("https://, code.example, 1.2.3.256")).toBe("\"https://\", \"1.2.3.256\" aren't hosts. Enter hosts separated by commas, such as example.com.");
+  });
+
+  it("checks browser.popupSites as it does browser.systemSites, refusing an entry that isn't a host by naming it", async () => {
+    const context: WindowContext = new WindowContext();
+    await new BrowserWindowPart().activateAsync(context);
+    const check = context.settingChecks.get("browser.popupSites");
+
+    expect([check?.(""), check?.("docs.example.com, https://code.example/team"), check?.("code.example, code example")])
+      .toEqual([null, null, "\"code example\" isn't a host. Enter hosts separated by commas, such as example.com."]);
   });
 
   it("checks browser.localSites, refusing by name an entry the runtime part leaves out, and saving exact local http: and https: origins", async () => {

@@ -11,7 +11,7 @@
     "documents": ["browser.page"],
     "events": ["browser.pageActivity"],
     "statusBarItems": ["browser.agentPages"],
-    "settings": ["browser.linkClick", "browser.linkMiddleClick", "browser.systemSites", "browser.agentTools", "browser.localSites"],
+    "settings": ["browser.linkClick", "browser.linkMiddleClick", "browser.systemSites", "browser.agentTools", "browser.localSites", "browser.popupSites"],
     "methods": ["browser.allowTypedAddress", "browser.passTypedRedirect", "browser.endTypedRedirects", "browser.readyPage", "browser.rememberPage", "browser.readPage", "browser.forgetPage", "browser.clearBrowsingData", "browser.readAppName", "browser.stopPage", "browser.readActivities", "browser.claimPage", "browser.holdPages", "browser.letGoPage"],
     "menus": ["browser.pageTabRow"],
     "tools": [

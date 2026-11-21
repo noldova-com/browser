@@ -35,10 +35,18 @@ LICENSE file in the root directory of this source tree.
           class="nol-browser-toolbar-host">{{ host }}</span><span class="nol-browser-toolbar-path" data-truncates>{{ pathAfter(host) }}</span></span>
       }
     </span>
+    @if (!isNarrow() && popup() !== null) {
+      <button nol-icon-button type="button" class="nol-browser-toolbar-popup" [label]="resources.popupBlocked" [icon]="resources.popupBlockedGlyph"
+        [nolTooltip]="resources.popupBlocked" [nolTooltipSide]="below" [nolMenuTriggerFor]="popupMenu" [nolMenuAlignment]="end"></button>
+    }
   </div>
   @if (isNarrow() && isInsecure()) {
     <span class="nol-browser-toolbar-mark nol-browser-toolbar-glyph material-symbols-rounded" role="img" [attr.aria-label]="resources.notSecure" [nolTooltip]="resources.notSecure"
       [nolTooltipSide]="below">{{ resources.insecureGlyph }}</span>
+  }
+  @if (isNarrow() && popup() !== null) {
+    <button nol-toolbar-button type="button" class="nol-browser-toolbar-popup-mark" [label]="resources.popupBlocked" [icon]="resources.popupBlockedGlyph"
+      [nolTooltip]="resources.popupBlocked" [nolTooltipSide]="below" [nolMenuTriggerFor]="popupMenu" [nolMenuAlignment]="end"></button>
   }
   <button #more nol-toolbar-button type="button" class="nol-browser-toolbar-more" [label]="resources.more" [icon]="resources.moreGlyph" [nolMenuTriggerFor]="moreMenu" [nolMenuAlignment]="end"
     [nolTooltip]="resources.more" [nolTooltipSide]="below"></button>
@@ -54,6 +62,19 @@ LICENSE file in the root directory of this source tree.
       [nolMenuTriggerFor]="zoomMenu"></button>
     <button nol-menu-item [label]="resources.findOnPage" [icon]="resources.findGlyph" [shortcut]="findKey" [disabled]="!hasPage()" (triggered)="requestFind()"></button>
     <button nol-menu-item [label]="resources.clearBrowsingData" [icon]="resources.clearGlyph" [disabled]="!isAvailable()" (triggered)="clearBrowsingData.emit()"></button>
+  </nol-menu>
+</ng-template>
+<ng-template #popupMenu>
+  <nol-menu class="nol-browser-toolbar-popup-menu">
+    @if (popup(); as popup) {
+      <nol-menu-group [label]="resources.popupBlocked">
+        <button nol-menu-item [label]="resources.openPopup" [icon]="resources.openPopupGlyph" [description]="popup.address" (triggered)="popupOpened.emit(popup.address)"></button>
+        @if (popupSite(); as site) {
+          <button nol-menu-item [label]="resources.formatAllowPopups(site)" [icon]="resources.allowPopupsGlyph" [description]="resources.allowPopupsDescription"
+            (triggered)="popupsAllowed.emit(popup.address)"></button>
+        }
+      </nol-menu-group>
+    }
   </nol-menu>
 </ng-template>
 <ng-template #zoomMenu>

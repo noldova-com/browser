@@ -8,7 +8,7 @@ LICENSE file in the root directory of this source tree.
 
 @if (tab(); as tab) {
   <nol-browser-toolbar [controller]="tab.controller" [openLink]="openLink" [noticeId]="noticeId" [refusalId]="stateHeadingId" [shownAddress]="refusedAddress()" (addressEntered)="goTo(tab, $event)" (entryLeft)="leaveEntry(tab)" (clearBrowsingData)="clearBrowsingData(tab)"
-    (findRequested)="openFind(tab)" />
+    (findRequested)="openFind(tab)" (popupOpened)="openPopup(tab, $event)" (popupsAllowed)="allowPopups(tab, $event)" />
   @if (isFinding()) {
     <nol-browser-find-bar [controller]="tab.controller" (closed)="closeFind()" />
   }
@@ -18,7 +18,7 @@ LICENSE file in the root directory of this source tree.
 }
 <div class="nol-browser-page-area" [id]="pageId" [attr.aria-busy]="isLoading() || null">
   @if (tab(); as tab) {
-    <nol-browser-request-notice [controller]="tab.controller" [messageId]="noticeId" [appName]="appName()" (focusLeaving)="focusToolbar()" (popupOpened)="openPopup(tab, $event)"
+    <nol-browser-request-notice [controller]="tab.controller" [messageId]="noticeId" [appName]="appName()" (focusLeaving)="focusToolbar()"
       (externalOpened)="openExternal($event)" />
   }
   <div #view class="nol-browser-page-view">

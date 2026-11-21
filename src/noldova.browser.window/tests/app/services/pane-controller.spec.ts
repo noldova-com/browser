@@ -337,10 +337,23 @@ describe("PaneController", () => {
     controller.offerPopup("https://other.example/", null);
     unavailable.offerPopup("https://ads.example/", null);
 
-    expect([statuses.map(t => t.popup), unavailable.status]).toStrictEqual([[new PopupOffer("https://ads.example/", "https://one.example", false)], PaneStatus.unavailable]);
+    expect([statuses.map(t => t.popup), unavailable.status]).toStrictEqual([[new PopupOffer("https://ads.example/", "https://one.example")], PaneStatus.unavailable]);
   });
 
-  it("says a request got nothing in its status, in place of a pop-up's notice, once, and says nothing once closed or without a view", () => {
+  it("drops a pop-up once the person opens it, keeping a refused request's notice, and says nothing when it has none", () => {
+    const { controller, view } = open();
+    const statuses: PaneStatus[] = [];
+    view.emit(new ViewRequestRefusalEvent(RefusedRequest.Download, "https://one.example"));
+    controller.offerPopup("https://ads.example/", null);
+    controller.onChange(t => statuses.push(t));
+
+    controller.dismissPopup();
+    controller.dismissPopup();
+
+    expect(statuses.map(t => [t.popup, t.refusedRequest])).toEqual([[null, RefusedRequest.Download]]);
+  });
+
+  it("says a request got nothing in its status, beside a pop-up, once, and says nothing once closed or without a view", () => {
     const { controller } = open();
     const unavailable: PaneController = new PaneController(null);
     const statuses: PaneStatus[] = [];
@@ -355,7 +368,8 @@ describe("PaneController", () => {
     unavailable.refuseRequest(RefusedRequest.NewWindow);
 
     expect([statuses.map(t => [t.refusedRequest, t.refusedTarget, t.popup]), unavailable.status])
-      .toEqual([[[RefusedRequest.NewWindow, null, null], [RefusedRequest.NewWindow, "https://status.example/", null]], PaneStatus.unavailable]);
+      .toEqual([[[RefusedRequest.NewWindow, null, new PopupOffer("https://ads.example/", null)], [RefusedRequest.NewWindow, "https://status.example/",
+        new PopupOffer("https://ads.example/", null)]], PaneStatus.unavailable]);
   });
 
   it("refuses no typed address once closed or without a view", () => {

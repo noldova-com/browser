@@ -379,20 +379,41 @@ describe("PageComponent", () => {
     await vi.waitFor(() => expectErrors([failure]));
   });
 
-  it("opens a stopped pop-up as a page document of its own in the same workspace, takes the notice away, and moves the focus to Reload", async () => {
+  function popupItem(name: string): HTMLButtonElement | undefined {
+    return [...document.querySelectorAll<HTMLButtonElement>(".nol-browser-toolbar-popup-menu button[nol-menu-item]")]
+      .find(t => t.querySelector(".nol-menu-item-label")?.textContent?.trim() === name);
+  }
+
+  async function blockAsync(): Promise<FakeWebView> {
     const view: FakeWebView = await placeAsync();
     view.emit(new ViewNewWindowEvent("https://ads.example.com/", false, "https://one.example"));
     await stableAsync();
-    const action = find<HTMLButtonElement>("button.nol-browser-request-notice-action");
-    action.focus();
+    find<HTMLButtonElement>("button.nol-browser-toolbar-popup").click();
+    await vi.waitFor(() => expect(popupItem("Open the pop-up")).toBeDefined());
+    return view;
+  }
 
-    expect([notice(), action.textContent?.trim()]).toEqual(["one.example tried to open a pop-up window and was stopped.", "Open as a tab"]);
-    action.click();
+  it("blocks a pop-up with no press without a notice, and opens it from the address bar's sign as a page of its own in the same workspace, moving the focus to Reload", async () => {
+    await blockAsync();
+
+    expect([notice(), context.opened.length]).toEqual([undefined, 1]);
+    popupItem("Open the pop-up")?.click();
     await stableAsync();
 
-    expect([context.opened.at(-1)?.title, notice(), document.activeElement]).toEqual(["https://ads.example.com/", undefined, button("Reload", "Stop")]);
+    await vi.waitFor(() => expect(document.activeElement === button("Reload", "Stop")).toBe(true));
+    expect([context.opened.at(-1)?.title, element.querySelector(".nol-browser-toolbar-popup") === null]).toEqual(["https://ads.example.com/", true]);
     await pages.showAsync(context.opened.at(-1)?.instance ?? "");
     expect(surface().views.at(-1)?.profileKey).toBe("workspace-1");
+  });
+
+  it("adds the page's site to the sites allowed pop-ups from the address bar's sign, and opens the blocked pop-up", async () => {
+    await blockAsync();
+
+    popupItem("Always allow pop-ups from one.example")?.click();
+    await stableAsync();
+
+    await vi.waitFor(() => expect([context.settings.get("browser.popupSites"), document.activeElement === button("Reload", "Stop")]).toEqual(["one.example", true]));
+    expect([context.opened.at(-1)?.title, element.querySelector(".nol-browser-toolbar-popup") === null]).toEqual(["https://ads.example.com/", true]);
   });
 
   it("moves the focus to Reload when the notice holding it goes with the page's next load", async () => {

@@ -1085,43 +1085,38 @@ describe("Pages", () => {
     expect(tab.controller.status).toBe(PaneStatus.empty);
   });
 
-  it("opens a new window the person's own input asked for as a page on the same workspace, marked with the page that asked, and offers any other in the tab's notice", async () => {
+  it("opens a new window a press of the person's asked for as a page on the same workspace, marked with the page that asked, and blocks any other, offering it in the address bar", async () => {
     const tab = await openAsync(null, "workspace-2");
     loading(viewOf(tab), "https://docs.example.com/", false, "Plans and pricing");
 
-    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com"));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com", false, true));
     viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/", false, null));
 
     expect(context.opened.slice(1).map(t => [t.title, t.after, t.marker]))
       .toEqual([["https://status.example.com/", tab.id, { glyph: "subdirectory_arrow_right", label: "Opened from Plans and pricing" }]]);
-    expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://ads.example.com/", null, false));
+    expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://ads.example.com/", null));
     const opener = await pages.showAsync(lastOpened());
     expect(opener === null ? null : viewOf(opener).profileKey).toBe("workspace-2");
   });
 
-  it("opens one page for the person's input however many windows the page asks for, offers the rest, and opens again once the input is old", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-06T12:00:00Z"));
+  it("opens one page for each press however many windows the page asks for, and blocks the rest, the person's recent input or not, keeping the latest in the address bar", async () => {
     const tab = await openAsync(null, "workspace-2");
     const other = await openAsync(null, "workspace-2");
-    const ask = (view: FakeWebView, address: string): void => view.emit(new ViewNewWindowEvent(address, true, null));
+    const ask = (view: FakeWebView, address: string, isFromPress: boolean): void => view.emit(new ViewNewWindowEvent(address, true, null, false, isFromPress));
 
-    for (let count = 1; count <= 50; count++)
-      ask(viewOf(tab), `https://ads.example.com/${count}`);
-    ask(viewOf(other), "https://status.example.com/");
-    vi.setSystemTime(new Date("2026-11-06T12:00:04.999Z"));
-    ask(viewOf(tab), "https://ads.example.com/late");
+    ask(viewOf(tab), "https://ads.example.com/1", true);
+    for (let count = 2; count <= 50; count++)
+      ask(viewOf(tab), `https://ads.example.com/${count}`, false);
+    ask(viewOf(other), "https://status.example.com/", true);
+    viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/late", false, null));
 
     expect(context.opened.slice(2).map(t => t.title)).toEqual(["https://ads.example.com/1", "https://status.example.com/"]);
-    expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://ads.example.com/late", null, true));
-    vi.setSystemTime(new Date("2026-11-06T12:00:05Z"));
-    ask(viewOf(tab), "https://docs.example.com/next");
+    expect([tab.controller.status.popup, other.controller.status.popup]).toStrictEqual([new PopupOffer("https://ads.example.com/late", null), null]);
+    ask(viewOf(tab), "https://docs.example.com/next", true);
     expect(context.opened.slice(4).map(t => t.title)).toEqual(["https://docs.example.com/next"]);
   });
 
-  it("opens a tab behind the page at once for each of the person's middle or Ctrl clicks on a link, while the same click's second request and a page's other requests in the same 5 seconds wait in its notice", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-06T12:00:00Z"));
+  it("opens a tab behind the page at once for each of the person's middle or Ctrl clicks on a link, and blocks the same click's second request and a page's request with no press", async () => {
     const tab = await openAsync(null, "workspace-2");
 
     viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/a", true, null, true, true));
@@ -1129,11 +1124,68 @@ describe("Pages", () => {
     viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/second", true, null, true, false));
     const second: PopupOffer | null = tab.controller.status.popup;
     viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/", true, null));
-    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/c", false, null, true, true));
 
     expect(context.opened.map(t => [t.title, t.activate])).toEqual([["New tab", undefined], ["https://docs.example.com/a", false], ["https://docs.example.com/b", false]]);
-    expect(second).toStrictEqual(new PopupOffer("https://ads.example.com/second", null, true));
-    expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://docs.example.com/c", null, false));
+    expect([second, tab.controller.status.popup]).toStrictEqual([new PopupOffer("https://ads.example.com/second", null), new PopupOffer("https://ads.example.com/", null)]);
+  });
+
+  it("opens every new window a page on a site allowed pop-ups asks for, its subdomains' too, with no press, and blocks a page's on another site", async () => {
+    context.settings.set("browser.popupSites", "docs.example.com, *.wiki.example");
+    const tab = await openAsync(null, "workspace-2");
+    const other = await openAsync(null, "workspace-2");
+    loading(viewOf(tab), "https://help.docs.example.com/start", false);
+    loading(viewOf(other), "https://example.com/", false);
+
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", false, null));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/history", false, null, true));
+    viewOf(other).emit(new ViewNewWindowEvent("https://ads.example.com/", false, null));
+
+    expect(context.opened.slice(2).map(t => [t.title, t.activate])).toEqual([["https://status.example.com/", undefined], ["https://status.example.com/history", false]]);
+    expect([tab.controller.status.popup, other.controller.status.popup]).toStrictEqual([null, new PopupOffer("https://ads.example.com/", null)]);
+  });
+
+  it("logs the entries of the sites allowed pop-ups that aren't hosts once for each text, and still allows the rest", async () => {
+    context.settings.set("browser.popupSites", "docs example, docs.example.com");
+    const tab = await openAsync(null, "workspace-2");
+    loading(viewOf(tab), "https://docs.example.com/", false);
+
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", false, null));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/history", false, null));
+
+    expect([context.opened.slice(1).map(t => t.title), context.logs])
+      .toEqual([["https://status.example.com/", "https://status.example.com/history"], ["The sites allowed to open pop-ups ignore the entries that aren't hosts, at 1 in the list."]]);
+  });
+
+  it("adds the page's site to the sites allowed pop-ups and opens the blocked pop-up, keeping the sites already there, so the site's next request opens with no press", async () => {
+    context.settings.set("browser.popupSites", "wiki.example");
+    const tab = await openAsync(null, "workspace-2");
+    loading(viewOf(tab), "https://docs.example.com./pricing", false);
+    viewOf(tab).emit(new ViewNewWindowEvent("https://ads.example.com/", false, null));
+
+    pages.allowPopups(tab, "https://ads.example.com/");
+    await vi.waitFor(() => expect(context.settings.get("browser.popupSites")).toBe("wiki.example, docs.example.com"));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", false, null));
+
+    expect([context.opened.slice(1).map(t => t.title), tab.controller.status.popup]).toEqual([["https://ads.example.com/", "https://status.example.com/"], null]);
+  });
+
+  it("opens the blocked pop-up when the site can't be added, logging a refused write and saying so in the tab's notice, and adds nothing for a page that isn't a web page's", async () => {
+    const tab = await openAsync(null, "workspace-2");
+    const blank = await openAsync(null, "workspace-2");
+    loading(viewOf(tab), "https://docs.example.com/", false);
+    tab.controller.offerPopup("https://ads.example.com/", null);
+    blank.controller.offerPopup("https://more-ads.example.com/", null);
+    context.settingFailure = new RangeError("The value is too long.");
+
+    pages.allowPopups(tab, "https://ads.example.com/");
+    await vi.waitFor(() => expect(context.logs).toEqual(["The site wasn't added to the sites allowed to open pop-ups: RangeError."]));
+    context.settingFailure = null;
+    pages.allowPopups(blank, "https://more-ads.example.com/");
+    await Promise.resolve();
+
+    expect([context.opened.slice(2).map(t => t.title), context.settings.has("browser.popupSites"), tab.controller.status.popup, blank.controller.status.popup])
+      .toEqual([["https://ads.example.com/", "https://more-ads.example.com/"], false, null, null]);
+    expect([tab.controller.status.refusedRequest, blank.controller.status.refusedRequest]).toEqual([RefusedRequest.PopupSites, null]);
   });
 
   it("opens a new window as a page of its own, with its own view, controller and history, and leaves the page that asked as it was, even once that page closes", async () => {
@@ -1141,7 +1193,7 @@ describe("Pages", () => {
     await vi.waitFor(() => expect(tab.controller.status.url).toBe("https://docs.example.com/"));
     const asked: string[] = [...viewOf(tab).calls];
 
-    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com"));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com", false, true));
     const opened = await pages.showAsync(lastOpened());
     if (opened === null)
       throw new Error("The new page didn't show.");
@@ -1155,30 +1207,27 @@ describe("Pages", () => {
 
     pages.release(tab);
 
-    viewOf(opened).emit(new ViewNewWindowEvent("https://status.example.com/history", true, "https://status.example.com"));
+    viewOf(opened).emit(new ViewNewWindowEvent("https://status.example.com/history", true, "https://status.example.com", false, true));
 
     expect([viewOf(tab).isClosed, viewOf(opened).isClosed, opened.controller.status.url]).toEqual([true, false, "https://status.example.com/"]);
     expect(context.opened.slice(1).map(t => t.title)).toEqual(["https://status.example.com/", "https://status.example.com/history"]);
   });
 
-  it("logs a new window Noldova Desktop refused to open, says so in the tab's notice, and lets the next one the input asks for open", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-06T12:00:00Z"));
+  it("logs a new window Noldova Desktop refused to open, says so in the tab's notice, and lets the next one a press asks for open", async () => {
     const tab = await openAsync(null, "workspace-2");
     const refusal = vi.spyOn(context, "openDocument").mockImplementationOnce(() => {
       throw new RangeError("The title is too long.");
     });
 
-    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, null));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, null, false, true));
     expect([tab.controller.status.refusedRequest, tab.controller.status.refusedTarget, tab.controller.status.popup]).toEqual([RefusedRequest.NewWindow, "https://status.example.com/", null]);
-    vi.setSystemTime(new Date("2026-11-06T12:00:01Z"));
-    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/next", true, null));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://docs.example.com/next", true, null, false, true));
 
     expect([refusal.mock.calls.length, context.logs]).toEqual([2, ["A page's new window didn't open as a page: RangeError."]]);
     expect([context.opened.slice(1).map(t => t.title), tab.controller.status.popup]).toEqual([["https://docs.example.com/next"], null]);
   });
 
-  it("opens an offered pop-up as a page on the tab's workspace and takes its notice away, and nothing for a tab it let go of", async () => {
+  it("opens an offered pop-up as a page on the tab's workspace and takes the offer away, and nothing for a tab it let go of", async () => {
     const tab = await openAsync(null, "workspace-2");
     tab.controller.offerPopup("https://ads.example.com/", null);
 
@@ -1190,11 +1239,11 @@ describe("Pages", () => {
     expect(context.opened.slice(1).map(t => t.title)).toEqual(["https://ads.example.com/"]);
   });
 
-  it("opens a page that another page asked for after it, after the person's click or from the pop-up notice", async () => {
+  it("opens a page that another page asked for after it, after the person's click or from the address bar's offer", async () => {
     const tab = await openAsync("https://docs.example.com/", "workspace-2");
     tab.controller.offerPopup("https://ads.example.com/", null);
 
-    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com"));
+    viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com", false, true));
     pages.openPopup(tab, "https://ads.example.com/");
 
     expect(context.opened.map(t => [t.title, t.after])).toEqual([

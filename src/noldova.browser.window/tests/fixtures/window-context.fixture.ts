@@ -55,7 +55,8 @@ export class WindowContext extends FakeWindowPartContext {
     ["browser.linkMiddleClick", "Modified"],
     ["browser.systemSites", ""],
     ["browser.agentTools", true],
-    ["browser.localSites", ""]
+    ["browser.localSites", ""],
+    ["browser.popupSites", ""]
   ]);
   public override readonly webViews: FakeWindowWebViews;
   public readonly views: FakeWebViews = new FakeWebViews();
@@ -71,6 +72,7 @@ export class WindowContext extends FakeWindowPartContext {
   public readonly linkPlaces: (LinkPlace | undefined)[] = [];
   public readonly settings: Map<string, JsonValue> = new Map<string, JsonValue>();
   public openDocuments: readonly string[] | null | Error = [];
+  public settingFailure: Error | null = null;
   public answerRequest: (method: string, parameters: JsonValue) => Promise<JsonValue> = t => WindowContext.answerDeclared(t);
   public inAppBrowser: Parameters<IWindowPartContext["registerInAppBrowser"]>[0] | null = null;
   public readonly settingChecks: Map<string, (value: string) => string | null> = new Map<string, (value: string) => string | null>();
@@ -117,6 +119,14 @@ export class WindowContext extends FakeWindowPartContext {
       if (!WindowContext.settingDefaults.has(t))
         throw new UnansweredCallException(t);
       return this.settings.has(t) ? this.settings.get(t) : WindowContext.settingDefaults.get(t);
+    });
+    this.answer("writeSettingAsync", (name, value) => {
+      if (!WindowContext.settingDefaults.has(name))
+        return Promise.reject(new UnansweredCallException(name));
+      if (this.settingFailure !== null)
+        return Promise.reject(this.settingFailure);
+      this.settings.set(name, value);
+      return Promise.resolve();
     });
     const context: FakeWindowPartContext = this;
     const registerInAppBrowser: IWindowPartContext["registerInAppBrowser"] = this.registerInAppBrowser;

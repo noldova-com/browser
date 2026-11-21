@@ -250,6 +250,17 @@ export class PageComponent {
 
   protected openPopup(tab: PaneTab, url: string): void {
     this.pages.openPopup(tab, url);
+    this.focusToolbarAfterSign();
+  }
+
+  protected allowPopups(tab: PaneTab, url: string): void {
+    this.pages.allowPopups(tab, url);
+    this.focusToolbarAfterSign();
+  }
+
+  // The sign's menu gives the focus back to the sign as it closes, and the sign goes with its pop-up once the toolbar renders.
+  private focusToolbarAfterSign(): void {
+    afterNextRender(() => this.focusToolbar(), { injector: this.injector });
   }
 
   protected openExternal(url: string): void {

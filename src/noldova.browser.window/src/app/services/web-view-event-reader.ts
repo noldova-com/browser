@@ -76,6 +76,6 @@ export class WebViewEventReader {
   }
 
   private static readRefusedRequest(value: unknown): RefusedRequest | null {
-    return Object.values(RefusedRequest).find(t => Resources.refusedRequestNames[t] === value) ?? null;
+    return typeof value === "string" ? Object.values(RefusedRequest).find(t => Resources.refusedRequestNames[t] === value) ?? null : null;
   }
 }

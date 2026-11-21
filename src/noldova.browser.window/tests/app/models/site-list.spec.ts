@@ -98,4 +98,18 @@ describe("SiteList", () => {
   it("matches nothing with no sites", () => {
     expect(SiteList.read("").matches("https://code.example/")).toBe(false);
   });
+
+  it("gives an http: or https: page's site as its host without a trailing dot, and none for another page, a host the list refuses or a text that isn't an address", () => {
+    expect([
+      SiteList.siteOf("https://Docs.Example.com./pricing?a=1"), SiteList.siteOf("http://127.0.0.1:4173/"), SiteList.siteOf("file:///home/one/page.html"),
+      SiteList.siteOf("about:blank"), SiteList.siteOf("not an address"), SiteList.siteOf("http://[::1]:4173/")
+    ]).toEqual(["docs.example.com", "127.0.0.1", null, null, null, null]);
+  });
+
+  it("adds a host to the end of a list, after a comma, keeping the list's own text and leaving a list that already has it as it was", () => {
+    expect([
+      SiteList.append("", "docs.example"), SiteList.append("  ", "docs.example"), SiteList.append("code.example, bad entry ", "docs.example"),
+      SiteList.append("https://Docs.Example/a,code.example", "docs.example")
+    ]).toEqual(["docs.example", "docs.example", "code.example, bad entry, docs.example", "https://Docs.Example/a,code.example"]);
+  });
 });
