@@ -277,7 +277,7 @@ The redirect row also asserts that the allowed server received each first hop, a
 | `isolation.spec.ts` | The view is isolated from the app, from other profiles and from the runtime. |
 | `denials.spec.ts` | Each default denial. |
 | `permissions.spec.ts` | A refused origin, once the person allows it through the permission contract, loads; a denied or expired request leaves it refused. |
-| `agent-tools.spec.ts` | Each tool acts on a real page: navigate, snapshot, click by reference, type, screenshot and console reading, each checked by what the fixture page records. A covered element is reported, not clicked. |
+| `agent-tools.spec.ts` | Each tool acts on a real page: navigate, snapshot, click by reference, type, screenshot and console reading, each checked by what the fixture page records. Typing replaces what a field, a text area and an editable element hold, and an empty text clears a field. A covered element is reported, not clicked. |
 | `crash.spec.ts` | A crashed view ends every pending call with an error within its time limit: a snapshot, a screenshot or a wait whose own command waits on the page, and the calls the module holds behind it, since it runs a page's calls one at a time. |
 | `screenshot-scale.spec.ts` | A capture's decoded image is the view's size in CSS pixels times the device scale factor, scaled by `min(1, 1600 / its longer side in device pixels)` with the aspect ratio kept, for a view under the cap and one over it, at 1 and at a forced 2. |
 | `focus.spec.ts` | Focus moves into the page on a click and back to the pane's own controls. |

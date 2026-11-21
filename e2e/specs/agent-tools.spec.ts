@@ -46,6 +46,13 @@ document.getElementById("q").addEventListener("focus", t => {
   t.target.replaceWith(fresh);
   fresh.focus();
 }, { once: true });</script>`;
+// A page whose fields already hold text, with the caret at each one's start, as a form shows a saved value.
+const PREFILLED = `<!doctype html><title>${START_TITLE}</title>
+<input id="email" type="text" autocomplete="email" aria-label="Email" value="a@x.com">
+<textarea id="notes" aria-label="Notes">old notes</textarea>
+<div id="bio" role="textbox" aria-label="Bio" contenteditable="true">old bio</div>
+<script>for (const id of ["email", "notes"])
+  document.getElementById(id).setSelectionRange(0, 0);</script>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -187,6 +194,25 @@ test.describe("the agent tools on a real page", () => {
     await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
     await callAsync(app, bindings, "browser_type", { reference: again, text: "Ada" });
     expect([await seenAsync(app, docs), await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('q').value")]).toEqual([["input Ada"], "Ada"]);
+  });
+
+  test("typing replaces what a field, a text area and an editable element hold, and an empty text clears a field", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": PREFILLED });
+    const bindings = await openAsync(app, docs);
+    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
+    const fields = [/- textbox "Email" \[(e\d+)\]/u, /- textbox "Notes" \[(e\d+)\]/u, /- textbox "Bio" \[(e\d+)\]/u].map(t => referenceOf(snapshot, t));
+    const typeAsync = async (reference: string, text: string): Promise<void> => {
+      await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
+      await callAsync(app, bindings, "browser_type", { reference, text });
+    };
+    const values = "JSON.stringify([document.getElementById('email').value, document.getElementById('notes').value, document.getElementById('bio').textContent])";
+
+    for (const [reference, text] of [[fields[0], "b@y.com"], [fields[1], "new notes"], [fields[2], "new bio"]] as const)
+      await typeAsync(reference ?? "", text);
+    const typed = await app.viewPages.runAtAsync(docs.url("/"), values);
+    await typeAsync(fields[0] ?? "", "");
+
+    expect([typed, await app.viewPages.runAtAsync(docs.url("/"), values)]).toEqual([JSON.stringify(["b@y.com", "new notes", "new bio"]), JSON.stringify(["", "new notes", "new bio"])]);
   });
 
   // An element under a cover doesn't show at its centre, so the click scrolls to it first; the scroll can run the page's handlers, so the

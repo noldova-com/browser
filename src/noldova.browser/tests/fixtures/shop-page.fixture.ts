@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { FieldSelectScript } from "../../src/models/field-select-script.ts";
 import { JsonShapes } from "../../src/services/json-shapes.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import type { ToolBench } from "./tool-bench.fixture.ts";
@@ -61,6 +62,7 @@ export class ShopPage {
   ] };
 
   private static readonly SHOWN: WeakMap<ToolBench, ShownDocument> = new WeakMap<ToolBench, ShownDocument>();
+  private static readonly NOT_FIELDS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
 
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
@@ -90,6 +92,8 @@ export class ShopPage {
       if (typeof objectId !== "string" || shown === undefined)
         return { result: { type: "boolean", value: true } };
       const backendNodeId: number = Number(objectId.slice("node-".length));
+      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration)
+        return { result: { type: "boolean", value: !ShopPage.NOT_FIELDS.has(bench) } };
       if (params["returnByValue"] === true)
         return { result: { type: "object", value: ShopPage.facts(shown, backendNodeId) } };
       const form: JsonObject | undefined = ShopPage.formOf(shown, backendNodeId);
@@ -108,6 +112,11 @@ export class ShopPage {
   }
 
   // The document the element facts function reads from now on, as when the page changes after the person was asked.
+  // The field selection then answers that no element is a field it can select in.
+  public static treatAsNoField(bench: ToolBench): void {
+    ShopPage.NOT_FIELDS.add(bench);
+  }
+
   public static showDocument(bench: ToolBench, document: JsonObject): void {
     const shown: ShownDocument | undefined = ShopPage.SHOWN.get(bench);
     if (shown === undefined)
