@@ -429,6 +429,7 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
   It goes as a PNG; a PNG over 1 MB, or one the engine's answer can't carry, goes as a JPEG at quality 80, then 50, then 20, and one still over fails as `TooLarge`.
   An element with no box, or an area with no size, is refused with `browser.notVisible`.
   An element the engine doesn't lay out, such as one under `display: none`, has no box: the engine refuses to read one, and a click or a screenshot treats that refusal as no box.
+  `browser_type` refuses such a field with `browser.notVisible` before it asks, while a field the engine answers no box for still takes the text.
 
   <a id="a-capture-of-a-hidden-page"></a>The page may be hidden, behind the chat's tab, and a hidden view never draws, so a capture of it waits until it's shown, even one the view had a size for before.
   So a screenshot first takes a one-pixel capture with a wait of a second; a page that answers is captured as it is.
@@ -526,7 +527,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | `browser.originRefused` | `Refused` | The typed-address policy refused the navigation's address, such as a local or link-local one, before anything asked |
 | `browser.covered` | `Refused` | Another element is topmost at the clicked element's centre, so nothing was pressed; a cover is found only after the scroll or the pointer's move, so the call's result is always `OutcomeUncertain` with this code in its message |
 | `browser.pageNotShowing` | `Refused` | The page has no layout at the point, or none at all, so nothing was pressed; never a stale reference |
-| `browser.notVisible` | `Refused` | The clicked or captured element has no box on the page, or a screenshot's area has no size |
+| `browser.notVisible` | `Refused` | The clicked or captured element has no box on the page, a screenshot's area has no size, or the engine doesn't lay out the field `browser_type` types into |
 | `browser.pageHidden` | `Refused` | The page has no size even when laid out for a screenshot, as when its tab is hidden, so nothing was captured |
 | `browser.shortcutRefused` | `Refused` | An agent's key matched one of the app's shortcuts, as [SECURITY-MODEL.md](SECURITY-MODEL.md#agent-input-and-the-apps-shortcuts) says |
 | `browser.previewRefused` | `Refused` | The action is refused in the preview: a download, an upload, a new window, a site permission, an authentication prompt or a certificate error |

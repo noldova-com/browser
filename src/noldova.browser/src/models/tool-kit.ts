@@ -193,21 +193,24 @@ export class ToolKit {
     return request.isAsking === true ? AimFollower.whileAsync(this.calls, this.changes, element, activity, options, askAsync) : askAsync();
   }
 
-  public async readBoxAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<PageBox | null> {
-    const quad: readonly number[] | null = await this.readQuadAsync(viewId, backendNodeId, options);
+  public async readBoxAsync(viewId: string, backendNodeId: number, options: CallOptions, notLaidOut: (() => CallFailureException) | null = null): Promise<PageBox | null> {
+    const quad: readonly number[] | null = await this.readQuadAsync(viewId, backendNodeId, options, notLaidOut);
     return quad === null ? null : ContentQuads.toBox(quad);
   }
 
   // The element's first box, or null for one with none: the engine answers no quads for some, and refuses the call for one it doesn't lay
-  // out, such as an element under display: none.
-  public async readQuadAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<readonly number[] | null> {
+  // out, such as an element under display: none. That refusal fails as `notLaidOut` gives, or reads as no box without one.
+  public async readQuadAsync(viewId: string, backendNodeId: number, options: CallOptions, notLaidOut: (() => CallFailureException) | null = null)
+    : Promise<readonly number[] | null> {
     try {
       return ContentQuads.readFirst(await this.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
     }
     catch (error) {
-      if (error instanceof ProtocolFailedException && error.cause instanceof WebViewFailureException && error.cause.failure.message === Resources.noContentQuads)
-        return null;
-      throw error;
+      if (!(error instanceof ProtocolFailedException && error.cause instanceof WebViewFailureException && error.cause.failure.message === Resources.noContentQuads))
+        throw error;
+      if (notLaidOut !== null)
+        throw notLaidOut();
+      return null;
     }
   }
 

@@ -130,6 +130,7 @@ export class Resources {
   public static readonly maximumPageTitleLength: number = 300;
   public static readonly notVisible: string = "The element has no box on the page, so it can't be clicked; take a new snapshot.";
   public static readonly notVisibleCode: string = "browser.notVisible";
+  public static readonly fieldNotVisible: string = "The field isn't laid out on the page, so nothing was typed; take a new snapshot.";
   public static readonly covered: string = "Another element covers the element at its centre, so nothing was clicked; take a new snapshot.";
   public static readonly coveredCode: string = "browser.covered";
   public static readonly pageNotShowing: string = "The page isn't laid out, so nothing was pressed at that point; ask the person to show its tab.";

@@ -10,6 +10,7 @@ import { PageAction, type PageBox } from "@noldova/browser.protocol";
 import { type IPermissionDetail, type IPermissionRequest, type IToolDescriptor, PermissionDetailKind, type ToolCall, type ToolResult, ToolRisk }
   from "@noldova/desktop.runtime";
 
+import { FieldNotVisibleException } from "../exceptions/field-not-visible.exception.ts";
 import { NotSubmittedException } from "../exceptions/not-submitted.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import type { ActionProgress } from "../models/action-progress.ts";
@@ -58,7 +59,8 @@ export class TypeTool implements IBrowserTool {
         details.push({ label: Resources.submitLabel, kind: PermissionDetailKind.Text, value: Resources.submitValue });
       if (isSubmitting && RiskClassifier.submitsEnter(facts.path))
         details.push(...PermissionCards.sends(facts));
-      const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options);
+      // A field with no quads can still take the focus and the text; one the engine doesn't lay out, such as one under display: none, can't.
+      const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options, () => new FieldNotVisibleException());
       if (box !== null)
         activity.aim(box, null);
       const request: IPermissionRequest = ToolKit.request(Resources.typeAction, PermissionCards.typeTitle(facts, shown, isSubmitting, frame.origin), frame.origin, details, risk,
