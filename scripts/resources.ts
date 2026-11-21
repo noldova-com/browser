@@ -150,6 +150,8 @@ export class Resources {
   public static readonly partExports: readonly string[] = ["./runtime", "./window"];
   public static readonly windowSuffix: string = ".window";
   public static readonly windowPeersNeeded: readonly string[] = ["@noldova/context.core"];
+  public static readonly modulePeersNeeded: readonly string[] = ["@noldova/context.core"];
+  public static readonly runtimeExport: string = "./runtime";
   public static readonly archiveBlock: number = 512;
   public static readonly archiveNameEnd: number = 100;
   public static readonly archiveSizeStart: number = 124;
@@ -469,6 +471,14 @@ export class Resources {
 
   public static formatArchiveWindowPeerMissing(archiveName: string, peer: string): string {
     return `${archiveName} doesn't name ${peer} among its peers, so the window part's entry no longer imports it, and its type and absence checks aren't loaded.`;
+  }
+
+  public static formatArchiveModulePeerMissing(archiveName: string, peer: string): string {
+    return `${archiveName} doesn't name ${peer} among its peers, which the runtime part's entry imports for its type and absence checks.`;
+  }
+
+  public static formatArchiveRuntimeImportMissing(archiveName: string, entry: string, peer: string): string {
+    return `${archiveName}'s runtime entry ${entry} doesn't import ${peer}, so its type and absence checks aren't loaded before the runtime part's code runs.`;
   }
 
   public static formatCdkCopiesFound(count: number): string {

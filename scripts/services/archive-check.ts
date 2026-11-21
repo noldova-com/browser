@@ -17,6 +17,7 @@ import { JsonObjectUnreadableException } from "../exceptions/json-object-unreada
 import { DesktopRangeReading } from "../models/desktop-range-reading.ts";
 import { ReleaseArchive } from "../models/release-archive.ts";
 import { VersionRange } from "../models/version-range.ts";
+import { ExportTarget } from "../models/export-target.ts";
 import { Resources } from "../resources.ts";
 import { ArchiveReader } from "./archive-reader.ts";
 import { GitHubJson } from "./github-json.ts";
@@ -131,20 +132,27 @@ export class ArchiveCheck {
     }
   }
 
+  // Every file the exports point to, a conditional export's each.
+  private static readTargets(exports: unknown): readonly ExportTarget[] {
+    if (typeof exports !== "object" || exports === null)
+      return [];
+    const targets: ExportTarget[] = [];
+    for (const [subpath, target] of Object.entries(exports))
+      for (const file of typeof target === "object" && target !== null ? Object.values(target) : [target])
+        targets.push(new ExportTarget(subpath, String(file)));
+    return targets;
+  }
+
   private static checkContents(archiveName: string, manifest: Readonly<Record<string, unknown>>, entries: ReadonlyMap<string, Buffer>,
     noldovaDesktop: string | null): readonly string[] {
     const findings: string[] = [];
-    const exports = manifest[Resources.exportsField];
-    const targets = typeof exports === "object" && exports !== null
-      ? Object.entries(exports).flatMap(([subpath, target]: [string, unknown]) =>
-        (typeof target === "object" && target !== null ? Object.values(target) : [target]).map(t => [subpath, String(t)] as const))
-      : [];
+    const targets: readonly ExportTarget[] = ArchiveCheck.readTargets(manifest[Resources.exportsField]);
     if (targets.length === 0)
       findings.push(Resources.formatArchiveExportsNothing(archiveName));
-    for (const [subpath, target] of targets)
+    for (const { subpath, target } of targets)
       if (!entries.has(path.posix.join(Resources.archiveFolder, target)))
         findings.push(Resources.formatArchiveExportMissing(archiveName, subpath, target));
-    if (targets.some(([subpath]) => Resources.partExports.includes(subpath)) && !entries.has(Resources.moduleEntryName))
+    if (targets.some(t => Resources.partExports.includes(t.subpath)) && !entries.has(Resources.moduleEntryName))
       findings.push(Resources.formatArchiveModuleFileMissing(archiveName));
     const packageName = manifest[Resources.nameField];
     const isWindow = typeof packageName === "string" && packageName.endsWith(Resources.windowSuffix);
@@ -177,6 +185,18 @@ export class ArchiveCheck {
         const entry: unknown = typeof meta === "object" && meta !== null ? Object.fromEntries(Object.entries(meta))[peer] : undefined;
         if (typeof entry !== "object" || entry === null || Object.fromEntries(Object.entries(entry))[Resources.optionalField] !== true)
           findings.push(Resources.formatArchivePeerNotOptional(archiveName, peer));
+      }
+    }
+    const runtimeEntry: string | undefined = targets.find(t => t.subpath === Resources.runtimeExport && t.target.endsWith(Resources.scriptExtension))?.target;
+    if (runtimeEntry !== undefined) {
+      const peers = manifest[Resources.peersField];
+      const named: readonly string[] = typeof peers === "object" && peers !== null ? Object.keys(peers) : [];
+      const source: string = entries.get(path.posix.join(Resources.archiveFolder, runtimeEntry))?.toString("utf8") ?? "";
+      for (const peer of Resources.modulePeersNeeded) {
+        if (!named.includes(peer))
+          findings.push(Resources.formatArchiveModulePeerMissing(archiveName, peer));
+        if (!source.includes(`import "${peer}";`))
+          findings.push(Resources.formatArchiveRuntimeImportMissing(archiveName, runtimeEntry, peer));
       }
     }
     return findings;

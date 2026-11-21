@@ -6,5 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 export { BrowserLimits } from "../models/browser-limits.ts";
 export { RuntimePart } from "../runtime-part.ts";

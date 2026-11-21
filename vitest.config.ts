@@ -12,9 +12,23 @@ export default defineConfig({
   cacheDir: "_build/vite",
   test: {
     isolate: true,
-    include: [
-      "src/*/tests/**/*.test.ts",
-      "e2e/tests/**/*.test.ts"
+    // Only the module package takes context's checks, so only its tests load them, and a protocol test that needs them fails.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "module",
+          include: ["src/noldova.browser/tests/**/*.test.ts"],
+          setupFiles: ["src/noldova.browser/tests/context-core.setup.ts"]
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: "protocol and e2e fixtures",
+          include: ["src/noldova.browser.protocol/tests/**/*.test.ts", "e2e/tests/**/*.test.ts"]
+        }
+      }
     ],
     coverage: {
       provider: "v8",
