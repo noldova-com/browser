@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { KeyDefinition } from "../../src/models/key-definition.ts";
 import { KeyPress } from "../../src/models/key-press.ts";
 import { KeyEvents } from "../../src/services/key-events.ts";
+import type { KeyEvent } from "../../src/types/key-event.ts";
 
 describe("KeyEvents", () => {
   it("finds named keys, letters, digits and any other single character, and no longer text", () => {
@@ -30,12 +31,22 @@ describe("KeyEvents", () => {
     expect([KeyEvents.readBits([]), KeyEvents.readBits(["Alt", "Control", "Meta", "Shift"]), KeyEvents.readBits(["Hyper"])]).toEqual([0, 15, 0]);
   });
 
-  it("presses a typing key with its text, a named key without, and a shortcut without text even when Shift is held too", () => {
+  it("presses a typing key with its text, a named key without, and a shortcut without text even when Shift is held too, with Shift's capital", () => {
     expect(KeyEvents.press(new KeyDefinition("Enter", "Enter", 13, "\r"), 8).down).toEqual({ type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, modifiers: 8, text: "\r", unmodifiedText: "\r" });
     expect(KeyEvents.press(new KeyDefinition("Tab", "Tab", 9, ""), 0).down["type"]).toBe("rawKeyDown");
     expect(KeyEvents.press(new KeyDefinition("a", "KeyA", 65, "a"), 1 | 8)).toStrictEqual(new KeyPress(
-      { type: "rawKeyDown", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 9 },
-      { type: "keyUp", key: "a", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 9 }
+      { type: "rawKeyDown", key: "A", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 9 },
+      { type: "keyUp", key: "A", code: "KeyA", windowsVirtualKeyCode: 65, modifiers: 9 }
     ));
+  });
+
+  it("gives a letter under Shift its capital, in its key and its text, and leaves a digit, a sign, a named key and a letter whose capital is two as they are", () => {
+    const down = (key: string): readonly (string | undefined)[] => {
+      const event: KeyEvent = KeyEvents.press(KeyEvents.find(key) ?? new KeyDefinition(key, "", 0, ""), 8).down;
+      return [event.key, event.code, event.text ?? ""];
+    };
+
+    expect(["a", "Z", "1", "-", "Tab", "é", "ñ", "ж", "α", "ß"].map(down)).toEqual([["A", "KeyA", "A"], ["Z", "KeyZ", "Z"], ["1", "Digit1", "1"], ["-", "", "-"],
+      ["Tab", "Tab", ""], ["É", "", "É"], ["Ñ", "", "Ñ"], ["Ж", "", "Ж"], ["Α", "", "Α"], ["ß", "", "ß"]]);
   });
 });
