@@ -63,6 +63,11 @@ describe("InputValidator", () => {
     expectInvalid(() => InputValidator.readText({ text: "hello!" }, "text", 5), ArgumentTooLongException, "The argument \"text\" is longer than 5 characters.");
   });
 
+  it("counts text's length in code points, as the schema's maxLength does, so an emoji is one", () => {
+    expect(InputValidator.readText({ text: "\u{1F600}".repeat(5) }, "text", 5)).toBe("\u{1F600}".repeat(5));
+    expectInvalid(() => InputValidator.readText({ text: "\u{1F600}".repeat(6) }, "text", 5), ArgumentTooLongException, "The argument \"text\" is longer than 5 characters.");
+  });
+
   it("reads an http or https URL and gives it back normalized", () => {
     expect(InputValidator.readUrl({ url: "https://Example.test/a b" }, "url")).toBe("https://example.test/a%20b");
     expect(InputValidator.readUrl({ url: "http://127.0.0.1:8080" }, "url")).toBe("http://127.0.0.1:8080/");

@@ -45,7 +45,8 @@ export class InputValidator {
       throw new ArgumentMissingException(name);
     if (typeof value !== "string")
       throw new ArgumentNotTextException(name);
-    if (value.length > maximumLength)
+    // The schema's maxLength counts code points, so text of more UTF-16 units than its limit can still be within it.
+    if (value.length > maximumLength && [...value].length > maximumLength)
       throw new ArgumentTooLongException(name, maximumLength);
     return value;
   }
