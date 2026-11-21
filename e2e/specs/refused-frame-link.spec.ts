@@ -21,6 +21,7 @@ const FRAME = (target: string): string => "<!doctype html><title>Frame</title><b
 
 test.describe("a refused link in a frame", () => {
   test("the person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it", async ({ app, servers }) => {
+    test.skip(process.platform === "darwin", "On macOS a click sent to another site's frame within about 2 s of its load is lost: https://github.com/noldova-com/desktop/issues/459");
     const other = await servers.startAsync("other.localhost", { "/": "<!doctype html><title>Other</title>" });
     const framed = await servers.startAsync("framed.localhost", { "/": FRAME(other.url("/")) });
     const docs = await servers.startAsync("docs.localhost", { "/": PAGE(framed.url("/")) });
