@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Component, ElementRef, ErrorHandler, type Signal, type WritableSignal, computed, effect, inject, input, output, signal } from "@angular/core";
+import { Component, ElementRef, ErrorHandler, type Signal, type WritableSignal, computed, effect, inject, input, output, signal, viewChild } from "@angular/core";
 import { AnnouncementPoliteness, Announcer, ButtonComponent, ButtonVariant, ClipboardWriter, TooltipDirective } from "@noldova/ui.components.angular";
 
 import { Resources } from "../../../resources.ts";
@@ -28,6 +28,7 @@ import type { PaneController } from "../../services/pane-controller.ts";
 })
 export class PageStateComponent {
   private readonly host: HTMLElement = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly closeButton: Signal<ElementRef<HTMLElement> | undefined> = viewChild("close", { read: ElementRef<HTMLElement> });
   private readonly errors: ErrorHandler = inject(ErrorHandler);
   private readonly announcer: Announcer = inject(Announcer);
   private readonly clipboard: ClipboardWriter = inject(ClipboardWriter);
@@ -87,6 +88,10 @@ export class PageStateComponent {
       if (this.actions().length === 0 && !this.isForgotten() && !this.isElsewhere() && this.refusal() === null && this.host.contains(this.host.ownerDocument.activeElement))
         this.focusLeaving.emit();
     });
+  }
+
+  public focusClose(): void {
+    this.closeButton()?.nativeElement.focus();
   }
 
   protected act(controller: PaneController, action: Exclude<PageStateAction,
