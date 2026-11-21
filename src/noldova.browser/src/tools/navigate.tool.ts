@@ -15,6 +15,7 @@ import { AddressRefusedException } from "../exceptions/address-refused.exception
 import { ArgumentNotOneOfException } from "../exceptions/argument-not-one-of.exception.ts";
 import { CallDeniedException } from "../exceptions/call-denied.exception.ts";
 import type { CallFailureException } from "../exceptions/call-failure.exception.ts";
+import { LandedElsewhereException } from "../exceptions/landed-elsewhere.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
 import { ActionMove } from "../models/action-move.ts";
@@ -85,6 +86,8 @@ export class NavigateTool implements IBrowserTool {
       }
 
       const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      if (isLoaded && !await move.isLandedAsync(this.kit.calls, page.viewId, granted, target, now, options))
+        throw new LandedElsewhereException();
       const title: string = await this.kit.readTitleOfAsync(page.viewId, now.documentId, options);
       const content: ToolContent[] = [ToolContent.fromText(Resources.formatNavigated(now.url, title), now.origin)];
       if (!isLoaded)

@@ -481,6 +481,10 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
   A refused address fails as `Refused` with `browser.originRefused` before anything asks; an origin the workspace allows asks as low risk; any other asks the person as medium risk, offering to allow it for good, deny or always deny, joins the workspace on their allow, and only then loads.
   Back and forward read the history's next entry for its origin; with none, the call fails as `Refused` with `browser.noHistory` before it asks.
   After the grant every navigation reads the page's frame again, and fails as `Stale` when its document or URL changed, since the card named the page it leaves; back and forward then read the history again, and fail as `Stale` when the entry's index or URL changed.
+  Once the move has loaded, it checks where it landed: a reload at the address it read, back or forward at its entry's address, and a URL with the history's entry before it at the address it read.
+  A URL whose navigation replaced the entry it left, as the history's first entry or a navigation to the page's own address does, leaves no entry before it to compare, so it counts as landed when it has none or lands at the address it read.
+  When it landed elsewhere, the page moved between that read and Noldova Desktop's act, so the call fails with `browser.landedElsewhere`, past the point of no return, which ends it as `OutcomeUncertain`.
+  That window stays open: the bridge acts on whatever page the view shows, so the check only finds the move afterwards, and a move that hasn't loaded by the time to read it isn't checked.
 - **Dialogs:** **Not yet:** the tools don't watch for dialogs; this is their design.
   A page's alert, confirmation or prompt is reported by the event `Page.javascriptDialogOpening` and dismissed at once with `Page.handleJavaScriptDialog`, and the next tool result reports it with its text.
   The module only ever dismisses a dialog, since accepting a confirmation or a prompt can be the page's own "yes"; until the tools watch for dialogs, `webViews.json` declares neither, so Noldova Desktop refuses both.
@@ -521,6 +525,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | `browser.staleCursor` | `Refused` | A console cursor later than any the session was given, such as another session's |
 | `browser.noHistory` | `Refused` | Back or forward with no entry to go to |
 | `browser.riskRose` | `Stale` | The page made the element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; the tool fails as `Stale`, and past the point of no return the call's result is `OutcomeUncertain` with this code in its message |
+| `browser.landedElsewhere` | `Stale` | The page moved between the check after the grant and the navigation, so the navigation left or reached a page its request didn't name; past the point of no return, the call's result is `OutcomeUncertain` with this code in its message |
 | `browser.notSubmitted` | `Stale` | The text was typed, but the page then gave its form a secret field, so the Enter wasn't sent; the tool fails as `Stale`, and since the text was sent the call's result is `OutcomeUncertain` with this code in its message |
 | `browser.unbound` | `Unavailable` | The app bound the session to no page, to a page of another workspace, or to a page two views show |
 | `browser.handedOver` | `Denied` | The person chose to do the action themself, so the call ran nothing and the page is theirs, focused on the field |

@@ -15,6 +15,7 @@ import { ArgumentNotOneOfException } from "../../src/exceptions/argument-not-one
 import { CallCancelledException } from "../../src/exceptions/call-cancelled.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { ExactlyOneArgumentException } from "../../src/exceptions/exactly-one-argument.exception.ts";
+import { LandedElsewhereException } from "../../src/exceptions/landed-elsewhere.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { NavigationRefusedException } from "../../src/exceptions/navigation-refused.exception.ts";
 import { NoHistoryException } from "../../src/exceptions/no-history.exception.ts";
@@ -30,16 +31,24 @@ function frame(url: string, origin: string, loaderId: string): JsonObject {
   return { frameTree: { frame: { id: "F1", loaderId, url, securityOrigin: origin } } };
 }
 
-const HISTORY: JsonObject = { currentIndex: 1, entries: [
-  { id: 1, url: "https://docs.example/start", title: "Start" },
-  { id: 2, url: "https://docs.example/guide", title: "Guide" },
-  { id: 3, url: "https://other.example/next", title: "Next" }
-] };
-
 describe("NavigateTool", () => {
   let bench: ToolBench;
   let tool: NavigateTool;
   let shown: JsonObject;
+  let pages: string[];
+  let current: number;
+
+  function land(): void {
+    const target: string | undefined = bench.surface.navigations.at(-1)?.target;
+    if (target === WebViewAction.Back || target === WebViewAction.Forward)
+      current += target === WebViewAction.Back ? -1 : 1;
+    else if (target !== WebViewAction.Reload && target !== undefined) {
+      pages = [...pages.slice(0, current + 1), target];
+      current = pages.length - 1;
+    }
+    const url: string = pages[current] ?? "about:blank";
+    shown = frame(url, new URL(url).origin, "L2");
+  }
 
   afterEach(() => {
     vi.useRealTimers();
@@ -51,10 +60,12 @@ describe("NavigateTool", () => {
     bench.keep("workspace-1", ["https://docs.example"]);
     shown = frame("https://docs.example/guide", "https://docs.example", "L1");
     bench.surface.answerWith("Page.getFrameTree", () => shown);
-    bench.surface.answer("Page.getNavigationHistory", HISTORY);
+    pages = ["https://docs.example/start", "https://docs.example/guide", "https://other.example/next"];
+    current = 1;
+    bench.surface.answerWith("Page.getNavigationHistory", () => ({ currentIndex: current, entries: pages.map(url => ({ url })) }));
     bench.surface.answer("Accessibility.getFullAXTree", { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Next steps" } }] });
     bench.surface.afterNavigation = (viewId: string): void => {
-      shown = frame("https://docs.example/next", "https://docs.example", "L2");
+      land();
       bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
     };
     tool = new NavigateTool(bench.kit);
@@ -83,8 +94,10 @@ describe("NavigateTool", () => {
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
     expect(bench.sendingMarks).toBe(1);
-    expect(bench.methods).toEqual(["Page.enable", "Page.getFrameTree", "Page.getFrameTree", "Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree"]);
-    expect(bench.surface.calls[4]?.params).toEqual({ depth: 1 });
+    expect(bench.methods).toEqual([
+      "Page.enable", "Page.getFrameTree", "Page.getFrameTree", "Page.getFrameTree", "Page.getNavigationHistory", "Accessibility.getFullAXTree", "Page.getFrameTree"
+    ]);
+    expect(bench.surface.calls[5]?.params).toEqual({ depth: 1 });
   });
 
   it("asks the person as medium risk for an origin the workspace doesn't allow, offering to allow it for good, and on that allow keeps it, gives it to the views and loads", async () => {
@@ -195,7 +208,8 @@ describe("NavigateTool", () => {
 
   it.each<[string, JsonObject, JsonObject]>([
     ["opening a URL, when the page went to another address", { url: "https://docs.example/next" }, frame("https://docs.example/other", "https://docs.example", "L3")],
-    ["a reload, when the page loaded a new document at its address", { action: "reload" }, frame("https://docs.example/guide", "https://docs.example", "L3")]
+    ["a reload, when the page loaded a new document at its address", { action: "reload" }, frame("https://docs.example/guide", "https://docs.example", "L3")],
+    ["going back, when the page replaced its address, which leaves the history's index as it was", { action: "back" }, frame("https://docs.example/replaced", "https://docs.example", "L1")]
   ])("moves nowhere and fails as stale on %s by the time the person allows the move", async (_case: string, input: JsonObject, moved: JsonObject) => {
     bench.permissions.automaticDecision = null;
     const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input));
@@ -207,6 +221,40 @@ describe("NavigateTool", () => {
     expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
   });
 
+  it.each<[string, JsonObject, string[]]>([
+    ["a reload", { action: "reload" }, ["https://docs.example/start", "https://docs.example/moved"]],
+    ["going back", { action: "back" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"]],
+    ["opening a URL", { url: "https://docs.example/next" }, ["https://docs.example/start", "https://docs.example/guide", "https://docs.example/moved"]]
+  ])("fails as stale with browser.landedElsewhere, past its point of no return, when the page moved after its last read and before %s", async (_case: string, input: JsonObject, moved: string[]) => {
+    bench.surface.afterNavigation = (viewId: string): void => {
+      pages = moved;
+      current = moved.length - 1;
+      land();
+      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+    };
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call(input)), LandedElsewhereException, { reason: "Stale", moduleCode: "browser.landedElsewhere" });
+    expect([bench.surface.navigations.length, bench.sendingMarks]).toEqual([1, 1]);
+  });
+
+  it.each<[string, string[], number, string]>([
+    ["the history's first entry", ["about:blank"], 0, "https://docs.example/next"],
+    ["the entry of the page's own address", ["https://docs.example/start", "https://docs.example/guide"], 1, "https://docs.example/guide"]
+  ])("opens a URL whose navigation replaced %s, with no entry before it that names the page it left", async (_case: string, entries: string[], index: number, url: string) => {
+    const left: string = entries[index] ?? "about:blank";
+    shown = frame(left, new URL(left).origin, "L1");
+    bench.surface.afterNavigation = (viewId: string): void => {
+      pages = [...entries.slice(0, index), url];
+      current = index;
+      shown = frame(url, "https://docs.example", "L2");
+      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+    };
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ url }));
+
+    expect(result.structured).toEqual({ page: { url, title: "Next steps" } });
+  });
+
   it("reloads the current page, judged by its own origin, without reading the history", async () => {
     await bench.runAsync(tool, bench.call({ action: "reload" }));
 
@@ -215,7 +263,7 @@ describe("NavigateTool", () => {
   });
 
   it("goes back to a blank page as low risk", async () => {
-    bench.surface.answer("Page.getNavigationHistory", { currentIndex: 1, entries: [{ url: "about:blank" }, { url: "https://docs.example/guide" }] });
+    pages = ["about:blank", "https://docs.example/guide"];
 
     await bench.runAsync(tool, bench.call({ action: "back" }));
 
@@ -272,7 +320,10 @@ describe("NavigateTool", () => {
     ["to a fragment of the page", { url: "https://docs.example/guide#setup" }, "https://docs.example/guide#setup"]
   ])("answers as soon as the page moved %s, which fires no load", async (_case: string, input: JsonObject, url: string) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url });
+    bench.surface.afterNavigation = (viewId: string): void => {
+      land();
+      bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url });
+    };
 
     const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input, new AbortController(), ToolBench.SESSION, 60_000));
     await ToolBench.settleAsync();
