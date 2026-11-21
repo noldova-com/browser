@@ -10,7 +10,8 @@ import { type Signal, type WritableSignal, signal } from "@angular/core";
 import { BrowserEvents, BrowserMethods, BrowsingDataRequest, type HeldPages, OpenPagesRequest, PageAction, type PageActivity, PageActivityState, type PageClaim,
   PageRecord, PageRequest, PageStopRequest, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 import { QualifiedName, type WebViewNavigation, WebViewNavigationKind, WebViewPane } from "@noldova/desktop.protocol";
-import { DocumentTone, type IDocumentMarker, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWindowPartContext } from "@noldova/desktop.window";
+import { DocumentTone, type IDocumentMarker, type IDocumentOptions, type IDocumentStatus, type IWebViewHandle, type IWebViewOpenOptions,
+  type IWindowPartContext } from "@noldova/desktop.window";
 import type { JsonValue } from "@noldova/context.json";
 
 import { Resources } from "../../resources.ts";
@@ -537,7 +538,8 @@ export class Pages {
       return null;
     const pane: WebViewPane = new WebViewPane(QualifiedName.parse(Resources.pageDocument), instance);
     this.opening.set(instance, false);
-    const view: IWebViewHandle | null = await this.context.webViews.openAsync(pane, place.profileKey).catch((error: unknown) => {
+    const options: IWebViewOpenOptions = { name: Resources.formatBrowserStart(this.appName()) };
+    const view: IWebViewHandle | null = await this.context.webViews.openAsync(pane, place.profileKey, options).catch((error: unknown) => {
       this.context.log(Resources.formatViewNotOpened(error));
       return null;
     });
