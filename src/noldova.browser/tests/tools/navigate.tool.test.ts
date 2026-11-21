@@ -285,6 +285,20 @@ describe("NavigateTool", () => {
     ]);
   });
 
+  it("reloads a page that failed to load and fails to load again, which lands at the address that failed", async () => {
+    const failed = (loaderId: string): JsonObject =>
+      ({ frameTree: { frame: { id: "F1", loaderId, url: "chrome-error://chromewebdata/", unreachableUrl: "https://docs.example/guide", securityOrigin: "://" } } });
+    shown = failed("L1");
+    bench.surface.afterNavigation = (viewId: string): void => {
+      shown = failed("L2");
+      loadNew(viewId);
+    };
+
+    await bench.runAsync(tool, bench.call({ action: "reload" }));
+
+    expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[{ viewId: "view-1", target: WebViewAction.Reload }], 1]);
+  });
+
   it("goes back to a blank page as low risk", async () => {
     pages = ["about:blank", "https://docs.example/guide"];
 

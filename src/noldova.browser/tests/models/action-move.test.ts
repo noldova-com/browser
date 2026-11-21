@@ -86,17 +86,19 @@ describe("ActionMove", () => {
     expect(await new ActionMove(WebViewAction.Reload).readTargetAsync(bench.kit.calls, ToolBench.VIEW, failed, options())).toStrictEqual(new HistoryTarget(null, "https://docs.example/guide"));
   });
 
-  it("says a move landed at its target's address, a reload's being the address it left or failed to load, without reading the history", async () => {
-    function isLandedAsync(action: WebViewAction, target: string, url: string): Promise<boolean> {
-      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, new HistoryTarget(null, target), new FrameFacts(url, "https://docs.example", "L2", "F1", null));
+  it("says a move landed at its target's address, a reload's being the address it left or failed to load, failing again too, without reading the history", async () => {
+    function isLandedAsync(action: WebViewAction, target: string, url: string, failedUrl: string | null = null): Promise<boolean> {
+      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, new HistoryTarget(null, target), new FrameFacts(url, "https://docs.example", "L2", "F1", failedUrl));
     }
 
     expect(await Promise.all([
       isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "https://docs.example/guide"),
       isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "https://docs.example/moved"),
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "chrome-error://chromewebdata/", "https://docs.example/guide"),
+      isLandedAsync(WebViewAction.Reload, "https://docs.example/guide", "chrome-error://chromewebdata/", "https://docs.example/moved"),
       isLandedAsync(WebViewAction.Back, "https://docs.example/", "https://docs.example/"),
       isLandedAsync(WebViewAction.Back, "https://docs.example/", "https://docs.example/guide")
-    ])).toEqual([true, false, true, false]);
+    ])).toEqual([true, false, true, false, true, false]);
     expect(bench.methods).toEqual([]);
   });
 

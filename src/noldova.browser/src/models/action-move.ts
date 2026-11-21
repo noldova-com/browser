@@ -47,6 +47,6 @@ export class ActionMove extends NavigationMove {
   }
 
   public isLandedAsync(_calls: ViewCalls, _viewId: string, _left: FrameFacts, target: HistoryTarget, landed: FrameFacts): Promise<boolean> {
-    return Promise.resolve(landed.url === target.url);
+    return Promise.resolve(landed.address === target.url);
   }
 }
