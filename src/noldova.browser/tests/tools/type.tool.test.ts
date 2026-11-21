@@ -208,7 +208,7 @@ describe("TypeTool", () => {
 
     const pressed: number = bench.methods.indexOf("Input.dispatchKeyEvent");
     expect([bench.methods.slice(pressed - 2, pressed + 2), sent("Input.insertText"), sent("Input.dispatchKeyEvent").map(t => [t["type"], t["key"], t["windowsVirtualKeyCode"]])]).toEqual([
-      ["Runtime.callFunctionOn", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["keyDown", "Delete", 46], ["keyUp", "Delete", 46]]
+      ["Runtime.callFunctionOn", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["rawKeyDown", "Delete", 46], ["keyUp", "Delete", 46]]
     ]);
   });
 
