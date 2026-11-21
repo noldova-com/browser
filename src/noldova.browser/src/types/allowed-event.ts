@@ -9,6 +9,7 @@
 export type AllowedEvent =
   | "Page.loadEventFired"
   | "Page.frameNavigated"
+  | "Page.frameStartedNavigating"
   | "Runtime.consoleAPICalled"
   | "Runtime.exceptionThrown"
   | "Runtime.executionContextCreated"

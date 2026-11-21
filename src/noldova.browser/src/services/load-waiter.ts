@@ -20,13 +20,26 @@ export class LoadWaiter implements Disposable {
 
   // `within` is a move that may stay in its document, such as back to an entry a page pushed or to a fragment: such a move fires no load, so its
   // frame's navigation to its URL ends the wait too, unless the frame took a new document first, whose load the wait is for.
-  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null) {
+  // `frameId` is the main frame a move navigates: a load counts only once that frame committed the document of the newest navigation that
+  // started in it after the wait began, so neither the load of the document the move leaves nor that of one an earlier move left loading,
+  // which started before, ends the wait. With none, as for a wait for the page's next load, any load counts.
+  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null, frameId: string | null) {
     let isNewDocument: boolean = false;
+    let started: JsonValue | undefined;
+    let isCommitted: boolean = frameId === null;
     this.stop = relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
-      if (event.method === Resources.loadEvent)
+      if (event.method === Resources.loadEvent && isCommitted)
         this.loaded.resolve();
-      else if (event.method === Resources.frameNavigatedEvent && within !== null && LoadWaiter.idOf(event.params[Resources.frameField]) === within.frameId)
-        isNewDocument = true;
+      else if (event.method === Resources.frameStartedNavigatingEvent && event.params[Resources.frameIdField] === frameId
+        && !Resources.sameDocumentNavigationTypes.includes(String(event.params[Resources.navigationTypeField]))) {
+        started = event.params[Resources.loaderIdField];
+        isCommitted = false;
+      }
+      else if (event.method === Resources.frameNavigatedEvent) {
+        const frame: JsonValue | undefined = event.params[Resources.frameField];
+        isNewDocument ||= within !== null && LoadWaiter.idOf(frame) === within.frameId;
+        isCommitted ||= started !== undefined && LoadWaiter.isCommit(frame, frameId, started);
+      }
       else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && within !== null && event.params[Resources.frameIdField] === within.frameId
         && event.params[Resources.urlField] === within.url)
         this.loaded.resolve();
@@ -61,6 +74,11 @@ export class LoadWaiter implements Disposable {
 
   private static idOf(frame: JsonValue | undefined): JsonValue | undefined {
     return JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
+  }
+
+  // Whether the navigated frame is the move's, committing the document of its newest navigation.
+  private static isCommit(frame: JsonValue | undefined, frameId: string | null, loaderId: JsonValue | undefined): boolean {
+    return JsonShapes.isObject(frame) && frame[Resources.idField] === frameId && frame[Resources.loaderIdField] === loaderId;
   }
 
   public [Symbol.dispose](): void {
