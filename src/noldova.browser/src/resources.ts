@@ -168,6 +168,7 @@ export class Resources {
   public static readonly referencePrefix: string = "e";
   public static readonly missingNodePrefix: string = "No node";
   public static readonly noNodeAtPoint: string = "No node found at given location";
+  public static readonly noContentQuads: string = "Could not compute content quads.";
   public static readonly webSchemes: readonly string[] = ["http:", "https:"];
   public static readonly wildcardPattern: RegExp = /[*%]/u;
   public static readonly localSitesSetting: string = "browser.localSites";

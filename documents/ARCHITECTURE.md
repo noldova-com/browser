@@ -428,6 +428,7 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
   It is scaled so its longer side in device pixels is at most 1,600, and never scaled up.
   It goes as a PNG; a PNG over 1 MB, or one the engine's answer can't carry, goes as a JPEG at quality 80, then 50, then 20, and one still over fails as `TooLarge`.
   An element with no box, or an area with no size, is refused with `browser.notVisible`.
+  An element the engine doesn't lay out, such as one under `display: none`, has no box: the engine refuses to read one, and a click or a screenshot treats that refusal as no box.
 
   <a id="a-capture-of-a-hidden-page"></a>The page may be hidden, behind the chat's tab, and a hidden view never draws, so a capture of it waits until it's shown, even one the view had a size for before.
   So a screenshot first takes a one-pixel capture with a wait of a second; a page that answers is captured as it is.

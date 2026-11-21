@@ -15,6 +15,7 @@ import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { HandedOverException } from "../exceptions/handed-over.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { PageNotControlledException } from "../exceptions/page-not-controlled.exception.ts";
+import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
 import { RiskRoseException } from "../exceptions/risk-rose.exception.ts";
 import { StaleReferenceException } from "../exceptions/stale-reference.exception.ts";
@@ -193,8 +194,21 @@ export class ToolKit {
   }
 
   public async readBoxAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<PageBox | null> {
-    const quad: readonly number[] | null = ContentQuads.readFirst(await this.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+    const quad: readonly number[] | null = await this.readQuadAsync(viewId, backendNodeId, options);
     return quad === null ? null : ContentQuads.toBox(quad);
+  }
+
+  // The element's first box, or null for one with none: the engine answers no quads for some, and refuses the call for one it doesn't lay
+  // out, such as an element under display: none.
+  public async readQuadAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<readonly number[] | null> {
+    try {
+      return ContentQuads.readFirst(await this.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+    }
+    catch (error) {
+      if (error instanceof ProtocolFailedException && error.cause instanceof WebViewFailureException && error.cause.failure.message === Resources.noContentQuads)
+        return null;
+      throw error;
+    }
   }
 
   public async readFrameAsync(viewId: string, options: CallOptions): Promise<FrameFacts> {

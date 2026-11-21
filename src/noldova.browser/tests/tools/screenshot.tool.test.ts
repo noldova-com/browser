@@ -130,6 +130,10 @@ describe("ScreenshotTool", () => {
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference() })), ScreenshotNotVisibleException, { reason: "Refused", moduleCode: "browser.notVisible" });
     expect(captures()).toEqual([DRAW_CHECK]);
 
+    bench.surface.fail("DOM.getContentQuads", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Could not compute content quads."));
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference() })), ScreenshotNotVisibleException, { reason: "Refused", moduleCode: "browser.notVisible" });
+    expect(captures()).toEqual([DRAW_CHECK, DRAW_CHECK]);
+
     bench.surface.answer("Page.getLayoutMetrics", { ...METRICS, cssContentSize: { width: 800, height: 0 } });
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ fullPage: true })), ScreenshotNotVisibleException, { reason: "Refused", moduleCode: "browser.notVisible" });
     expect(captures()).toEqual([DRAW_CHECK, DRAW_CHECK]);
