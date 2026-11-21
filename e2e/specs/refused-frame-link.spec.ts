@@ -17,7 +17,8 @@ const FRAME_BOX = "JSON.stringify(document.querySelector(\"iframe\").getBounding
 const PAGE = (frame: string): string => `<!doctype html><title>${TITLE}</title><body style="margin:0">`
   + `<iframe src="${frame}" style="display:block;width:320px;height:160px;border:0"></iframe>`;
 const FRAME = (target: string): string => "<!doctype html><title>Frame</title><body style=\"margin:0\">"
-  + `<a id="a" href="${target}" style="display:inline-block;width:100px;height:40px">Out</a>`;
+  + `<a id="a" href="${target}" style="display:inline-block;width:100px;height:40px" onpointerover="document.getElementById('r').textContent='Over'">Out</a>`
+  + "<p id=\"r\" style=\"margin:0\"></p>";
 
 test.describe("a refused link in a frame", () => {
   test("the person's click on a link in another site's frame, to a site the workspace doesn't allow, shows the refused page in that frame, sized to it", async ({ app, servers }) => {
@@ -35,6 +36,12 @@ test.describe("a refused link in a frame", () => {
     if (box === null)
       throw new Error("The page's view has no box.");
 
+    let step: number = 0;
+    await expect.poll(async () => {
+      step = 1 - step;
+      await app.window.mouse.move(box.x + 50 + step, box.y + 20);
+      return app.viewPages.frameTextsAsync(docs.url("/"));
+    }, { message: "The frame never saw the pointer over its link." }).toEqual(["Out\nOver"]);
     await app.window.mouse.click(box.x + 50, box.y + 20);
 
     await expect.poll(() => app.viewPages.frameTextsAsync(docs.url("/")), { message: "The frame never showed the refusal, as the frames' texts." })
