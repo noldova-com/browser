@@ -40,12 +40,13 @@ describe("KeyEvents", () => {
     ));
   });
 
-  it("gives a letter under Shift its capital, in its key and its text, and leaves a digit, a sign and a named key as they are", () => {
+  it("gives a letter under Shift its capital, in its key and its text, and leaves a digit, a sign, a named key and a letter whose capital is two as they are", () => {
     const down = (key: string): readonly (string | undefined)[] => {
       const event: KeyEvent = KeyEvents.press(KeyEvents.find(key) ?? new KeyDefinition(key, "", 0, ""), 8).down;
       return [event.key, event.code, event.text ?? ""];
     };
 
-    expect(["a", "Z", "1", "-", "Tab", "é"].map(down)).toEqual([["A", "KeyA", "A"], ["Z", "KeyZ", "Z"], ["1", "Digit1", "1"], ["-", "", "-"], ["Tab", "Tab", ""], ["é", "", "é"]]);
+    expect(["a", "Z", "1", "-", "Tab", "é", "ñ", "ж", "α", "ß"].map(down)).toEqual([["A", "KeyA", "A"], ["Z", "KeyZ", "Z"], ["1", "Digit1", "1"], ["-", "", "-"],
+      ["Tab", "Tab", ""], ["É", "", "É"], ["Ñ", "", "Ñ"], ["Ж", "", "Ж"], ["Α", "", "Α"], ["ß", "", "ß"]]);
   });
 });

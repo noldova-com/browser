@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ArgumentMissingException } from "../../src/exceptions/argument-missing.exception.ts";
 import { ArgumentNotFlagException } from "../../src/exceptions/argument-not-flag.exception.ts";
@@ -66,6 +66,17 @@ describe("InputValidator", () => {
   it("counts text's length in code points, as the schema's maxLength does, so an emoji is one", () => {
     expect(InputValidator.readText({ text: "\u{1F600}".repeat(5) }, "text", 5)).toBe("\u{1F600}".repeat(5));
     expectInvalid(() => InputValidator.readText({ text: "\u{1F600}".repeat(6) }, "text", 5), ArgumentTooLongException, "The argument \"text\" is longer than 5 characters.");
+  });
+
+  it("refuses text of more than twice the limit in UTF-16 units without counting its code points", () => {
+    const spread = vi.spyOn(String.prototype, Symbol.iterator);
+    try {
+      expectInvalid(() => InputValidator.readText({ text: "x".repeat(11) }, "text", 5), ArgumentTooLongException, "The argument \"text\" is longer than 5 characters.");
+      expect(spread).not.toHaveBeenCalled();
+    }
+    finally {
+      spread.mockRestore();
+    }
   });
 
   it("reads an http or https URL and gives it back normalized", () => {

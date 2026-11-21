@@ -13,37 +13,37 @@ import type { IRuntimePart, IRuntimePartContext, Migration, RegistrationExceptio
  */
 export declare class BrowserLimits {
   /**
-   * The most characters a URL that a tool receives may have.
+   * The most code points a URL that a tool receives may have, counted as `[...url].length`.
    *
    * @example
    * ```ts
    * import { BrowserLimits } from "@noldova/browser/runtime";
    *
-   * const fits: boolean = "https://example.com/".length <= BrowserLimits.maximumUrlLength;
+   * const fits: boolean = [..."https://example.com/"].length <= BrowserLimits.maximumUrlLength;
    * ```
    */
   public static readonly maximumUrlLength: number;
 
   /**
-   * The most characters of text one call may type.
+   * The most code points of text one call may type, counted as `[...text].length`.
    *
    * @example
    * ```ts
    * import { BrowserLimits } from "@noldova/browser/runtime";
    *
-   * const fits: boolean = "hello".length <= BrowserLimits.maximumTypedTextLength;
+   * const fits: boolean = [..."hello"].length <= BrowserLimits.maximumTypedTextLength;
    * ```
    */
   public static readonly maximumTypedTextLength: number;
 
   /**
-   * The most characters of an element reference, such as `e12`, that a tool receives.
+   * The most code points of an element reference, such as `e12`, that a tool receives, counted as `[...reference].length`.
    *
    * @example
    * ```ts
    * import { BrowserLimits } from "@noldova/browser/runtime";
    *
-   * const fits: boolean = "e12".length <= BrowserLimits.maximumReferenceLength;
+   * const fits: boolean = [..."e12"].length <= BrowserLimits.maximumReferenceLength;
    * ```
    */
   public static readonly maximumReferenceLength: number;

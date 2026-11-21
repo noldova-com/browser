@@ -151,7 +151,7 @@ export class Resources {
   public static readonly typeTitle: string = "Type into a field";
   public static readonly typeDescription: string = "Replaces what a field holds with the text, by the field's reference, and optionally presses Enter. An empty text clears the field. Secret fields and submitting ask the person first.";
   public static readonly pressKeyTitle: string = "Press a key";
-  public static readonly pressKeyDescription: string = "Presses a key, with optional modifiers, in the focused element. Keys that submit a form ask the person first.";
+  public static readonly pressKeyDescription: string = "Presses a key, with optional modifiers, in the focused element. Shift gives a letter its capital; a digit or a sign goes as given. Keys that submit a form ask the person first.";
   public static readonly screenshotTitle: string = "Take a screenshot";
   public static readonly screenshotDescription: string = "Returns an image of the visible page, the full page or one element.";
   public static readonly consoleTitle: string = "Read the console";

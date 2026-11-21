@@ -48,9 +48,11 @@ export class KeyEvents {
     return new KeyPress(down, { type: Resources.keyUpType, ...fields });
   }
 
-  // Shift gives a letter its capital, as a keyboard does, in the key and the text it types; any other key stays as it is.
+  // Shift gives a letter its capital, as a keyboard does, in the key and the text it types, when the capital is one other code point, as for
+  // ñ, ж or α. Any other key stays as it is: a digit's or a sign's shifted form depends on the keyboard's layout.
   private static shifted(definition: KeyDefinition): KeyDefinition {
     const upper: string = definition.key.toUpperCase();
-    return Resources.letterKeyPattern.test(upper) ? new KeyDefinition(upper, definition.code, definition.keyCode, upper) : definition;
+    const isLetter: boolean = upper !== definition.key && [...definition.key].length === 1 && [...upper].length === 1;
+    return isLetter ? new KeyDefinition(upper, definition.code, definition.keyCode, upper) : definition;
   }
 }
