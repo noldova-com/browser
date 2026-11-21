@@ -130,6 +130,7 @@ export class Resources {
   public static readonly maximumPageTitleLength: number = 300;
   public static readonly notVisible: string = "The element has no box on the page, so it can't be clicked; take a new snapshot.";
   public static readonly notVisibleCode: string = "browser.notVisible";
+  public static readonly fieldNotVisible: string = "The field isn't laid out on the page, so nothing was typed; take a new snapshot.";
   public static readonly covered: string = "Another element covers the element at its centre, so nothing was clicked; take a new snapshot.";
   public static readonly coveredCode: string = "browser.covered";
   public static readonly pageNotShowing: string = "The page isn't laid out, so nothing was pressed at that point; ask the person to show its tab.";
@@ -168,6 +169,7 @@ export class Resources {
   public static readonly referencePrefix: string = "e";
   public static readonly missingNodePrefix: string = "No node";
   public static readonly noNodeAtPoint: string = "No node found at given location";
+  public static readonly noContentQuads: string = "Could not compute content quads.";
   public static readonly webSchemes: readonly string[] = ["http:", "https:"];
   public static readonly wildcardPattern: RegExp = /[*%]/u;
   public static readonly localSitesSetting: string = "browser.localSites";

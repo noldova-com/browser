@@ -253,6 +253,26 @@ test.describe("the agent tools on a real page", () => {
     expect(await app.viewPages.runAtAsync(docs.url("/"), "pressed.join(', ')"), "The page saw a press.").toBe("");
   });
 
+  // The engine refuses to read the box of an element it doesn't lay out, such as one under display: none.
+  test("a click on and a screenshot of an element hidden after the snapshot say it isn't visible, and the element isn't clicked", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": START });
+    const bindings = await openAsync(app, docs);
+    const buy = referenceOf(textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- button "Buy" \[(e\d+)\]$/u);
+    await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('buy').style.display = 'none'; true");
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
+
+    const clicked = await app.requestAsync("agent-double.callTool", { name: "browser_click", input: { reference: buy }, bindings });
+    const captured = await app.requestAsync("agent-double.callTool", { name: "browser_screenshot", input: { reference: buy }, bindings });
+
+    expect([clicked, captured]).toEqual([
+      expect.objectContaining({ isFailure: true, code: "Refused", moduleCode: "browser.notVisible",
+        message: "The element has no box on the page, so it can't be clicked; take a new snapshot." }),
+      expect.objectContaining({ isFailure: true, code: "Refused", moduleCode: "browser.notVisible",
+        message: "The area has no size on the page, so nothing was captured; take a new snapshot." }),
+    ]);
+    expect(await app.viewPages.runAtAsync(docs.url("/"), "pressed.join(', ')"), "The page saw a press.").toBe("");
+  });
+
   test("a screenshot gives a PNG of the view's shape and its page, of the size its text says", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);

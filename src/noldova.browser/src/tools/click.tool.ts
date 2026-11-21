@@ -113,6 +113,9 @@ export class ClickTool implements IBrowserTool {
     let [quad, metrics]: [readonly number[] | null, JsonObject] = isLaidOut
       ? await this.settleAsync(viewId, backendNodeId, options)
       : await this.readPointAsync(viewId, backendNodeId, options);
+    // An element with no box has nothing a scroll could bring into view, and the engine refuses to scroll one it doesn't lay out.
+    if (quad === null)
+      throw new ElementNotVisibleException();
     const isShown: boolean = await this.isShownAsync(viewId, backendNodeId, quad, metrics, options);
     if (!isShown) {
       await this.kit.calls.sendAsync(viewId, Resources.scrollIntoViewIfNeededMethod, { backendNodeId }, options);
@@ -137,7 +140,7 @@ export class ClickTool implements IBrowserTool {
   }
 
   private async confirmUnmovedAsync(viewId: string, backendNodeId: number, quad: readonly number[], scroll: PagePoint, options: CallOptions): Promise<void> {
-    const now: readonly number[] | null = ContentQuads.readFirst(await this.kit.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+    const now: readonly number[] | null = await this.kit.readQuadAsync(viewId, backendNodeId, options);
     const scrolled: PagePoint = await this.readScrollAsync(viewId, options);
     if (now === null || now.some((t, index) => t !== quad[index]) || scrolled.x !== scroll.x || scrolled.y !== scroll.y)
       throw new PageChangedAfterGrantException();
@@ -146,9 +149,7 @@ export class ClickTool implements IBrowserTool {
   }
 
   // Whether the element shows at its centre: the centre is in the view and the topmost element there is the element or inside it.
-  private async isShownAsync(viewId: string, backendNodeId: number, quad: readonly number[] | null, metrics: JsonObject, options: CallOptions): Promise<boolean> {
-    if (quad === null)
-      return false;
+  private async isShownAsync(viewId: string, backendNodeId: number, quad: readonly number[], metrics: JsonObject, options: CallOptions): Promise<boolean> {
     const centre: PagePoint = ContentQuads.toCentre(quad);
     if (!ClickTool.isInView(metrics, centre))
       return false;
@@ -159,7 +160,7 @@ export class ClickTool implements IBrowserTool {
 
   // The element's first box and the page's metrics, read together.
   private async readPointAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<[readonly number[] | null, JsonObject]> {
-    const quad: readonly number[] | null = ContentQuads.readFirst(await this.kit.calls.sendAsync(viewId, Resources.getContentQuadsMethod, { backendNodeId }, options));
+    const quad: readonly number[] | null = await this.kit.readQuadAsync(viewId, backendNodeId, options);
     return [quad, await this.kit.calls.sendAsync(viewId, Resources.getLayoutMetricsMethod, {}, options)];
   }
 

@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ArgumentNotFlagException } from "../../src/exceptions/argument-not-flag.exception.ts";
 import { ArgumentTooLongException } from "../../src/exceptions/argument-too-long.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
+import { FieldNotVisibleException } from "../../src/exceptions/field-not-visible.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
 import { NotSubmittedException } from "../../src/exceptions/not-submitted.exception.ts";
 import { OutcomeUncertainException } from "../../src/exceptions/outcome-uncertain.exception.ts";
@@ -254,6 +255,14 @@ describe("TypeTool", () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red shoes" }));
 
     expect([bench.activities.map(t => t["box"]), sent("Input.insertText")]).toEqual([[null, null, null, null], [{ text: "red shoes" }]]);
+  });
+
+  it("refuses a field the engine doesn't lay out, as under display: none, before it asks, and types nothing", async () => {
+    bench.surface.fail("DOM.getContentQuads", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Could not compute content quads."));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red shoes" })), FieldNotVisibleException,
+      { reason: "Refused", moduleCode: "browser.notVisible" });
+    expect([bench.permissions.requests, bench.methods.includes("DOM.focus"), sent("Input.insertText")]).toEqual([[], false, []]);
   });
 
   it("names the form its Enter submits, and the fields the form sends", async () => {
