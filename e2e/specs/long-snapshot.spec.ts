@@ -26,9 +26,18 @@ const ROWS_UNSEARCHED = /^Closed parts inside <div id="rows">: ([\d,]+) of 12,00
 // The snapshot's step deadline; the time each took is an annotation.
 const STEP_MS = 15_000;
 
-// Each link's name is long, so the snapshot's limit comes after a few dozen links.
-const PAGE = "<!doctype html><title>Long page</title><ul>"
-  + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`;
+// Each link's name is long, so the snapshot's limit comes after a few dozen links; the icon page puts a view-tall svg icon before one
+// section's link, which the walk doesn't enter.
+const ICON_SECTION = 200;
+const ICON = '<svg style="display: block; width: 100%; height: 100vh"><path d="M0 0H4000V4000H0Z"/></svg>';
+const PAGE = longPage("");
+const ICON_PAGE = longPage(ICON);
+
+function longPage(icon: string): string {
+  return "<!doctype html><title>Long page</title><ul>"
+    + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li>' + (i === ${ICON_SECTION} ? '${icon}' : '') + '<a href="#s' + i + '">Section ' + i`
+    + ` + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`;
+}
 
 // Rows under one element: 12,000 link rows, with short or long names, are the page whose whole tree the engine took most of the time limit
 // to build (#68); 12,000 rows with a long attribute each make even the list of that element's children larger than one reply could carry.
@@ -181,6 +190,25 @@ test.describe("a snapshot of a long page", () => {
     expect(sections.slice(0, 3)).toEqual([first, first + 1, first + 2]);
     expect(tree).toMatch(/^ {6}- link "Section \d+(?: word){800}" \[e1\]$/mu);
     expect(Buffer.byteLength(tree, "utf8")).toBeLessThanOrEqual(SNAPSHOT_LIMIT_BYTES);
+    expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE]));
+  });
+
+  test("on a long page scrolled to an svg icon, the snapshot starts at the icon, which it doesn't enter, and gives what follows it", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": ICON_PAGE });
+    await app.allowLocalSitesAsync([docs.origin]);
+    const instance = await app.openPageAsync(docs.url("/"));
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long page")]);
+    const hit = await app.viewPages.runAtAsync(docs.url("/"), "document.querySelector('svg').scrollIntoView(); document.elementFromPoint(innerWidth / 2, innerHeight / 4).localName");
+    expect(hit, "The view's point isn't on the icon.").toBe("path");
+
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+
+    expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
+    const notes = textsOf(result);
+    const tree = treeOf(notes);
+    const sections = [...tree.matchAll(/^ {6}- link "Section (\d+) /gmu)].map(t => Number(t[1]));
+    expect(sections.slice(0, 3)).toEqual([ICON_SECTION, ICON_SECTION + 1, ICON_SECTION + 2]);
+    expect(tree).toMatch(/^ {6}- link "Section \d+(?: word){800}" \[e1\]$/mu);
     expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE]));
   });
 });

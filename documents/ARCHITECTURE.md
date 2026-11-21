@@ -381,6 +381,7 @@ The runtime part registers eight tools by default, which `module.json` declares 
   A closed root whose lines reach the 128 KiB, or the step's last second, cuts the snapshot there, so no later line leaves a hole before it.
 - The function stops once its lines pass the snapshot's 128 KiB, counting each reference at the most it takes, and the runtime part cuts the text at the last whole line within the limit; the snapshot then carries the cut note, which says how to read more.
   On a page scrolled down whose snapshot is cut, it starts again at the element a quarter of the way down the view, below a header the page keeps at its top, and gives only the lines from the root down to it, then its own and whatever follows them; the snapshot carries a note that it starts where the page is scrolled to.
+  When the walk stops on the way down, at an element it doesn't enter, such as an svg icon the view's point falls on or a hidden part around it, it starts at that element instead, so the lines still follow from there.
 - The tool's three options are arguments of the same function:
   - `interactive` keeps only the elements the agent may act on and the headings, leaving out text and other lines.
   - `depth` keeps the lines fewer than that many levels below the root, from 1 to 100, and gives each element at the last level with lines below it a reference; the snapshot then says that deeper lines were left out.
