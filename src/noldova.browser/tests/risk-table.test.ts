@@ -104,6 +104,7 @@ describe("the risk table", () => {
       action: "Navigate, go back or forward, or reload within the allowed origins",
       checkAsync: async () => {
         const tool: NavigateTool = new NavigateTool(bench.kit);
+        bench.surface.answer("Page.getNavigationHistory", { currentIndex: 1, entries: [{ url: "https://shop.test/cart/" }, { url: "https://shop.test/cart/" }, { url: "https://shop.test/cart/" }] });
         const outcomes: readonly string[] = [await runAsync(tool, { url: "https://shop.test/next" }), await runAsync(tool, { action: "back" }),
           await runAsync(tool, { action: "forward" }), await runAsync(tool, { action: "reload" })];
 
