@@ -7,18 +7,21 @@
  */
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
-import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailureCode, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
+import { PermissionDecision, PermissionDetailKind, PermissionOption, ToolFailure, ToolFailureCode, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArgumentNotOneOfException } from "../../src/exceptions/argument-not-one-of.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
+import { OutcomeUncertainException } from "../../src/exceptions/outcome-uncertain.exception.ts";
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
 import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
 import { UnknownKeyException } from "../../src/exceptions/unknown-key.exception.ts";
+import { ActionProgress } from "../../src/models/action-progress.ts";
+import { ToolFailures } from "../../src/services/tool-failures.ts";
 import { PressKeyTool } from "../../src/tools/press-key.tool.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
@@ -258,6 +261,22 @@ describe("PressKeyTool", () => {
     await running;
 
     expect(keyEvents().map(t => t["type"])).toEqual(["keyDown", "keyUp"]);
+  });
+
+  it.each<[string, string, ToolFailure | null]>([
+    ["a character ends as uncertain", "a", new OutcomeUncertainException(ToolFailureCode.Stale, null).toFailure()],
+    ["a shortcut ends as uncertain", "ArrowLeft", new OutcomeUncertainException(ToolFailureCode.Stale, null).toFailure()],
+    ["Enter, which can submit a form by itself, ends as done", "Enter", null],
+    ["Space, which can follow a link by itself, ends as done", " ", null]
+  ])("%s when the page went to another document after its last read", async (_case: string, key: string, expected: ToolFailure | null) => {
+    bench.checkAs(tool.descriptor);
+    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(keyEvents().length === 0 ? "L1" : "L2"));
+    const progress: ActionProgress = new ActionProgress(() => undefined);
+
+    const failure: ToolFailure | null = await tool.callAsync(bench.call({ key }), progress)
+      .then(() => null, (error: unknown) => ToolFailures.forCall(error, progress, tool.descriptor.isResumable !== true));
+
+    expect([failure, keyEvents().length]).toEqual([expected, 2]);
   });
 
   it.each<[string, JsonObject, abstract new (...args: never[]) => Error]>([
