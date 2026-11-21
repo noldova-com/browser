@@ -207,7 +207,7 @@ describe("TypeTool", () => {
 
   it.each<[string, string, string]>([
     ["inserted text", "red", "Input.insertText"],
-    ["an empty text's Delete", "", "Input.dispatchKeyEvent"]
+    ["Delete that clears the field", "", "Input.dispatchKeyEvent"]
   ])("ends as uncertain, pressing no Enter, when the page went to another document after its last read, found after the %s", async (_case: string, text: string, input: string) => {
     bench.checkAs(tool.descriptor);
     bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(sent(input).length === 0 ? "L1" : "L2"));
