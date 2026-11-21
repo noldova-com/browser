@@ -358,6 +358,18 @@ describe("NavigateTool", () => {
     expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toEqual([]);
   });
 
+  it("answers with the URL's fragment, which the engine gives apart from the frame's URL", async () => {
+    bench.surface.afterNavigation = (viewId: string): void => {
+      land();
+      shown = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://docs.example/guide", urlFragment: "#setup", securityOrigin: "https://docs.example" } } };
+      bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide#setup" });
+    };
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ url: "https://docs.example/guide#setup" }));
+
+    expect(result.content[1]?.value).toBe("URL: https://docs.example/guide#setup\nTitle: Next steps");
+  });
+
   it("waits on a reload for its load, which a navigation within the document doesn't end", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide" });

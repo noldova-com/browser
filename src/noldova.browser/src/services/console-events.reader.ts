@@ -12,6 +12,7 @@ import type { ConsoleEvent } from "../models/console-event.ts";
 import { ConsoleNavigationEvent } from "../models/console-navigation-event.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
+import { FrameTreeReader } from "./frame-tree.reader.ts";
 import { JsonShapes } from "./json-shapes.ts";
 import { PageOrigin } from "./page-origin.ts";
 
@@ -78,7 +79,8 @@ export class ConsoleEventsReader {
   private static readNavigation(frame: JsonValue | undefined): ConsoleEvent | null {
     if (!JsonShapes.isObject(frame) || frame[Resources.parentIdField] !== undefined)
       return null;
-    const { url, securityOrigin: origin } = frame;
+    const url: JsonValue | undefined = FrameTreeReader.urlOf(frame);
+    const origin: JsonValue | undefined = frame[Resources.securityOriginField];
     return typeof url === "string" && typeof origin === "string" ? new ConsoleNavigationEvent(url, PageOrigin.of(origin)) : null;
   }
 
