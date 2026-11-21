@@ -79,6 +79,8 @@ export class TypeTool implements IBrowserTool {
         await this.kit.calls.sendAsync(page.viewId, Resources.insertTextMethod, { text }, options);
       else if (isSelected)
         await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, deleting.down, deleting.up, ViewCalls.holding(options));
+      // Typing doesn't navigate by itself, so a document changed by now went before or under the text, which ends the call as uncertain.
+      await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
       if (isSubmitting) {
         await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options, () => new NotSubmittedException());
         const keys: KeyPress = KeyEvents.press(Resources.enterKey, 0);
