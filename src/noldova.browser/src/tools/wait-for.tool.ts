@@ -51,17 +51,22 @@ export class WaitForTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Waiting, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, choice === Resources.referenceField);
-      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, null);
+      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, null, null);
       try {
+        // The page sends its load only once its events are on, as navigate turns them on.
+        if (choice === Resources.loadField)
+          await this.kit.calls.sendAsync(page.viewId, Resources.enableMethod, {}, options);
         const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-        const until: number = Math.min(Date.now() + timeout, call.deadline - Resources.answerMarginMilliseconds);
+        // The call's deadline can cut the wait short of its time limit, so a wait that isn't met says how long it waited.
+        const started: number = Date.now();
+        const until: number = Math.min(started + timeout, call.deadline - Resources.answerMarginMilliseconds);
         const isMet: boolean = choice === Resources.loadField
           ? await loads.waitAsync(until, activity.signal)
           : await this.whenAsync(page.viewId, options, until, choice === Resources.textField
             ? this.checkText(page.viewId, text, options)
             : await this.checkShownAsync(call.session, reference, page.viewId, frame.documentId, options));
         const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-        return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(timeout), new ShownPage(now.url, await this.kit.readTitleOfAsync(page.viewId, now.documentId, options)));
+        return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(Math.max(0, until - started)), new ShownPage(now.url, await this.kit.readTitleOfAsync(page.viewId, now.documentId, options)));
       }
       finally {
         loads[Symbol.dispose]();
