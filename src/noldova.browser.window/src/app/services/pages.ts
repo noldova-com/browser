@@ -42,6 +42,9 @@ export class Pages {
   private static readonly registry: WeakMap<IWindowPartContext, Pages> = new WeakMap<IWindowPartContext, Pages>();
   private readonly context: IWindowPartContext;
   private readonly pending: Map<string, PagePlace> = new Map<string, PagePlace>();
+  // Pages the person closed here while an agent's call ran on them, until that call ends or the page opens again: a refusal that comes after its
+  // tab closed, from a card still waiting, isn't kept.
+  private readonly closed: Set<string> = new Set<string>();
   private readonly shown: Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }> = new Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }>();
   private readonly lastAsked: Map<string, string> = new Map<string, string>();
   private readonly entries: WeakMap<PaneTab, TypedEntry> = new WeakMap<PaneTab, TypedEntry>();
@@ -78,6 +81,9 @@ export class Pages {
     this.stopClosing = context.onDocumentClosed(Resources.pageDocument, t => {
       this.markElsewhere(t, false);
       this.pending.delete(t);
+      this.dismissRefusal(t);
+      if (this.current().has(t))
+        this.closed.add(t);
       this.agentPages.closeTab(t);
       this.request(BrowserMethods.forgetPage, new PageRequest(t).toJson(), Resources.formatNotKept);
     });
@@ -169,6 +175,7 @@ export class Pages {
       return instance;
     }
     this.pending.set(instance, { profileKey, url: url === null ? "" : url });
+    this.closed.delete(instance);
     try {
       this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(opener, isBehind));
     }
@@ -322,6 +329,7 @@ export class Pages {
       cancel();
     this.firstLoads.clear();
     this.pending.clear();
+    this.closed.clear();
     this.stopActivities();
     this.stopClosing();
     this.current.set(new Map<string, PageActivity>());
@@ -389,8 +397,10 @@ export class Pages {
       for (const tab of this.shown.keys())
         if (tab.id === activity.instance)
           tab.controller.followNavigation();
-    if (activity.refusal !== null)
+    if (activity.refusal !== null && !this.closed.has(activity.instance))
       this.refused.set(new Map<string, RefusedPage>(this.refused()).set(activity.instance, new RefusedPage(activity.agentName, activity.refusal.url, activity.refusal.origin)));
+    if (activity.state === PageActivityState.Ended)
+      this.closed.delete(activity.instance);
     const held: PaneTab | undefined = activity.state === PageActivityState.Ended && activity.isHandedOver ? [...this.shown.keys()].find(t => t.id === activity.instance) : undefined;
     if (held !== undefined)
       this.context.openDocument(Resources.pageDocument, activity.instance, held.title);
