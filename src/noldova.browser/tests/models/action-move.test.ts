@@ -83,7 +83,7 @@ describe("ActionMove", () => {
   it("says a reload landed at the address it left, and back or forward at its target's, without reading the history", async () => {
     const target: HistoryTarget = new HistoryTarget(0, "https://docs.example/");
     function isLandedAsync(action: WebViewAction, url: string): Promise<boolean> {
-      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, target, new FrameFacts(url, "https://docs.example", "L2", "F1"), options());
+      return new ActionMove(action).isLandedAsync(bench.kit.calls, ToolBench.VIEW, FRAME, target, new FrameFacts(url, "https://docs.example", "L2", "F1"));
     }
 
     expect(await Promise.all([
