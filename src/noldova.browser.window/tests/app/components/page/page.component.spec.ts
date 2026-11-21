@@ -785,6 +785,28 @@ describe("PageComponent", () => {
     expect([view.calls.filter(t => t.startsWith("navigate")), field().value]).toEqual([["navigate https://one.example/"], "https://one.example/"]);
   });
 
+  it("goes nowhere once the failed page's own Try again leaves an entered address that still waits for its answer, and puts the page's address back", async () => {
+    const view: FakeWebView = await stateAsync(PaneState.Failed);
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("three.example{Enter}");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(1));
+    const entered: string = field().value;
+    stateAction("Try again").click();
+    await vi.waitFor(() => expect(field().value).not.toBe(entered));
+    allow({ kind: "Allowed", origin: "https://three.example" });
+    await stableAsync();
+
+    expect([entered, view.calls.filter(t => t === "reload" || t === "navigate https://three.example/"), field().value]).toEqual(["three.example", ["reload"], "https://two.example/"]);
+  });
+
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {
     await openAsync();
 

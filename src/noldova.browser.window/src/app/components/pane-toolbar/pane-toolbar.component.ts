@@ -71,9 +71,6 @@ export class PaneToolbarComponent {
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
   protected readonly isAvailable: Signal<boolean> = computed(() => this.status().state !== PaneState.Unavailable);
   protected readonly shown: Signal<string> = computed(() => this.shownAddress() ?? this.status().url);
-  private readonly shownPage: Signal<string> = computed(() => this.shown() === this.status().url ? this.shown() : "");
-  protected readonly isInsecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.insecureScheme));
-  protected readonly isSecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.secureScheme));
   protected readonly shownHost: Signal<string | null> = computed(() => {
     const url: string = this.shown();
     if (this.draft() !== null || !URL.canParse(url))
@@ -82,6 +79,9 @@ export class PaneToolbarComponent {
     return host === "" ? null : host;
   });
   protected readonly address: Signal<string> = computed(() => this.draft() ?? this.shown());
+  private readonly shownPage: Signal<string> = computed(() => this.address() === this.status().url ? this.address() : "");
+  protected readonly isInsecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.insecureScheme));
+  protected readonly isSecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.secureScheme));
   // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading
   // while the pane shows that refusal.
   private readonly isAnswerRefused: WritableSignal<boolean> = signal(false);
@@ -174,16 +174,14 @@ export class PaneToolbarComponent {
   }
 
   public reloadPage(): void {
-    if (!this.hasPage())
-      return;
-    this.leaveEntry();
-    this.run(this.controller().reloadAsync());
+    if (this.hasPage())
+      this.run(this.controller().reloadAsync());
   }
 
   public stopPage(): boolean {
     if (!this.isLoading())
       return false;
-    this.leaveEntry();
+    this.entryLeft.emit();
     const press: number = ++this.stopPresses;
     this.standingStop = press;
     this.run(this.controller().stopAsync().catch((error: unknown) => {
@@ -235,12 +233,10 @@ export class PaneToolbarComponent {
   }
 
   protected goBack(): void {
-    this.leaveEntry();
     this.run(this.controller().goBackAsync());
   }
 
   protected goForward(): void {
-    this.leaveEntry();
     this.run(this.controller().goForwardAsync());
   }
 
@@ -290,12 +286,6 @@ export class PaneToolbarComponent {
     this.entryLeft.emit();
     this.controller().dismissAddress();
     this.conceal();
-  }
-
-  private leaveEntry(): void {
-    if (this.isEntered)
-      this.restore();
-    this.entryLeft.emit();
   }
 
   private announceZoom(factor: number): void {
