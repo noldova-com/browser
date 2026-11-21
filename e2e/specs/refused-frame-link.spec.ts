@@ -36,6 +36,8 @@ test.describe("a refused link in a frame", () => {
     if (box === null)
       throw new Error("The page's view has no box.");
 
+    // Just after another site's frame shows, the pointer at first reaches the page around it, not the frame, so a click there right away
+    // is lost (desktop#459); the pointer moves over the link until the frame sees it, and only then clicks.
     let step: number = 0;
     await expect.poll(async () => {
       step = 1 - step;
