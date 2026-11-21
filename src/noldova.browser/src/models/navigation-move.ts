@@ -13,9 +13,12 @@ import type { ViewCalls } from "../services/view-calls.ts";
 import type { CallOptions } from "./call-options.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import type { HistoryTarget } from "./history-target.ts";
+import type { WithinDocumentMove } from "./within-document-move.ts";
 
 export abstract class NavigationMove {
   public abstract readTargetAsync(calls: ViewCalls, viewId: string, frame: FrameFacts, options: CallOptions): Promise<HistoryTarget>;
+
+  public abstract readWithinDocument(frame: FrameFacts, target: HistoryTarget): WithinDocumentMove | null;
 
   public abstract goAsync(webViews: IRuntimeWebViews, viewId: string): Promise<WebViewNavigation>;
 }

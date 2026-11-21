@@ -213,7 +213,9 @@ describe("PageComponent", () => {
       (await AppearanceFixture.parkPointerAsync()).remove();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
       fixture?.destroy();
+      TestBed.resetTestingModule();
       pages.close();
       AppearanceFixture.reset();
     }
@@ -431,7 +433,7 @@ describe("PageComponent", () => {
     const bar: DOMRect = find("nol-browser-agent-bar").getBoundingClientRect();
     const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
     expect([tags(find("nol-browser-page")), [...find(".nol-browser-agent-bar-row").children].map(t => t.textContent?.trim())])
-      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop"]]);
+      .toEqual([["nol-browser-toolbar", "nol-browser-agent-bar", "div"], ["smart_toy", "Scout is using this page", "Take over", "Stop teammate"]]);
     expect([Math.round(bar.top - find("nol-browser-toolbar").getBoundingClientRect().bottom), Math.round(area.top - bar.bottom)]).toEqual([0, 0]);
     await vi.waitFor(() => expect(boundsOf(view.element.getBoundingClientRect())).toEqual(boundsOf(area)));
   });
@@ -724,6 +726,47 @@ describe("PageComponent", () => {
     ]);
   });
 
+  it("keeps the typed text in the field, marked invalid and described by the refused page's heading, when Noldova Desktop refuses its navigation", async () => {
+    const view: FakeWebView = await openAsync();
+    surface().script("https://example.com/docs", { kind: "refuse" });
+
+    await typeAsync("example.com/docs");
+    await vi.waitFor(() => expect(view.calls).toEqual(["mount", "navigate https://example.com/docs"]));
+    await stableAsync();
+
+    expect([field().value, field().getAttribute("aria-invalid"), document.getElementById(field().getAttribute("aria-describedby") ?? "")?.textContent?.trim()])
+      .toEqual(["example.com/docs", "true", heading()]);
+    expect(heading()).toContain("example.com");
+  });
+
+  it("marks no address entered over a refused page while its answer is held, nor once its navigation starts", async () => {
+    const view: FakeWebView = await openAsync();
+    surface().script("https://refused.example/", { kind: "refuse" });
+    surface().script("https://fixed.example/", { kind: "pending" });
+    await typeAsync("refused.example");
+    await vi.waitFor(() => expect(field().getAttribute("aria-invalid")).toBe("true"));
+    const refusal: string | undefined = heading();
+    const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
+    let allow: (value: JsonValue) => void = () => undefined;
+    context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
+      : new Promise<JsonValue>(resolve => {
+        allow = resolve;
+      });
+
+    await userEvent.clear(field());
+    await typeAsync("fixed.example");
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(2));
+    await stableAsync();
+    const held: [string, string | null, string | undefined] = [field().value, field().getAttribute("aria-invalid"), heading()];
+    allow({ kind: "Allowed", origin: "https://fixed.example" });
+    await vi.waitFor(() => expect(view.calls).toContain("navigate https://fixed.example/"));
+    await stableAsync();
+
+    expect(refusal).toContain("refused.example");
+    expect(held).toEqual(["fixed.example", null, refusal]);
+    expect(field().getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("says why it didn't go to typed text that isn't an address, at the top of the page area, and names the notice as the field's description", async () => {
     await openAsync();
 
@@ -742,7 +785,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expectErrors([allowed]));
     expect([notice(), field().value, field().getAttribute("aria-invalid"), view.calls]).toEqual([
-      "Browser couldn't allow this address's site in the workspace. Try again.", "example.com", "true", ["mount"]
+      `${WindowContext.appName}'s browser couldn't allow this address's site in the workspace. Try again.`, "example.com", "true", ["mount"]
     ]);
   });
 
@@ -756,13 +799,13 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     expect([field().value, field().getAttribute("aria-invalid"), notice()]).toEqual(["http://192.168.1.1", "true",
-      "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network."]);
+      `${WindowContext.appName}'s browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.`]);
     expect(await AccessibilityTreeFixture.readAsync(find(".nol-browser-page-view"))).toEqual([
-      "heading \"Browser doesn't open http://192.168.1.1\" level=2",
+      `heading "${WindowContext.appName}'s browser doesn't open http://192.168.1.1" level=2`,
       "paragraph",
-      "  StaticText \"Its address isn't one Browser opens.\"",
+      `  StaticText "Its address isn't one ${WindowContext.appName}'s browser opens."`,
       "button \"Back\""
     ]);
   });
@@ -776,7 +819,7 @@ describe("PageComponent", () => {
     refuseTyped("Local");
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
 
     await userEvent.keyboard("{Escape}");
 
@@ -801,7 +844,7 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync(address);
 
-    await vi.waitFor(() => expect([heading(), said.includes("Browser doesn't open this address")]).toEqual(["Browser doesn't open this address", true]));
+    await vi.waitFor(() => expect([heading(), said.includes(`${WindowContext.appName}'s browser doesn't open this address`)]).toEqual([`${WindowContext.appName}'s browser doesn't open this address`, true]));
     expect([said.join(" "), find(".nol-browser-page-view").textContent]).toEqual([expect.not.stringMatching(/hunter2|user:|example\.com/u),
       expect.not.stringMatching(/hunter2|user:|example\.com/u)]);
   });
@@ -815,25 +858,25 @@ describe("PageComponent", () => {
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     expect([document.activeElement === field(), await AccessibilityTreeFixture.readAsync(find(".nol-browser-page-view"))]).toEqual([true, [
-      "heading \"Browser doesn't open http://192.168.1.1\" level=2",
+      `heading "${WindowContext.appName}'s browser doesn't open http://192.168.1.1" level=2`,
       "paragraph",
-      "  StaticText \"Its address isn't one Browser opens.\""
+      `  StaticText "Its address isn't one ${WindowContext.appName}'s browser opens."`
     ]]);
   });
 
   it("puts a refused address's state for another origin in place of a refused navigation's, and Escape brings the navigation's back", async () => {
     await stateAsync(PaneState.Refused);
-    expect(heading()).toBe("Browser doesn't open https://blocked.example");
+    expect(heading()).toBe("This workspace doesn't allow https://blocked.example");
     refuseTyped("Local");
 
     await userEvent.clear(field());
     await typeAsync("http://192.168.1.1");
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open http://192.168.1.1"));
+    await vi.waitFor(() => expect(heading()).toBe(`${WindowContext.appName}'s browser doesn't open http://192.168.1.1`));
     await userEvent.keyboard("{Escape}");
 
-    await vi.waitFor(() => expect(heading()).toBe("Browser doesn't open https://blocked.example"));
+    await vi.waitFor(() => expect(heading()).toBe("This workspace doesn't allow https://blocked.example"));
   });
 
   it("has the announcer's live region from its first render, so the page's first message is spoken into a region that was already there", async () => {
@@ -888,7 +931,7 @@ describe("PageComponent", () => {
     ]);
   });
 
-  it("names the teammate's bar and its Take over and Stop in the accessibility tree, and drops the buttons while the call asks", async () => {
+  it("names the teammate's bar and its Take over and Stop teammate in the accessibility tree, and drops the buttons while the call asks", async () => {
     await placeAsync();
     await actAsync("Acting");
     const acting: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
@@ -896,8 +939,17 @@ describe("PageComponent", () => {
     const asking: string[] = await AccessibilityTreeFixture.readAsync(find("nol-browser-agent-bar"));
 
     expect([acting.at(0), acting.slice(-2), asking.at(0), asking.some(t => t.includes("button"))])
-      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop\""], "paragraph", false]);
+      .toEqual(["paragraph", ["button \"Take over\"", "button \"Stop teammate\""], "paragraph", false]);
     expect(acting.join("\n")).toContain("Scout");
+  });
+
+  it("names the toolbar's Stop and the teammate's Stop teammate apart while a teammate acts on a loading page", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.emit(new ViewStateEvent("https://one.example/", "One", true, true, false));
+    await actAsync("Acting");
+
+    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
+      .toEqual(["Stop", "Stop teammate"]);
   });
 
   it("puts the state's message in a heading, its detail in a paragraph and its actions in buttons, in the accessibility tree", async () => {
@@ -954,7 +1006,7 @@ describe("PageComponent", () => {
 
     await showAsync(pages.open("workspace-1", "https://one.example/"));
 
-    expect([surface().views, element.querySelector("nol-browser-toolbar") !== null, heading()]).toEqual([[], true, "Browser can't show pages here"]);
+    expect([surface().views, element.querySelector("nol-browser-toolbar") !== null, heading()]).toEqual([[], true, `${WindowContext.appName}'s browser can't show pages here`]);
   });
 
   it("says a restored page it keeps no record of can't open again, without a toolbar, and closes its document on Close", async () => {
@@ -995,7 +1047,7 @@ describe("PageComponent", () => {
     expect([heading(), element.querySelector("nol-browser-toolbar"), surface().views.map(t => t.isClosed)]).toEqual(["This page moved to another window", null, [true]]);
   });
 
-  it("hands the failure to the error handler, and says nothing it doesn't know, when the runtime part can't read a restored page's record", async () => {
+  it("says a restored page whose record the runtime part can't read can't open again, without a toolbar, closes its document on Close, and hands the failure to the error handler", async () => {
     const failure: Error = new Error("The database is closed.");
     context.answerRequest = () => Promise.reject(failure);
 
@@ -1003,7 +1055,10 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expectErrors([failure]));
     await stableAsync();
-    expect([heading(), element.querySelector("nol-browser-toolbar")]).toEqual([undefined, null]);
+    expect([heading(), element.querySelector("nol-browser-toolbar"), surface().views]).toEqual(["This page can't open again", null, []]);
+    find<HTMLButtonElement>("button.nol-browser-page-state-action").click();
+
+    expect(context.closed).toEqual(["4a1c7e2b-9d3f-4e8a-b6c5-0f1e2d3c4b5a"]);
   });
 
   it("reopens a restored page in its workspace at its last address", async () => {
@@ -1305,7 +1360,9 @@ describe("PageComponent colors", () => {
       (await AppearanceFixture.parkPointerAsync()).remove();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
       fixture?.destroy();
+      TestBed.resetTestingModule();
       pages.close();
       AppearanceFixture.reset();
       await EmulatedMediaFixture.resetAsync();
@@ -1353,7 +1410,7 @@ describe("PageComponent colors", () => {
         ["the bar's message", ContrastFixture.ofText(find(".nol-browser-agent-bar-message")), 4.5],
         ["the bar's name", ContrastFixture.ofText(find(".nol-browser-agent-bar-name")), 4.5]
       );
-      for (const [name, action] of [["Take over", 1], ["Stop", 2]] as const) {
+      for (const [name, action] of [["Take over", 1], ["Stop teammate", 2]] as const) {
         const target = (): HTMLElement => find(`.nol-browser-agent-bar-action:nth-of-type(${action})`);
         pairs.push([name, ContrastFixture.ofText(target()), 4.5]);
         await tabToAsync(target());

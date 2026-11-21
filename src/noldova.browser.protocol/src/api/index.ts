@@ -12,6 +12,7 @@ export { PageActivityState } from "../enums/page-activity-state.ts";
 export { TypedAddressAnswerKind } from "../enums/typed-address-answer-kind.ts";
 export { TypedAddressRefusal } from "../enums/typed-address-refusal.ts";
 export { AddressKinds } from "../models/address-kinds.ts";
+export { AddressLimits } from "../models/address-limits.ts";
 export { BrowserEvents } from "../models/browser-events.ts";
 export { BrowserMethods } from "../models/browser-methods.ts";
 export { BrowserToolNames } from "../models/browser-tool-names.ts";

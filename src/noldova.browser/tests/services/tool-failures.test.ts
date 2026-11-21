@@ -195,6 +195,23 @@ describe("ToolFailures", () => {
     expect(ToolFailures.forCall(new Error("bug"), sent, true)).toEqual(uncertain("browser.internal"));
   });
 
+  it("keeps a lost element or a changed page, not an uncertain outcome, when the action sent only the focus, which the page can answer by replacing the element", () => {
+    const focused = (progress: ActionProgress): ActionProgress => {
+      progress.markInputSent(true);
+      return progress;
+    };
+    const typed: ActionProgress = focused(granted());
+    typed.markInputSent();
+    const changed: ToolFailure = new ToolFailure(ToolFailureCode.Stale, "The page changed after the action was allowed, so nothing ran; take a new snapshot.");
+
+    expect([ToolFailures.forCall(new StaleReferenceException(), focused(granted()), true), ToolFailures.forCall(new PageChangedAfterGrantException(), focused(granted()), true)])
+      .toEqual([changed, changed]);
+    expect(ToolFailures.forCall(new StaleReferenceException(), focused(new ActionProgress(() => undefined)), true))
+      .toMatchObject({ code: ToolFailureCode.Refused, moduleCode: "browser.staleReference" });
+    expect([ToolFailures.forCall(new PageAnswerTimedOutException(), focused(granted()), true), ToolFailures.forCall(new StaleReferenceException(), typed, true)].map(t => t.code))
+      .toEqual([ToolFailureCode.OutcomeUncertain, ToolFailureCode.OutcomeUncertain]);
+  });
+
   it("maps each relay failure by whether the non-resumable action may have sent its input", () => {
     const sent: ActionProgress = granted();
     sent.markInputSent();

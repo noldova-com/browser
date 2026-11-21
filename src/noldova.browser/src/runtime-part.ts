@@ -27,7 +27,8 @@ import type { JsonValue } from "./types/json-value.ts";
 export class RuntimePart implements IRuntimePart {
   private registrations: readonly Disposable[] = [];
   private stopEvents: (() => void) | null = null;
-  public readonly migrations: readonly Migration[] = [...DatabaseOriginStore.migrations, ...DatabasePageStore.migrations];
+  // A database's applied migrations must be a prefix of this list, so a new migration goes last.
+  public readonly migrations: readonly Migration[] = [...DatabaseOriginStore.migrations, ...DatabasePageStore.migrations, DatabaseOriginStore.dropStarredMigration];
 
   public activateAsync(context: IRuntimePartContext): Promise<void> {
     const sessions: SessionStates = new SessionStates();

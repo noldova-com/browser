@@ -22,6 +22,8 @@ export class TypedAddressPolicy {
       return new TypedAddressRefused(TypedAddressRefusal.NotWeb);
     if (parsed.username !== "" || parsed.password !== "")
       return new TypedAddressRefused(TypedAddressRefusal.Credentials);
+    if (Resources.wildcardPattern.test(parsed.hostname))
+      return new TypedAddressRefused(TypedAddressRefusal.NotAnAddress);
     const kind: AddressKind = AddressKinds.ofHost(parsed.hostname);
     if (kind === AddressKind.LinkLocal || kind === AddressKind.Unspecified)
       return new TypedAddressRefused(TypedAddressRefusal.NeverAllowed);

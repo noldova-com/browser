@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PageAction, type PageActivity, PageActivityState, TypedAddressRefusal } from "@noldova/browser.protocol";
+import { AddressKind, AddressKinds, PageAction, type PageActivity, PageActivityState, TypedAddressRefusal } from "@noldova/browser.protocol";
 
 import { AddressRefusal } from "./app/enums/address-refusal.ts";
 import { PageStateAction } from "./app/enums/page-state-action.ts";
@@ -27,7 +27,6 @@ export class Resources {
   public static readonly pageTabRowPlace: string = "browser.pageTabRow";
   public static readonly agentPagesItem: string = "browser.agentPages";
   public static readonly agentPagesSeparator: string = ", ";
-  public static readonly pagesInactive: string = "A page document shows only while Browser's window part is active.";
   public static readonly openPageTitle: string = "Open a page";
   public static readonly newPageTitle: string = "New page";
   public static readonly newPageGlyph: string = "add";
@@ -78,7 +77,7 @@ export class Resources {
   public static readonly agentAsking: string = "is waiting for your answer";
   public static readonly unnamedAgent: string = "A teammate";
   public static readonly takeOver: string = "Take over";
-  public static readonly stopAgent: string = "Stop";
+  public static readonly stopAgent: string = "Stop teammate";
   public static readonly markAsking: string = "waiting for your answer";
   public static readonly markActions: Readonly<Record<PageAction, string>> = {
     [PageAction.Navigating]: "navigating", [PageAction.Reading]: "reading", [PageAction.Clicking]: "clicking", [PageAction.Typing]: "typing",
@@ -161,8 +160,6 @@ export class Resources {
   public static readonly pageId: string = "nol-browser-page-";
   public static readonly elsewherePage: PageStateText = new PageStateText("tab", "This page moved to another window",
     "A page shows in one window at a time. Open it again from where you found it to show it here, or close this tab.");
-  public static readonly forgottenPage: PageStateText = new PageStateText("history", "This page can't open again",
-    "Browser no longer knows which workspace it belonged to. Close it, and open the page again from where you found it.");
   public static readonly pageStateActions: Readonly<Record<PageStateAction, string>> = {
     [PageStateAction.TryAgain]: "Try again", [PageStateAction.CopyAddress]: "Copy address", [PageStateAction.Back]: "Back", [PageStateAction.Reload]: "Reload",
     [PageStateAction.Close]: "Close", [PageStateAction.AllowSite]: "Allow this site for the workspace", [PageStateAction.NotNow]: "Not now"
@@ -192,16 +189,9 @@ export class Resources {
   public static readonly pageErrorGlyph: string = "error";
   public static readonly pageBlockedGlyph: string = "block";
   public static readonly thisBrowser: string = "this browser";
-  public static readonly refusedAddresses: Readonly<Record<AddressRefusal, string>> = {
-    [AddressRefusal.NotAnAddress]: "Type a web address, such as example.com.",
-    [AddressRefusal.NotWeb]: "Browser opens only addresses that start with http: or https:.",
-    [AddressRefusal.TooLong]: "This address is too long to open.",
-    [AddressRefusal.Credentials]: "Browser doesn't open addresses with a user name or password.",
-    [AddressRefusal.Local]: "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
-    [AddressRefusal.NeverAllowed]: "Browser never opens this address.",
-    [AddressRefusal.Failed]: "Browser couldn't allow this address's site in the workspace. Try again."
-  };
+  public static readonly thisBrowserStart: string = "This browser";
   public static readonly noticeId: string = "-notice";
+  public static readonly stateHeadingId: string = "-state-heading";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
   public static readonly agentBarSelector: string = "nol-browser-agent-bar";
   public static readonly pageSelector: string = ".nol-browser-page";
@@ -231,9 +221,18 @@ export class Resources {
     ["ERR_INTERNET_DISCONNECTED", "This computer isn't connected to the internet."],
     ["ERR_ADDRESS_UNREACHABLE", "The server's address can't be reached from this network."]
   ]);
+  private static readonly refusedAddresses: Readonly<Record<AddressRefusal, (browser: string) => string>> = {
+    [AddressRefusal.NotAnAddress]: () => "Type a web address, such as example.com.",
+    [AddressRefusal.NotWeb]: t => `${t} opens only addresses that start with http: or https:.`,
+    [AddressRefusal.TooLong]: () => "This address is too long to open.",
+    [AddressRefusal.Credentials]: t => `${t} doesn't open addresses with a user name or password.`,
+    [AddressRefusal.Local]: t => `${t} opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.`,
+    [AddressRefusal.NeverAllowed]: t => `${t} never opens this address.`,
+    [AddressRefusal.Failed]: t => `${t} couldn't allow this address's site in the workspace. Try again.`
+  };
   private static readonly refusedRequests: Readonly<Record<RefusedRequest, (browser: string) => string>> = {
     [RefusedRequest.Download]: t => `Downloads aren't available in ${t} yet.`,
-    [RefusedRequest.NewWindow]: t => `${t} didn't open the new window this page asked for.`,
+    [RefusedRequest.NewWindow]: t => `This page asked for a new window, and ${t} didn't open it.`,
     [RefusedRequest.Permission]: t => `Site permissions, such as the camera or your location, aren't available in ${t} yet.`,
     [RefusedRequest.FileChooser]: t => `Opening files from this computer isn't available in ${t} yet.`,
     [RefusedRequest.Authentication]: t => `Sign-in dialogs aren't available in ${t} yet.`,
@@ -241,7 +240,30 @@ export class Resources {
     [RefusedRequest.NestedView]: t => `Pages shown inside other pages aren't available in ${t} yet.`
   };
 
-  public static formatPageStateText(status: PaneStatus): PageStateText {
+  // The pane names the module as the app's browser wherever it speaks of it, or as this browser while the app's name is unknown.
+  public static formatBrowser(appName: string | null): string {
+    return appName === null ? Resources.thisBrowser : `${appName}'s browser`;
+  }
+
+  public static formatPagesInactive(appName: string | null): string {
+    return `${Resources.formatBrowserStart(appName)} can't show a page here, since its window part isn't active.`;
+  }
+
+  public static formatBrowserStart(appName: string | null): string {
+    return appName === null ? Resources.thisBrowserStart : `${appName}'s browser`;
+  }
+
+  public static formatForgottenPage(appName: string | null): PageStateText {
+    return new PageStateText("history", "This page can't open again",
+      `${Resources.formatBrowserStart(appName)} no longer knows which workspace it belonged to. Close it, and open the page again from where you found it.`);
+  }
+
+  public static formatRefusedAddress(refusal: AddressRefusal, appName: string | null): string {
+    return Resources.refusedAddresses[refusal](Resources.formatBrowserStart(appName));
+  }
+
+  public static formatPageStateText(status: PaneStatus, appName: string | null): PageStateText {
+    const browser: string = Resources.formatBrowserStart(appName);
     switch (status.state) {
       case PaneState.Empty:
         return new PageStateText("travel_explore", "Type an address to open a page", null);
@@ -252,13 +274,16 @@ export class Resources {
       }
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
-          ? new PageStateText("block", "Browser doesn't open this address", "Edit the address in the field to open its site.")
-          : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? "Browser doesn't open this page" : `Browser doesn't open ${status.refusedOrigin}`,
-            "Its address isn't one Browser opens.");
+          ? new PageStateText("block", `${browser} doesn't open this address`, "Edit the address in the field to open its site.")
+          : status.mayBeUnlisted && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
+            ? new PageStateText("block", `This workspace doesn't allow ${status.refusedOrigin}`,
+              "This address isn't among the sites this workspace allows. Type it in the address field to open it.")
+            : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? `${browser} doesn't open this page` : `${browser} doesn't open ${status.refusedOrigin}`,
+              `Its address isn't one ${Resources.formatBrowser(appName)} opens.`);
       case PaneState.Crashed:
         return new PageStateText("sentiment_dissatisfied", "This page stopped working", "Its content process ended. Reload to open it again; anything typed into it is lost.");
       default:
-        return new PageStateText("web_asset_off", "Browser can't show pages here", null);
+        return new PageStateText("web_asset_off", `${browser} can't show pages here`, null);
     }
   }
 
@@ -299,8 +324,15 @@ export class Resources {
     return `calc(${length}px + 2 * var(--nol-browser-mark-ring-offset) - max(0px, var(--nol-browser-mark-ring-offset) - ${start}px))`;
   }
 
+  // The tag starts no later than its least width before the right edge, so the edge never cuts its glyph. The step term leaves a tag under an element past the edge at its place.
   public static formatTagStart(pixels: number): string {
-    return `max(0px, calc(${pixels}px - var(--nol-browser-mark-tag-offset)))`;
+    const place: string = `${pixels}px - var(--nol-browser-mark-tag-offset)`;
+    return `max(0px, min(${place}, max(100% - var(--nol-browser-mark-tag-least), (${pixels}px - 100%) * 100000)))`;
+  }
+
+  // The space from the tag's start to the page's right edge, so a tag near that edge is cut with its ellipsis rather than by the edge.
+  public static formatTagSpace(pixels: number): string {
+    return `calc(100% - ${Resources.formatTagStart(pixels)})`;
   }
 
   public static formatTagTop(pixels: number): string {
@@ -348,7 +380,7 @@ export class Resources {
   }
 
   public static formatRefusedRequest(request: RefusedRequest, appName: string | null): string {
-    return Resources.refusedRequests[request](appName === null ? Resources.thisBrowser : `${appName}'s browser`);
+    return Resources.refusedRequests[request](Resources.formatBrowser(appName));
   }
 
   public static formatNoAppName(error: unknown): string {
@@ -430,7 +462,7 @@ export class Resources {
 
   public static formatRefusedLocalSites(entries: readonly string[]): string {
     const named: string = entries.map(t => `"${t}"`).join(", ");
-    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.`;
+    return `${named} ${entries.length === 1 ? "isn't a site's address" : "aren't sites' addresses"} on this computer or network. Enter addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.`;
   }
 
   public static formatSubdomainSuffix(host: string): string {
@@ -451,6 +483,14 @@ export class Resources {
 
   public static formatLoaded(page: string): string {
     return `${page} loaded.`;
+  }
+
+  // A public site's origin over http or https: the only kind the workspace's site list can be missing, since typing its address adds
+  // it to the list; any other origin, or an opaque one's address, is refused by its kind, whatever the list says.
+  private static isPublicWebOrigin(origin: string): boolean {
+    const parsed: URL | null = URL.parse(origin);
+    return parsed !== null && Resources.webSchemeNames.includes(parsed.protocol.slice(0, -Resources.schemeEnd.length))
+      && AddressKinds.ofHost(parsed.hostname) === AddressKind.Public;
   }
 
   private static kindOf(error: unknown): string {

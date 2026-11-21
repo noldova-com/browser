@@ -25,4 +25,21 @@ describe("ActionProgress", () => {
     expect([progress.isGranted, progress.isInputSent]).toEqual([true, true]);
     expect(sendings).toBe(1);
   });
+
+  it("notes whether every input sent so far only moved the focus", () => {
+    const focused: ActionProgress = new ActionProgress(() => undefined);
+    const typed: ActionProgress = new ActionProgress(() => undefined);
+    const pressed: ActionProgress = new ActionProgress(() => undefined);
+    expect(focused.isOnlyFocusSent).toBe(false);
+
+    focused.markInputSent(true);
+    focused.markInputSent(true);
+    typed.markInputSent(true);
+    typed.markInputSent();
+    typed.markInputSent(true);
+    pressed.markInputSent();
+    pressed.markInputSent(true);
+
+    expect([focused, typed, pressed].map(t => t.isOnlyFocusSent)).toEqual([true, false, false]);
+  });
 });

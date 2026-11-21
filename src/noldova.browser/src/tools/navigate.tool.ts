@@ -67,7 +67,7 @@ export class NavigateTool implements IBrowserTool {
           throw new PageChangedAfterGrantException();
       }
 
-      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId);
+      const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, move.readWithinDocument(frame, target));
       let isLoaded: boolean;
       try {
         progress.markInputSent();
@@ -123,5 +123,7 @@ export class NavigateTool implements IBrowserTool {
       throw error;
     }
     await this.kit.origins.allowTypedAsync(new TypedAddressRequest(page.profileKey, target));
+    if (activity.signal.aborted)
+      throw ToolFailures.fromAbort(activity.signal.reason);
   }
 }

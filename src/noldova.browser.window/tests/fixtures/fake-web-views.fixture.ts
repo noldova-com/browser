@@ -75,6 +75,7 @@ export class FakeWebView implements IWebViewHandle {
   private failure: Error | null = null;
   private readonly unmountedNavigations: (() => void)[] = [];
   private factor: number = 1;
+  private isCrashed: boolean = false;
 
   public readonly id: string;
   public readonly pane: WebViewPane;
@@ -171,7 +172,9 @@ export class FakeWebView implements IWebViewHandle {
       listener(event);
   }
 
+  // Crashes the page, which, as in Noldova Desktop, answers a reload with no history until a navigation or a move brings it back.
   public crash(): void {
+    this.isCrashed = true;
     this.emit(new ViewCrashEvent());
   }
 
@@ -235,6 +238,7 @@ export class FakeWebView implements IWebViewHandle {
     if (this.isClosed)
       throw new Error(FakeWebView.CLOSED);
     const script: NavigationScript = this.scripts.get(url) ?? { kind: "load", title: "" };
+    this.isCrashed &&= script.kind === "refuse";
     switch (script.kind) {
       case "refuse":
         return WebViewValues.refused(new URL(url).origin);
@@ -274,7 +278,7 @@ export class FakeWebView implements IWebViewHandle {
   public async reloadAsync(): Promise<WebViewNavigation> {
     this.record("reload");
     this.refuseUnmounted();
-    return this.move(0);
+    return this.isCrashed ? WebViewValues.noHistory : this.move(0);
   }
 
   public async stopAsync(): Promise<WebViewNavigation> {
@@ -378,6 +382,7 @@ export class FakeWebView implements IWebViewHandle {
       return WebViewValues.noHistory;
     if (this.scripts.get(url)?.kind === "refuse")
       return WebViewValues.refused(new URL(url).origin);
+    this.isCrashed = false;
     this.index += step;
     this.change({ ...this.place(url), isLoading: true });
     this.change({ isLoading: false });

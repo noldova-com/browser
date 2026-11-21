@@ -12,6 +12,7 @@ import { readdir } from "node:fs/promises";
 
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
+import { FolderChanges } from "../fixtures/folder-changes.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { TestCertificate } from "../fixtures/test-certificate.ts";
 import { type AppSurfaces, ViewPage } from "../fixtures/view-pages.ts";
@@ -44,6 +45,9 @@ const FAVICON = "/favicon.ico";
 const NOTICE_MESSAGE =".nol-browser-request-notice-message";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 const SECURITY_MODEL = new URL("../../documents/SECURITY-MODEL.md", import.meta.url);
+// Chromium writes a temporary file to the downloads folder for each download, before the app can refuse it, and removes it a few milliseconds later.
+// So the check is that no file stays: it waits up to this long for the folder to be as it was.
+const DOWNLOADS_SETTLE_MS = 10_000;
 
 const PERMISSION_NOTICE = /^Site permissions, such as the camera or your location, aren't available in .+ yet\.$/;
 const DOWNLOAD_NOTICE = /^Downloads aren't available in .+ yet\.$/;
@@ -71,7 +75,7 @@ const PAGE_SCRIPT = `
 
 const POSITION = `new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, error => reject({ name: "PositionError " + error.code })))`;
 
-const BLUETOOTH = `navigator.bluetooth === undefined ? Promise.reject({ name: "Absent" }) : navigator.bluetooth.requestDevice({ acceptAllDevices: true })`;
+const BLUETOOTH = `"bluetooth" in navigator ? navigator.bluetooth.requestDevice({ acceptAllDevices: true }) : Promise.reject({ name: "Absent" })`;
 
 const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "the camera", attempt: "navigator.mediaDevices.getUserMedia({ video: true })", outcome: NOT_ALLOWED, query: `{ name: "camera" }`, isNoticed: true },
@@ -82,13 +86,12 @@ const REFUSED_ASKS: readonly IRefusedAsk[] = [
   { title: "USB devices", attempt: "navigator.usb.requestDevice({ filters: [] })", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "serial ports", attempt: "navigator.serial.requestPort()", outcome: NOT_FOUND, query: null, isNoticed: false },
   { title: "HID devices", attempt: "navigator.hid.requestDevice({ filters: [] }).then(t => t.length)", outcome: "resolved 0", query: null, isNoticed: false },
-  { title: "Bluetooth devices", attempt: BLUETOOTH, outcome: "rejected Absent", query: null, isNoticed: false },
   { title: "every other permission the engine can ask for", attempt: "navigator.requestMIDIAccess({ sysex: true })", outcome: NOT_ALLOWED, query: `{ name: "midi", sysex: true }`,
     isNoticed: true },
   { title: "screen capture", attempt: "navigator.mediaDevices.getDisplayMedia({ video: true })", outcome: NOT_ALLOWED, query: null, isNoticed: true }
 ];
 
-const OWN_TESTS: readonly string[] = ["downloads", "new windows and pop-ups", "file choosers", "authentication prompts", "certificate errors", "embedded <webview> elements"];
+const OWN_TESTS: readonly string[] = ["Bluetooth devices", "downloads", "new windows and pop-ups", "file choosers", "authentication prompts", "certificate errors", "embedded <webview> elements"];
 
 function documentedItems(): readonly string[] {
   const text = readFileSync(SECURITY_MODEL, "utf8");
@@ -130,7 +133,9 @@ async function beforeAsync(app: TestApp): Promise<Before> {
 async function expectNothingOpenedAsync(app: TestApp, before: Before, title: string): Promise<void> {
   expect(await app.viewPages.takeChoosersAsync(), `The view's session offered a device chooser for ${title}.`).toEqual([]);
   expect(await app.viewPages.surfacesAsync(), `The app's windows or contents changed after ${title}, so something may have prompted.`).toEqual(before.surfaces);
-  expect(await filesAsync(await app.viewPages.downloadsFolderAsync()), `The downloads folder changed after ${title}.`).toEqual(before.downloads);
+  const folder: string = await app.viewPages.downloadsFolderAsync();
+  await expect.poll(async () => FolderChanges.between(before.downloads, await filesAsync(folder)), { message: `The downloads folder still differs after ${title}.`, timeout: DOWNLOADS_SETTLE_MS })
+    .toEqual([]);
 }
 
 function pathsOf(server: FixtureServer): readonly string[] {
@@ -155,6 +160,15 @@ test.describe("denied by default", () => {
         await expect(app.window.locator(NOTICE_MESSAGE), `The pane never said it refused ${ask.title}.`).toHaveText(PERMISSION_NOTICE);
       await expectNothingOpenedAsync(app, before, ask.title);
     });
+
+  test("Bluetooth devices", async ({ app, servers }) => {
+    const allowed = await openAsync(app, servers);
+    const before = await beforeAsync(app);
+
+    expect(await app.viewPages.runAsync(`window.outcomeAsync(() => ${BLUETOOTH})`), "The page has Web Bluetooth.").toBe("rejected Absent");
+    expect(await app.viewPages.bluetoothChoicesAsync(), "The view didn't cancel a Bluetooth device choice.").toEqual([[allowed.url("/"), true, [""]]]);
+    await expectNothingOpenedAsync(app, before, "Bluetooth devices");
+  });
 
   test("downloads", async ({ app, servers }) => {
     const allowed = await openAsync(app, servers);

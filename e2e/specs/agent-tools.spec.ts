@@ -36,6 +36,16 @@ document.getElementById("buy").addEventListener("click", () => seen.push("click"
 document.getElementById("name").addEventListener("input", t => seen.push("input " + t.target.value));
 console.info("tools page ready");</script>`;
 const NEXT = `<!doctype html><title>${NEXT_TITLE}</title><p>Next page</p>`;
+// A page whose search field replaces itself with a new one, and focuses it, the first time it takes the focus, as some sites' search
+// fields do, and records each value a field takes.
+const SWAPPING = `<!doctype html><title>${START_TITLE}</title><label for="q">Search</label><input id="q" type="search">
+<script>window.seen = [];
+addEventListener("input", t => seen.push("input " + t.target.value), true);
+document.getElementById("q").addEventListener("focus", t => {
+  const fresh = Object.assign(document.createElement("input"), { id: "q", type: "search" });
+  t.target.replaceWith(fresh);
+  fresh.focus();
+}, { once: true });</script>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -126,6 +136,23 @@ test.describe("the agent tools on a real page", () => {
     expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/", "/next"]);
   });
 
+  test("navigate answers at once a move back to an entry the page pushed and a move to a fragment, which fire no load", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": START });
+    const bindings = await openAsync(app, docs);
+    await app.viewPages.runAtAsync(docs.url("/"), "history.pushState({}, '', '/pushed'), location.href");
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/pushed"), START_TITLE)]);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
+
+    const back = textsOf(await callAsync(app, bindings, "browser_navigate", { action: "back" }));
+    const fragment = textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/#setup") }));
+
+    expect(back.join("\n")).toContain(`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`);
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/#setup"), START_TITLE)]);
+    expect([...back, ...fragment].filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+    expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/"]);
+  });
+
   test("a snapshot gives the page's controls with references, and a click and typing by them reach the page", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
@@ -143,6 +170,23 @@ test.describe("the agent tools on a real page", () => {
     expect([clicked, typed].map(t => t.includes(`URL: ${docs.url("/")}`))).toEqual([true, true]);
     expect(await seenAsync(app, docs)).toEqual(["click", "input Ada"]);
     expect(await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('name').value")).toBe("Ada");
+  });
+
+  test("typing into a field that replaces itself on focus types nothing and fails as a changed page, and typing again after a new snapshot works", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": SWAPPING });
+    const bindings = await openAsync(app, docs);
+    const searchOf = async (): Promise<string> => referenceOf(textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- searchbox "Search" \[(e\d+)\]$/u);
+    const first = await searchOf();
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
+
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_type", input: { reference: first, text: "Ada" }, bindings });
+
+    expect(result).toEqual(expect.objectContaining({ isFailure: true, code: "Stale", message: "The page changed after the action was allowed, so nothing ran; take a new snapshot." }));
+    expect([await seenAsync(app, docs), await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('q').value")]).toEqual([[], ""]);
+    const again = await searchOf();
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
+    await callAsync(app, bindings, "browser_type", { reference: again, text: "Ada" });
+    expect([await seenAsync(app, docs), await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('q').value")]).toEqual([["input Ada"], "Ada"]);
   });
 
   // An element under a cover doesn't show at its centre, so the click scrolls to it first; the scroll can run the page's handlers, so the

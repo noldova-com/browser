@@ -246,7 +246,7 @@ export declare class BrowserMethods {
   public static readonly readAppName: string;
 
   /**
-   * The request that ends the agent calls running on a page, from the person's Stop or Take over in the page's bar: each fails as stopped.
+   * The request that ends the agent calls running on a page, from the person's Stop teammate or Take over in the page's bar: each fails as stopped.
    * Take over also refuses the later calls on the page of the session that last acted on it, until that session ends.
    * It carries an {@link PageStopRequest} and is answered with null.
    *
@@ -319,7 +319,7 @@ export declare class BrowserMethods {
 }
 
 /**
- * The person's Stop or Take over on a page an agent acts on.
+ * The person's Stop teammate or Take over on a page an agent acts on.
  */
 export declare class PageStopRequest {
   /**
@@ -1686,6 +1686,24 @@ export declare class AddressKinds {
    * ```
    */
   public static ofHost(hostname: string): AddressKind;
+}
+
+/**
+ * The limits on addresses that the browser module's parts share.
+ */
+export declare class AddressLimits {
+  /**
+   * The most characters a URL may have, as Noldova Desktop limits an address a view opens: a tool's URL, a typed address, and a page's own
+   * refused navigation that the workspace's site list could explain.
+   *
+   * @example
+   * ```ts
+   * import { AddressLimits } from "@noldova/browser.protocol";
+   *
+   * const fits: boolean = "https://example.com/".length <= AddressLimits.maximumUrlLength;
+   * ```
+   */
+  public static readonly maximumUrlLength: number;
 }
 
 /**

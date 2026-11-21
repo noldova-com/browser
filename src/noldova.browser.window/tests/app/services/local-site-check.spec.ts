@@ -17,7 +17,7 @@ describe("LocalSiteCheck", () => {
 
   it("names the one entry the runtime part leaves out, as the person wrote it", () => {
     expect(LocalSiteCheck.check("http://127.0.0.1:4173, http://127.0.0.1:4173/form")).toBe(
-      "\"http://127.0.0.1:4173/form\" isn't a site's address on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.");
+      "\"http://127.0.0.1:4173/form\" isn't a site's address on this computer or network. Enter addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.");
   });
 
   it.each([
@@ -29,11 +29,11 @@ describe("LocalSiteCheck", () => {
     ["ftp://127.0.0.1", "another scheme"]
   ])("names %j, with %s, among the entries it leaves out", entry => {
     expect(LocalSiteCheck.check(`http://localhost:3000, ${entry}, http://[::1]:5000`)).toBe(
-      `"${entry}" isn't a site's address on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.`);
+      `"${entry}" isn't a site's address on this computer or network. Enter addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.`);
   });
 
   it("names every entry it leaves out, in their order", () => {
     expect(LocalSiteCheck.check("http://0.0.0.0:3000, http://127.0.0.1, ftp://127.0.0.1")).toBe(
-      "\"http://0.0.0.0:3000\", \"ftp://127.0.0.1\" aren't sites' addresses on this computer or network. Enter addresses with no path, as localhost or an IP address, separated by commas, such as http://127.0.0.1:4173; for a server on 0.0.0.0, enter 127.0.0.1.");
+      "\"http://0.0.0.0:3000\", \"ftp://127.0.0.1\" aren't sites' addresses on this computer or network. Enter addresses with http:// or https://, as localhost or an IP address, and no path, separated by commas, such as http://localhost:4173; for a server on 0.0.0.0, enter http://127.0.0.1:<port>.");
   });
 });

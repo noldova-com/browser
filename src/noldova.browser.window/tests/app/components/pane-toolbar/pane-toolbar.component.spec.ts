@@ -28,10 +28,11 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 
 @Component({
   imports: [PaneToolbarComponent],
-  template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
+  template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" refusalId="refusal-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
     (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
     <div class="probe" style="background: var(--nol-input); border: 1px solid var(--nol-input-border); color: var(--nol-text-strong); outline: 1px solid var(--nol-accent)"></div>
-    <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>`
+    <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>
+    <div class="error" style="border: 1px solid var(--nol-error)"></div><h2 id="refusal-1">This workspace doesn't allow refused.example</h2>`
 })
 class HostComponent {
   public readonly width: WritableSignal<number> = signal(640);
@@ -50,6 +51,7 @@ describe("PaneToolbarComponent", () => {
   const LONG = `https://example.test/${"long-path/".repeat(40)}`;
   let fixture: ComponentFixture<HostComponent>;
   let element: HTMLElement;
+  let views: FakeWebViews;
   let view: FakeWebView;
   let controller: PaneController;
   let errors: unknown[];
@@ -87,6 +89,15 @@ describe("PaneToolbarComponent", () => {
     if (shown === undefined)
       throw new Error(`No tooltip shows ${name}.`);
     return shown;
+  }
+
+  // Loads the address through the view, mounted as a view loads only once it is, so its history holds the page and a reload finds it, as in
+  // Noldova Desktop.
+  async function commitAsync(url: string): Promise<void> {
+    view.mount(document.createElement("div"));
+    await controller.navigateAsync(url);
+    await fixture.whenStable();
+    view.calls.length = 0;
   }
 
   async function showAsync(event: ViewEvent): Promise<void> {
@@ -201,7 +212,8 @@ describe("PaneToolbarComponent", () => {
       groups.push(options?.group);
       announce(message, politeness, options);
     });
-    view = new FakeWebViews().open("workspace-1");
+    views = new FakeWebViews();
+    view = views.open("workspace-1");
     controller = new PaneController(view);
     fixture = TestBed.createComponent(HostComponent);
     fixture.componentInstance.controller.set(controller);
@@ -217,9 +229,11 @@ describe("PaneToolbarComponent", () => {
     try {
       vi.restoreAllMocks();
       (await AppearanceFixture.parkPointerAsync()).remove();
-      fixture.destroy();
     }
     finally {
+      // Vitest skips Angular's own reset after a hook that rejects, so the next test could not configure its module.
+      fixture.destroy();
+      TestBed.resetTestingModule();
       AppearanceFixture.reset();
       await Promise.all([ForcedColorsFixture.resetAsync(), ZoomFixture.resetAsync()]);
     }
@@ -242,6 +256,13 @@ describe("PaneToolbarComponent", () => {
     expect([view.calls, errors]).toEqual([[], []]);
   });
 
+  it("does nothing for the reload key without a page", async () => {
+    fixture.componentInstance.toolbar().reloadPage();
+    await fixture.whenStable();
+
+    expect([view.calls, errors]).toEqual([[], []]);
+  });
+
   it("goes back and forward while the page has history there", async () => {
     await showAsync(state("https://one.example/", false, true, true));
 
@@ -254,6 +275,7 @@ describe("PaneToolbarComponent", () => {
   });
 
   it("turns Reload into Stop in the same place while the page loads, with the progress bar under the row", async () => {
+    await commitAsync("https://one.example/");
     const reload = button("Reload", "Stop");
     await showAsync(state("https://one.example/", true));
 
@@ -357,12 +379,22 @@ describe("PaneToolbarComponent", () => {
     expect([said, button("Reload", "Stop").getAttribute("aria-label")]).toEqual([[], "Stop"]);
   });
 
-  it("reloads a page that failed, was refused or crashed", async () => {
+  it("reloads a page whose load failed", async () => {
+    await commitAsync("https://one.example/");
     await showAsync(new ViewLoadFailureEvent("https://one.example/", -105, "No answer"));
     button("Reload", "Stop").click();
     await fixture.whenStable();
 
     expect([button("Reload", "Stop").getAttribute("aria-disabled"), view.calls]).toEqual([null, ["reload"]]);
+  });
+
+  it("loads a crashed page's address again, which the view doesn't reload", async () => {
+    await showAsync(state("https://one.example/", false));
+    view.crash();
+    await fixture.whenStable();
+    button("Reload", "Stop").click();
+
+    await vi.waitFor(() => expect(view.calls).toEqual(["reload", "navigate https://one.example/"]));
   });
 
   it("hands a failed call to the error handler", async () => {
@@ -896,6 +928,69 @@ describe("PaneToolbarComponent", () => {
     await fixture.whenStable();
 
     expect([field().value, field().getAttribute("aria-invalid"), controller.status.refusedAddress]).toEqual(["https://one.example/", null, null]);
+  });
+
+  for (const [mode, isForced] of [[ThemeMode.Light, false], [ThemeMode.Dark, false], [ThemeMode.Dark, true]] as const) {
+    it(`marks an entered address that Noldova Desktop refused invalid, described by the refused page's heading, until the person edits it or the pane leaves the refusal, in the ${isForced ? "forced colours" : mode} look`, async () => {
+      AppearanceFixture.apply(DefaultTheme.theme, mode);
+      if (isForced)
+        await ForcedColorsFixture.activateAsync();
+      await commitAsync("https://one.example/");
+      await measuredAsync();
+      const address: HTMLElement = find(".nol-browser-toolbar-address");
+      const border: number = Number.parseFloat(getComputedStyle(address).borderLeftWidth);
+      const inset = (): number => rem(field().getBoundingClientRect().left - address.getBoundingClientRect().left);
+      const shown: number = inset();
+      const mark = (): [string | null, string | undefined, string, string, number, number] => {
+        const style: CSSStyleDeclaration = getComputedStyle(address);
+        return [field().getAttribute("aria-invalid"), document.getElementById(field().getAttribute("aria-describedby") ?? "")?.textContent?.trim(), style.borderTopColor,
+          style.borderTopStyle, rem(Number.parseFloat(style.borderTopWidth)), inset()];
+      };
+      const [refusedColour, refusedStyle, refusedWidth] = isForced ? [ForcedColorsFixture.resolve("CanvasText"), "dashed", rem(border * 2)]
+        : [getComputedStyle(find(".error")).borderTopColor, "solid", rem(border)];
+      views.script("https://refused.example/", { kind: "refuse" });
+      views.script("https://refused.example/docs", { kind: "refuse" });
+      await userEvent.click(field());
+      field().select();
+      await userEvent.keyboard("refused.example{Enter}");
+      await controller.navigateAsync("https://refused.example/");
+      await fixture.whenStable();
+      const unanswered: ReturnType<typeof mark> = mark();
+      fixture.componentInstance.toolbar().markRefused(controller);
+      await fixture.whenStable();
+
+      expect(unanswered.slice(0, 2)).toEqual([null, undefined]);
+      expect([field().value, ...mark()]).toEqual(["refused.example", "true", "This workspace doesn't allow refused.example", refusedColour, refusedStyle, refusedWidth, shown]);
+      await userEvent.click(field());
+      await userEvent.keyboard("{End}/docs");
+      await fixture.whenStable();
+      const edited: [string, ...ReturnType<typeof mark>] = [field().value, ...mark()];
+      await userEvent.keyboard("{Enter}");
+      await controller.navigateAsync("https://refused.example/docs");
+      fixture.componentInstance.toolbar().markRefused(controller);
+      await fixture.whenStable();
+      const again: ReturnType<typeof mark> = mark();
+      await loadAsync("https://one.example/");
+      const left: ReturnType<typeof mark> = mark();
+
+      expect([edited.slice(0, 3), edited[4] === refusedStyle && edited[3] === refusedColour, edited[6]]).toEqual([["refused.example/docs", null, undefined], false, shown]);
+      expect(again.slice(0, 2)).toEqual(["true", "This workspace doesn't allow refused.example"]);
+      expect([field().value, left.slice(0, 2), left[3] === refusedStyle && left[2] === refusedColour, left[5]]).toEqual(["refused.example/docs", [null, undefined], false, shown]);
+    });
+  }
+
+  it("marks a refused entry only for its own controller, and only while the person's entry stands", async () => {
+    view.mount(document.createElement("div"));
+    views.script("https://refused.example/", { kind: "refuse" });
+    await controller.navigateAsync("https://refused.example/");
+    await fixture.whenStable();
+    fixture.componentInstance.toolbar().markRefused(controller);
+    await userEvent.click(field());
+    await userEvent.keyboard("refused.example{Enter}");
+    fixture.componentInstance.toolbar().markRefused(new PaneController(null));
+    await fixture.whenStable();
+
+    expect([field().value, field().getAttribute("aria-invalid")]).toEqual(["refused.example", null]);
   });
 
   it("follows the page again once the pane went to an entered address that the origin check refused", async () => {

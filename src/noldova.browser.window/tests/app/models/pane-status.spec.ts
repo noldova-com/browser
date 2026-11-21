@@ -129,6 +129,29 @@ describe("PaneStatus", () => {
     expect(byAnswer.refuse("https://other.example").refusedOrigin).toBe("https://other.example");
   });
 
+  it("says the page's own navigation was refused while the states and notices that keep its refusal last, and not once an answer refuses it or a load starts", () => {
+    const byEvent: PaneStatus = loaded.apply(new ViewRefusalEvent("https://refused.example/a", "https://refused.example", false));
+    const kept: PaneStatus[] = [
+      byEvent,
+      byEvent.apply(state("https://one.example/", "One", true)),
+      byEvent.apply(state("https://one.example/", "One", false, true)),
+      byEvent.navigate(),
+      byEvent.refuseAddress(TypedAddressRefusal.NotWeb).dismissAddress(),
+      byEvent.refuseRequest(RefusedRequest.Download).dismissRequest(),
+      byEvent.offerPopup(new PopupOffer("https://ads.example/", "https://one.example", false))
+    ];
+    const ended: PaneStatus[] = [
+      byEvent.refuse("https://refused.example", true),
+      loaded.refuse("https://refused.example", false, "https://refused.example/a"),
+      byEvent.apply(state("https://two.example/", "", true)),
+      byEvent.apply(new ViewCrashEvent())
+    ];
+
+    expect(kept.map(t => [t.state, t.mayBeUnlisted])).toEqual(new Array<[PaneState, boolean]>(kept.length).fill([PaneState.Refused, true]));
+    expect(ended.map(t => t.mayBeUnlisted)).toEqual([false, false, false, false]);
+    expect(byEvent.refuse("https://refused.example", true, null, true)).toBe(byEvent);
+  });
+
   it("names the refused address in place of an opaque origin, and a refused origin otherwise, by an event or a refusal", () => {
     const refusedSrcdoc: PaneStatus = loaded.refuse("null", true, "about:srcdoc");
     const opaque: PaneStatus[] = [loaded.apply(new ViewRefusalEvent("about:srcdoc", "null", false)), refusedSrcdoc];

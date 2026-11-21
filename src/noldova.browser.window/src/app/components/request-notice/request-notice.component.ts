@@ -27,6 +27,8 @@ export class RequestNoticeComponent {
   private readonly host: HTMLElement = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly announcer: Announcer = inject(Announcer);
   private readonly current: WritableSignal<PaneStatus> = signal(PaneStatus.unavailable);
+  // Each status change makes a new notice, so its text alone decides whether it is announced again.
+  private readonly message: Signal<string | null> = computed(() => this.notice()?.message ?? null);
 
   protected readonly resources: typeof Resources = Resources;
   protected readonly secondary: ButtonVariant = ButtonVariant.Secondary;
@@ -37,7 +39,7 @@ export class RequestNoticeComponent {
       return new RequestNotice(Resources.popupGlyph, status.popup.hadRecentInput ? Resources.formatHeldWindow(host) : Resources.formatPopup(host), Resources.openAsTab);
     }
     if (status.refusedAddress !== null)
-      return new RequestNotice(Resources.refusedAddressGlyph, Resources.refusedAddresses[status.refusedAddress], null);
+      return new RequestNotice(Resources.refusedAddressGlyph, Resources.formatRefusedAddress(status.refusedAddress, this.appName()), null);
     return status.refusedRequest === null
       ? null
       : new RequestNotice(Resources.refusedRequestGlyphs[status.refusedRequest], Resources.formatRefusedRequest(status.refusedRequest, this.appName()), Resources.openExternal);
@@ -57,9 +59,9 @@ export class RequestNoticeComponent {
       onCleanup(controller.onChange(t => this.current.set(t)));
     });
     effect(() => {
-      const notice = this.notice();
-      if (notice !== null)
-        this.announcer.announce(notice.message, AnnouncementPoliteness.Polite);
+      const message = this.message();
+      if (message !== null)
+        this.announcer.announce(message, AnnouncementPoliteness.Polite);
       else if (this.host.contains(document.activeElement))
         this.focusLeaving.emit();
     });

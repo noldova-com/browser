@@ -144,6 +144,19 @@ describe("ToolHost", () => {
     expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: "Stale" });
   });
 
+  it("reports an element gone right after the action's focus as stale, not uncertain, and one gone after other input as uncertain", async () => {
+    for (const [isFocus, code] of [[true, "Stale"], [false, "OutcomeUncertain"]] as const) {
+      const { session, host: toolHost } = new HostBench();
+      toolHost.register(tool("click", async (_call: ToolCall, progress: ActionProgress) => {
+        progress.markGranted();
+        progress.markInputSent(isFocus);
+        throw new StaleReferenceException();
+      }));
+
+      expect(await session.callAsync("browser_click", { reference: "e1" }), String(isFocus)).toMatchObject({ isFailure: true, code });
+    }
+  });
+
   it("never reports an uncertain outcome for a reading tool", async () => {
     const { session, host: toolHost } = new HostBench();
     toolHost.register(tool("snapshot", async (_call: ToolCall, progress: ActionProgress) => {

@@ -124,7 +124,7 @@ describe("RequestNoticeComponent", () => {
 
     expect(notices).toEqual([
       ["download", "Downloads aren't available in Fixture App's browser yet."],
-      ["tab", "Fixture App's browser didn't open the new window this page asked for."],
+      ["tab", "This page asked for a new window, and Fixture App's browser didn't open it."],
       ["location_off", "Site permissions, such as the camera or your location, aren't available in Fixture App's browser yet."],
       ["upload_file", "Opening files from this computer isn't available in Fixture App's browser yet."],
       ["key_off", "Sign-in dialogs aren't available in Fixture App's browser yet."],
@@ -143,7 +143,7 @@ describe("RequestNoticeComponent", () => {
     find("button").click();
 
     expect([shown()[1], fixture.componentInstance.links])
-      .toEqual(["Fixture App's browser didn't open the new window this page asked for.", ["https://status.example.com/"]]);
+      .toEqual(["This page asked for a new window, and Fixture App's browser didn't open it.", ["https://status.example.com/"]]);
   });
 
   it("names the browser the person is in while the app's name is unknown, and the app once it is known", async () => {
@@ -154,6 +154,18 @@ describe("RequestNoticeComponent", () => {
     fixture.componentInstance.appName.set("Fixture App");
     await fixture.whenStable();
     expect(shown()[1]).toBe("Downloads aren't available in Fixture App's browser yet.");
+  });
+
+  it("starts every refused request's notice with a capital while the app's name is unknown", async () => {
+    const starts: string[] = [];
+    fixture.componentInstance.appName.set(null);
+    await loadAsync();
+    for (const request of Object.values(RefusedRequest)) {
+      await refuseAsync(request);
+      starts.push(shown()[1]?.charAt(0) ?? "");
+    }
+
+    expect([starts.length, starts.filter(t => !/^[A-Z]/.test(t))]).toEqual([Object.values(RefusedRequest).length, []]);
   });
 
   it("says a pop-up was stopped, names the page's host, and opens its address as a tab, which takes the notice away", async () => {
@@ -192,14 +204,14 @@ describe("RequestNoticeComponent", () => {
 
     expect(texts).toEqual([
       "Type a web address, such as example.com.",
-      "Browser opens only addresses that start with http: or https:.",
+      "Fixture App's browser opens only addresses that start with http: or https:.",
       "This address is too long to open.",
-      "Browser doesn't open addresses with a user name or password.",
-      "Browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
-      "Browser never opens this address.",
-      "Browser couldn't allow this address's site in the workspace. Try again."
+      "Fixture App's browser doesn't open addresses with a user name or password.",
+      "Fixture App's browser opens an address on this computer or its network only once Settings names its site, under Sites on this computer or network.",
+      "Fixture App's browser never opens this address.",
+      "Fixture App's browser couldn't allow this address's site in the workspace. Try again."
     ]);
-    expect([controller.status.refusedRequest, said.at(-1)]).toEqual([null, ["Browser couldn't allow this address's site in the workspace. Try again.", AnnouncementPoliteness.Polite]]);
+    expect([controller.status.refusedRequest, said.at(-1)]).toEqual([null, ["Fixture App's browser couldn't allow this address's site in the workspace. Try again.", AnnouncementPoliteness.Polite]]);
   });
 
   it("goes with the tab's next load, and tells the page only while it holds the focus", async () => {
@@ -222,6 +234,19 @@ describe("RequestNoticeComponent", () => {
       ["This page's certificate wasn't accepted, so Fixture App's browser didn't open it.", AnnouncementPoliteness.Polite]
     ]);
     expect(document.activeElement).toBe(before);
+  });
+
+  it("doesn't announce its notice again when the page's status changes but the notice's text doesn't", async () => {
+    await loadAsync();
+    await refuseAsync(RefusedRequest.Download);
+    view.emit(new ViewStateEvent("https://docs.example.com/pricing", "Plans and prices", false, false, false));
+    view.emit(new ViewStateEvent("https://docs.example.com/pricing", "Plans and prices", false, true, false));
+    await fixture.whenStable();
+
+    expect([shown()[1], said]).toEqual([
+      "Downloads aren't available in Fixture App's browser yet.",
+      [["Downloads aren't available in Fixture App's browser yet.", AnnouncementPoliteness.Polite]]
+    ]);
   });
 
   it("follows the controller it is given, and leaves the one before", async () => {

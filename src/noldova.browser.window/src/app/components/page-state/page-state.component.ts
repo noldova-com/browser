@@ -42,8 +42,8 @@ export class PageStateComponent {
     if (this.isElsewhere())
       return Resources.elsewherePage;
     if (this.isForgotten())
-      return Resources.forgottenPage;
-    return refusal === null ? Resources.formatPageStateText(this.status()) : Resources.formatRefusalText(refusal);
+      return Resources.formatForgottenPage(this.appName());
+    return refusal === null ? Resources.formatPageStateText(this.status(), this.appName()) : Resources.formatRefusalText(refusal);
   });
   protected readonly actions: Signal<readonly Exclude<PageStateAction,
     typeof PageStateAction.Close | typeof PageStateAction.AllowSite | typeof PageStateAction.NotNow>[]> = computed(() => {
@@ -66,6 +66,8 @@ export class PageStateComponent {
   public readonly isForgotten = input<boolean>(false);
   public readonly isElsewhere = input<boolean>(false);
   public readonly refusal = input<RefusedPage | null>(null);
+  public readonly headingId = input<string | null>(null);
+  public readonly appName = input<string | null>(null);
   public readonly focusLeaving = output<void>();
   public readonly closed = output<void>();
   public readonly refusalAnswered = output<string | null>();
