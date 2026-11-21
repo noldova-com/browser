@@ -319,7 +319,7 @@ export class PageSnapshotScript {
     lines.push([depth, role, name, isMasked ? "" : value, isMasked, index, host]);
     return true;
   };
-  const walk = (node, depth, isVisible) => {
+  const visit = (node, depth, isVisible) => {
     if (isCut)
       return;
     if (node.nodeType === Node.TEXT_NODE) {
@@ -374,6 +374,11 @@ export class PageSnapshotScript {
     const after = isShownHere && !isInteractive && isStarted ? pseudoText(node, "::after") : "";
     if (after.trim() !== "")
       add(childDepth, "StaticText", collapse(after), "", false, null);
+  };
+  const walk = (node, depth, isVisible) => {
+    visit(node, depth, isVisible);
+    if (!isStarted && startPath.has(node))
+      isStarted = true;
   };
   const kept = globalThis[key];
   let root = document.documentElement;

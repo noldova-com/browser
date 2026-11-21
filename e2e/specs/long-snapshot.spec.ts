@@ -26,9 +26,24 @@ const ROWS_UNSEARCHED = /^Closed parts inside <div id="rows">: ([\d,]+) of 12,00
 // The snapshot's step deadline; the time each took is an annotation.
 const STEP_MS = 15_000;
 
-// Each link's name is long, so the snapshot's limit comes after a few dozen links.
-const PAGE = "<!doctype html><title>Long page</title><ul>"
-  + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li><a href="#s' + i + '">Section ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`;
+// Each link's name is long, so the snapshot's limit comes after a few dozen links; a stop page puts a view-tall element the walk doesn't
+// enter, an svg icon or a block inside an aria-hidden one, before one section's link.
+const STOP_SECTION = 200;
+const ICON = '<svg id="stop" style="display: block; width: 100%; height: 100vh"><path d="M0 0H4000V4000H0Z"/></svg>';
+const HIDDEN = '<div aria-hidden="true"><div id="stop" style="height: 100vh"></div></div>';
+const PAGE = longPage("");
+// Each item's own name is long and each link is view-tall, so at a depth that ends at the items, the point a quarter down the view is on
+// an item's link, below the boundary the walk stops at.
+const DEEP_DEPTH = 3;
+const DEEP_PAGE = "<!doctype html><title>Long page</title><style>a { display: block; height: 100vh; }</style><ul>"
+  + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li aria-label="Item ' + i + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '">`
+  + `<a href="#s' + i + '">Section ' + i + '</a></li>').join(''))</script></ul>`;
+
+function longPage(stop: string): string {
+  return "<!doctype html><title>Long page</title><ul>"
+    + `<script>document.write(Array.from({ length: ${SECTIONS} }, (_, i) => '<li>' + (i === ${STOP_SECTION} ? '${stop}' : '') + '<a href="#s' + i + '">Section ' + i`
+    + ` + ' ' + 'word '.repeat(${SECTION_NAME_LENGTH / 5}) + '</a></li>').join(''))</script></ul>`;
+}
 
 // Rows under one element: 12,000 link rows, with short or long names, are the page whose whole tree the engine took most of the time limit
 // to build (#68); 12,000 rows with a long attribute each make even the list of that element's children larger than one reply could carry.
@@ -182,5 +197,48 @@ test.describe("a snapshot of a long page", () => {
     expect(tree).toMatch(/^ {6}- link "Section \d+(?: word){800}" \[e1\]$/mu);
     expect(Buffer.byteLength(tree, "utf8")).toBeLessThanOrEqual(SNAPSHOT_LIMIT_BYTES);
     expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE]));
+  });
+
+  for (const [stop, page, hitOn] of [["an svg icon", longPage(ICON), "path false"], ["a block inside an aria-hidden one", longPage(HIDDEN), "div true"]] as const) {
+    test(`on a long page scrolled to ${stop}, the snapshot starts where the walk stops, which it doesn't enter, and gives what follows`, async ({ app, servers }) => {
+      const docs = await servers.startAsync("docs.localhost", { "/": page });
+      await app.allowLocalSitesAsync([docs.origin]);
+      const instance = await app.openPageAsync(docs.url("/"));
+      await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long page")]);
+      const hit = await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('stop').scrollIntoView();"
+        + " const hit = document.elementFromPoint(innerWidth / 2, innerHeight / 4); hit.localName + ' ' + String(hit.closest('[aria-hidden]') !== null)");
+      expect(hit, `The view's point isn't on ${stop}.`).toBe(hitOn);
+
+      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+
+      expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
+      const notes = textsOf(result);
+      const tree = treeOf(notes);
+      const sections = [...tree.matchAll(/^ {6}- link "Section (\d+) /gmu)].map(t => Number(t[1]));
+      expect(sections.slice(0, 3)).toEqual([STOP_SECTION, STOP_SECTION + 1, STOP_SECTION + 2]);
+      expect(tree).toMatch(/^ {6}- link "Section \d+(?: word){800}" \[e1\]$/mu);
+      expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE]));
+    });
+  }
+
+  test("at a depth that ends above the link the view's point is on, the snapshot starts at that link's boundary line, with its reference and the deeper note", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": DEEP_PAGE });
+    await app.allowLocalSitesAsync([docs.origin]);
+    const instance = await app.openPageAsync(docs.url("/"));
+    await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long page")]);
+    const hit = await app.viewPages.runAtAsync(docs.url("/"), `document.querySelectorAll('a')[${STOP_SECTION}].scrollIntoView();`
+      + " document.elementFromPoint(innerWidth / 2, innerHeight / 4).textContent");
+    expect(hit, "The view's point isn't on the section's link.").toBe(`Section ${STOP_SECTION}`);
+
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: { depth: DEEP_DEPTH }, bindings: { page: instance, profileKey: PROFILE_KEY } });
+
+    expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
+    const notes = textsOf(result);
+    const tree = treeOf(notes);
+    const items = [...tree.matchAll(/^ {4}- listitem "Item (\d+) /gmu)].map(t => Number(t[1]));
+    expect(items.slice(0, 3)).toEqual([STOP_SECTION, STOP_SECTION + 1, STOP_SECTION + 2]);
+    expect(tree).toMatch(new RegExp(`^ {4}- listitem "Item ${STOP_SECTION}(?: word){800}" \\[e1\\]$`, "mu"));
+    expect(tree).not.toMatch(/- link /u);
+    expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE, `Lines deeper than ${DEEP_DEPTH} levels were left out; read an element's part by its reference with part.`]));
   });
 });
