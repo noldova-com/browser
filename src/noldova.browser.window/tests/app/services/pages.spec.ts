@@ -1143,7 +1143,7 @@ describe("Pages", () => {
       const second = await openAsync();
 
       expect(await pages.goToAsync(first, "  example.com/docs ")).toBe(EntryAnswer.Gone);
-      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://example.com/docs" }]);
+      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "https://example.com/docs", instance: first.id }]);
       expect([viewOf(first).calls, viewOf(second).calls]).toEqual([["navigate https://example.com/docs"], []]);
       expect(first.controller.status.url).toBe("https://example.com/docs");
     });
@@ -1357,7 +1357,7 @@ describe("Pages", () => {
       answer = { kind: "Refused", reason: "Local" };
 
       expect(await pages.goToAsync(tab, "localhost:3000")).toBe(EntryAnswer.Stayed);
-      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "http://localhost:3000/" }]);
+      expect(typedAddresses()).toEqual([{ profileKey: "workspace-1", url: "http://localhost:3000/", instance: tab.id }]);
       expect([viewOf(tab).calls, tab.controller.status.state, tab.controller.status.refusedAddress]).toEqual([[], PaneState.Empty, "Local"]);
     });
 
@@ -1422,6 +1422,111 @@ describe("Pages", () => {
       answers.get("https://new.example/")?.({ kind: "Refused", reason: "Local" });
 
       expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/"], null]);
+    });
+
+    describe("an entry left while its address waits for its answer", () => {
+      let allow: (answer: JsonValue) => void;
+
+      beforeEach(() => {
+        allow = () => undefined;
+        context.answerRequest = (method, parameters) => method === BrowserMethods.allowTypedAddress
+          ? new Promise<JsonValue>(resolve => allow = resolve)
+          : declared(method, parameters);
+      });
+
+      it("answers at once that the person left it, and goes nowhere once it is allowed", async () => {
+        const tab = await openAsync();
+
+        const going = pages.goToAsync(tab, "new.example");
+        pages.leaveEntry(tab);
+
+        expect(await going).toBe(EntryAnswer.Left);
+        allow({ kind: "Allowed", origin: "https://new.example" });
+        await vi.waitFor(() => expect(context.requests.some(t => t.method === BrowserMethods.allowTypedAddress)).toBe(true));
+        expect([viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([[], null]);
+      });
+
+      it("is left by each navigation the pane's controller starts, as Back, Forward and Reload, but not by its own typed load", async () => {
+        const tab = await openAsync();
+        const seen: EntryAnswer[] = [];
+        for (const start of [() => tab.controller.goBackAsync(), () => tab.controller.goForwardAsync(), () => tab.controller.reloadAsync()]) {
+          const going = pages.goToAsync(tab, "new.example");
+          await start();
+          seen.push(await going);
+          allow({ kind: "Allowed", origin: "https://new.example" });
+        }
+        const kept = pages.goToAsync(tab, "kept.example");
+        await vi.waitFor(() => expect(context.requests.filter(t => t.method === BrowserMethods.allowTypedAddress)).toHaveLength(4));
+        allow({ kind: "Allowed", origin: "https://kept.example" });
+
+        expect([seen, await kept, viewOf(tab).calls.filter(t => t.startsWith("navigate"))])
+          .toEqual([[EntryAnswer.Left, EntryAnswer.Left, EntryAnswer.Left], EntryAnswer.Gone, ["navigate https://kept.example/"]]);
+      });
+
+      it("is left by a load in the pane that comes before its answer, and not by its own load once allowed", async () => {
+        surface().script("https://kept.example/", { kind: "pending" });
+        const tab = await openAsync();
+        const view: FakeWebView = viewOf(tab);
+
+        const left = pages.goToAsync(tab, "new.example");
+        loading(view, "https://link.example/", true);
+        expect(await left).toBe(EntryAnswer.Left);
+        allow({ kind: "Allowed", origin: "https://new.example" });
+        loading(view, "https://link.example/", false);
+
+        const gone = pages.goToAsync(tab, "kept.example");
+        await vi.waitFor(() => expect(context.requests.filter(t => t.method === BrowserMethods.allowTypedAddress)).toHaveLength(2));
+        allow({ kind: "Allowed", origin: "https://kept.example" });
+
+        expect([await gone, view.calls.filter(t => t.startsWith("navigate"))]).toEqual([EntryAnswer.Gone, ["navigate https://kept.example/"]]);
+      });
+
+      it("isn't left by a loading page's news, even its own redirect to another address, so it goes once allowed", async () => {
+        const tab = await openAsync();
+        const view: FakeWebView = viewOf(tab);
+        loading(view, "https://slow.example/", true);
+
+        const going = pages.goToAsync(tab, "new.example");
+        loading(view, "https://slow.example/", true, "Slow");
+        loading(view, "https://slow.example/next", true, "Slow");
+        await vi.waitFor(() => expect(typedAddresses()).toHaveLength(1));
+        allow({ kind: "Allowed", origin: "https://new.example" });
+
+        expect([await going, view.calls.filter(t => t.startsWith("navigate"))]).toEqual([EntryAnswer.Gone, ["navigate https://new.example/"]]);
+      });
+
+      it("answers at once that the person left it when the runtime part's answer says an agent's call started on the page, and goes nowhere", async () => {
+        const tab = await openAsync();
+
+        const going = pages.goToAsync(tab, "new.example");
+        await vi.waitFor(() => expect(typedAddresses()).toHaveLength(1));
+        allow({ kind: "Left" });
+
+        expect([await going, typedAddresses(), viewOf(tab).calls, tab.controller.status.refusedAddress])
+          .toEqual([EntryAnswer.Left, [{ profileKey: "workspace-1", url: "https://new.example/", instance: tab.id }], [], null]);
+      });
+
+      it("logs a failure of its request that comes after the person left it, while one that came before goes to its caller alone", async () => {
+        const failures: ((error: Error) => void)[] = [];
+        context.answerRequest = (method, parameters) => method === BrowserMethods.allowTypedAddress
+          ? new Promise<JsonValue>((_resolve, reject) => failures.push(reject))
+          : declared(method, parameters);
+        const tab = await openAsync();
+
+        const failed = pages.goToAsync(tab, "first.example");
+        await vi.waitFor(() => expect(failures).toHaveLength(1));
+        failures[0]?.(new Error("The runtime part stopped."));
+        const caught: unknown = await failed.catch((error: unknown) => error);
+        pages.leaveEntry(tab);
+        const left = pages.goToAsync(tab, "second.example");
+        await vi.waitFor(() => expect(failures).toHaveLength(2));
+        pages.leaveEntry(tab);
+        const answer: EntryAnswer = await left;
+        failures[1]?.(new TypeError("The runtime part stopped."));
+
+        await vi.waitFor(() => expect(context.logs).toHaveLength(1));
+        expect([caught, answer, context.logs]).toEqual([new Error("The runtime part stopped."), EntryAnswer.Left, ["A typed address the person left failed after it: TypeError."]]);
+      });
     });
 
     it("answers that the page stayed for an earlier entry whose navigation Noldova Desktop refuses after a later entry went", async () => {

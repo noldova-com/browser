@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { PageAction } from "@noldova/browser.protocol";
+import { PageAction } from "@noldova/browser.protocol";
 
 import type { JsonObject } from "../types/json-value.ts";
 import { PageActivity } from "./page-activity.ts";
@@ -14,10 +14,13 @@ import type { SessionPage } from "./session-page.ts";
 
 // Each page's control by an agent, and the sessions the person took a page from. A page's calls run one at a time, so a page has one control.
 export class PageStops {
+  private static readonly MOVING: ReadonlySet<PageAction> = new Set<PageAction>([PageAction.Navigating, PageAction.Clicking, PageAction.Typing, PageAction.PressingKey]);
+
   private readonly controls: Map<string, PageActivity> = new Map<string, PageActivity>();
   private readonly last: Map<string, string> = new Map<string, string>();
   private readonly takenOver: Map<string, Set<string>> = new Map<string, Set<string>>();
   private readonly stopped: Map<string, number> = new Map<string, number>();
+  private readonly begun: Map<string, number> = new Map<string, number>();
   private readonly publish: (payload: JsonObject) => void;
   private readonly release: (viewId: string) => void;
 
@@ -29,6 +32,10 @@ export class PageStops {
 
   public generationOf(instance: string): number {
     return this.stopped.get(instance) ?? 0;
+  }
+
+  public movesOn(instance: string): number {
+    return this.begun.get(instance) ?? 0;
   }
 
   public activities(): JsonObject[] {
@@ -46,6 +53,8 @@ export class PageStops {
   // Starts a call on the page: the session's control goes on, and another session's control of the page ends.
   public begin(page: SessionPage, session: string, action: PageAction, callSignal: AbortSignal): PageActivity {
     this.last.set(page.instance, session);
+    if (PageStops.MOVING.has(action))
+      this.begun.set(page.instance, this.movesOn(page.instance) + 1);
     const control: PageActivity | undefined = this.controls.get(page.instance);
     if (control?.session === session) {
       control.begin(page, action, callSignal);

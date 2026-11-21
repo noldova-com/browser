@@ -32,6 +32,7 @@ export { PageRefusal } from "../models/page-refusal.ts";
 export { PageRequest } from "../models/page-request.ts";
 export { PageStopRequest } from "../models/page-stop-request.ts";
 export { TypedAddressAllowed } from "../models/typed-address-allowed.ts";
+export { TypedAddressLeft } from "../models/typed-address-left.ts";
 export { TypedAddressRefused } from "../models/typed-address-refused.ts";
 export { TypedAddressRequest } from "../models/typed-address-request.ts";
 export { TypedRedirectRequest } from "../models/typed-redirect-request.ts";

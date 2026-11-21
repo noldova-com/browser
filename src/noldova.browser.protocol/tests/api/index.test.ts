@@ -35,6 +35,7 @@ import { PageRefusal } from "../../src/models/page-refusal.ts";
 import { PageRequest } from "../../src/models/page-request.ts";
 import { PageStopRequest } from "../../src/models/page-stop-request.ts";
 import { TypedAddressAllowed } from "../../src/models/typed-address-allowed.ts";
+import { TypedAddressLeft } from "../../src/models/typed-address-left.ts";
 import { TypedAddressRefused } from "../../src/models/typed-address-refused.ts";
 import { TypedAddressRequest } from "../../src/models/typed-address-request.ts";
 import { TypedRedirectRequest } from "../../src/models/typed-redirect-request.ts";
@@ -45,7 +46,7 @@ describe("@noldova/browser.protocol", () => {
     expect(Object.keys(api).sort()).toEqual([
       "AddressKind", "AddressKinds", "AddressLimits", "BrowserEvents", "BrowserMethods", "BrowserToolNames", "BrowsingDataRequest", "ElementFactsScript", "HeldPages", "LocalSites", "OpenPagesRequest",
       "PageAction", "PageActivity", "PageActivityState", "PageAgent", "PageBox", "PageChangeScript", "PageClaim", "PagePoint", "PageRecord", "PageRefusal", "PageRequest",
-      "PageStopRequest", "TypedAddressAllowed", "TypedAddressAnswerKind", "TypedAddressAnswerReader", "TypedAddressRefusal", "TypedAddressRefused",
+      "PageStopRequest", "TypedAddressAllowed", "TypedAddressAnswerKind", "TypedAddressAnswerReader", "TypedAddressLeft", "TypedAddressRefusal", "TypedAddressRefused",
       "TypedAddressRequest", "TypedRedirectRequest"
     ]);
     expect([api.AddressKind, api.PageAction, api.PageActivityState, api.TypedAddressAnswerKind, api.TypedAddressRefusal])
@@ -53,12 +54,12 @@ describe("@noldova/browser.protocol", () => {
     expect([
       api.AddressKinds, api.AddressLimits, api.BrowserEvents, api.BrowserMethods, api.BrowserToolNames, api.BrowsingDataRequest, api.ElementFactsScript, api.HeldPages, api.LocalSites, api.OpenPagesRequest,
       api.PageActivity, api.PageAgent, api.PageBox, api.PageChangeScript, api.PageClaim, api.PagePoint, api.PageRecord, api.PageRefusal, api.PageRequest, api.PageStopRequest,
-      api.TypedAddressAllowed, api.TypedAddressRefused, api.TypedAddressRequest, api.TypedRedirectRequest, api.TypedAddressAnswerReader
+      api.TypedAddressAllowed, api.TypedAddressRefused, api.TypedAddressRequest, api.TypedRedirectRequest, api.TypedAddressAnswerReader, api.TypedAddressLeft
     ].map((t, index) => t === [
       AddressKinds, AddressLimits, BrowserEvents, BrowserMethods, BrowserToolNames, BrowsingDataRequest, ElementFactsScript, HeldPages, LocalSites, OpenPagesRequest, PageActivity, PageAgent, PageBox,
       PageChangeScript, PageClaim, PagePoint, PageRecord, PageRefusal, PageRequest, PageStopRequest, TypedAddressAllowed, TypedAddressRefused, TypedAddressRequest,
-      TypedRedirectRequest, TypedAddressAnswerReader
-    ][index])).toEqual(Array.from({ length: 25 }, () => true));
+      TypedRedirectRequest, TypedAddressAnswerReader, TypedAddressLeft
+    ][index])).toEqual(Array.from({ length: 26 }, () => true));
   });
 
   it("spells each enum's wire values as its members' names", () => {
@@ -66,7 +67,7 @@ describe("@noldova/browser.protocol", () => {
       [["Public", "Public"], ["Loopback", "Loopback"], ["Private", "Private"], ["LinkLocal", "LinkLocal"], ["Unspecified", "Unspecified"]],
       [["Navigating", "Navigating"], ["Reading", "Reading"], ["Clicking", "Clicking"], ["Typing", "Typing"], ["PressingKey", "PressingKey"], ["Waiting", "Waiting"]],
       [["Acting", "Acting"], ["Asking", "Asking"], ["Idle", "Idle"], ["Ended", "Ended"]],
-      [["Allowed", "Allowed"], ["Refused", "Refused"]],
+      [["Allowed", "Allowed"], ["Refused", "Refused"], ["Left", "Left"]],
       [["NotAnAddress", "NotAnAddress"], ["NotWeb", "NotWeb"], ["TooLong", "TooLong"], ["Credentials", "Credentials"], ["Local", "Local"], ["NeverAllowed", "NeverAllowed"]]
     ]);
   });

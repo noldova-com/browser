@@ -6,7 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { type TypedAddressAnswer, TypedAddressAnswerKind, type TypedAddressRequest, type TypedRedirectRequest } from "@noldova/browser.protocol";
+import { type TypedAddressAllowed, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressLeft, type TypedAddressRefused, type TypedAddressRequest,
+  type TypedRedirectRequest } from "@noldova/browser.protocol";
 import type { WebViewInfo } from "@noldova/desktop.protocol";
 import type { IRuntimeWebViews } from "@noldova/desktop.runtime";
 
@@ -31,12 +32,14 @@ export class WorkspaceOrigins {
     this.settingsOrigins = settingsOrigins;
   }
 
-  public async allowTypedAsync(request: TypedAddressRequest): Promise<TypedAddressAnswer> {
-    const answer: TypedAddressAnswer = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
+  public async allowTypedAsync(request: TypedAddressRequest, isLeft: () => boolean = () => false): Promise<TypedAddressAnswer> {
+    const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     return this.inTurnAsync(request.profileKey, async () => {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
+      if (isLeft())
+        return new TypedAddressLeft();
       if (!origins.has(answer.origin) && !this.settingsOrigins.includes(answer.origin)) {
         const next: ReadonlySet<string> = new Set([...origins, answer.origin]);
         await this.store.writeAsync(request.profileKey, [...next]);
@@ -48,7 +51,7 @@ export class WorkspaceOrigins {
   }
 
   public async passTypedAsync(request: TypedRedirectRequest): Promise<TypedAddressAnswer> {
-    const answer: TypedAddressAnswer = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
+    const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     const view: WebViewInfo | undefined = this.viewsOf(request.instance).find(t => t.profileKey === request.profileKey);
@@ -86,7 +89,7 @@ export class WorkspaceOrigins {
     this.stopped.delete(viewId);
   }
 
-  public judge(url: string): TypedAddressAnswer {
+  public judge(url: string): TypedAddressAllowed | TypedAddressRefused {
     return TypedAddressPolicy.judge(url, this.settingsOrigins);
   }
 

@@ -69,6 +69,12 @@ describe("WorkspaceOrigins", () => {
     database[Symbol.dispose]();
   });
 
+  it("answers Left and keeps nothing when the typed address is left before its origin is kept", async () => {
+    expect(await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://example.com/docs"), () => true)).toEqual({ kind: "Left" });
+
+    expect([writes(), keptOrigins("workspace-1"), [...surface.allowedOrigins]]).toEqual([0, [], []]);
+  });
+
   it("allows a typed address's origin in its workspace, keeps it, and gives every view of that workspace only, the settings' origins first", async () => {
     expect(await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://example.com/docs"))).toEqual({ kind: "Allowed", origin: "https://example.com" });
 

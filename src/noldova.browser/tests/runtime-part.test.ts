@@ -454,6 +454,99 @@ describe("RuntimePart", () => {
     ]]);
   });
 
+  it("answers Left to a typed address whose pane's page an agent's call that can move it started on after its origin was kept", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const surface: ScriptedViews = pageViews(instance);
+    const context: BrowserContext = new BrowserContext(surface);
+    const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
+    const given: Promise<readonly string[]> = surface.allowedAsync("view-1");
+    await new RuntimePart().activateAsync(context);
+    await given;
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" });
+    const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    surface.allowing = () => {
+      surface.allowing = async () => undefined;
+      holding.resolve();
+      return held.promise;
+    };
+
+    const answer: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance });
+    await holding.promise;
+    const moving: Promise<unknown> = session.callAsync("browser_navigate", { url: "https://two.example/" });
+    await vi.waitFor(() => expect(kitOf(create).stops.movesOn(instance)).toBe(1));
+    held.resolve();
+    const answered: JsonValue = await answer;
+    await requestAsync(context, BrowserMethods.stopPage, { instance, isTakingOver: false });
+    await moving;
+
+    expect([answered, await kitOf(create).origins.isAllowedAsync("workspace-1", "https://one.example")]).toEqual([{ kind: "Left" }, true]);
+  });
+
+  it("answers Left and keeps no origin for a typed address whose pane's page an agent's call that can move it started on while it waited for its turn", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const surface: ScriptedViews = pageViews(instance);
+    const context: BrowserContext = new BrowserContext(surface);
+    const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
+    const given: Promise<readonly string[]> = surface.allowedAsync("view-1");
+    await new RuntimePart().activateAsync(context);
+    await given;
+    const session: ToolSession = context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" });
+    const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+    surface.allowing = () => {
+      surface.allowing = async () => undefined;
+      holding.resolve();
+      return held.promise;
+    };
+
+    const first: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://zero.example/" });
+    await holding.promise;
+    const answer: Promise<JsonValue> = typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance });
+    const moving: Promise<unknown> = session.callAsync("browser_navigate", { url: "https://two.example/" });
+    await vi.waitFor(() => expect(kitOf(create).stops.movesOn(instance)).toBe(1));
+    held.resolve();
+    const answered: JsonValue[] = [await first, await answer];
+    await requestAsync(context, BrowserMethods.stopPage, { instance, isTakingOver: false });
+    await moving;
+
+    expect([answered, await kitOf(create).origins.isAllowedAsync("workspace-1", "https://one.example")])
+      .toEqual([[{ kind: "Allowed", origin: "https://zero.example" }, { kind: "Left" }], false]);
+  });
+
+  it("answers a typed address as before when the agent's calls only read the page, start after the answer or on another page, or the request names no page",
+    async () => {
+      const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+      const other: string = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+      const surface: ScriptedViews = pageViews(instance, other);
+      const context: BrowserContext = new BrowserContext(surface);
+      await new RuntimePart().activateAsync(context);
+      const session: ToolSession = context.tools.openSession("conversation-1", { page: other, profileKey: "workspace-1", agentName: "Scout" });
+      const reader: ToolSession = context.tools.openSession("conversation-2", { page: instance, profileKey: "workspace-1", agentName: "Helper" });
+      const holding: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+      const held: PromiseWithResolvers<void> = Promise.withResolvers<void>();
+
+      const first: JsonValue = await typeAsync(context, { profileKey: "workspace-1", url: "https://one.example/", instance: other });
+      await session.callAsync("browser_snapshot", {});
+      surface.allowing = () => {
+        surface.allowing = async () => undefined;
+        holding.resolve();
+        return held.promise;
+      };
+      const answers: Promise<JsonValue[]> = Promise.all([
+        typeAsync(context, { profileKey: "workspace-1", url: "https://two.example/", instance }),
+        typeAsync(context, { profileKey: "workspace-1", url: "https://three.example/" })
+      ]);
+      await holding.promise;
+      const calls: unknown[] = [await session.callAsync("browser_snapshot", {}), await reader.callAsync("browser_snapshot", {}), await reader.callAsync("browser_console", {})];
+      held.resolve();
+
+      expect([first, ...await answers, calls]).toEqual([
+        { kind: "Allowed", origin: "https://one.example" }, { kind: "Allowed", origin: "https://two.example" }, { kind: "Allowed", origin: "https://three.example" },
+        [expect.objectContaining({ isFailure: false }), expect.objectContaining({ isFailure: false }), expect.objectContaining({ isFailure: false })]
+      ]);
+    });
+
   it("answers a typed address: its origin joins the workspace's views and the database, which a later run reads", async () => {
     const surface: ScriptedViews = new ScriptedViews(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);

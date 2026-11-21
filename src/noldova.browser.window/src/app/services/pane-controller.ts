@@ -18,6 +18,7 @@ import type { ViewEvent } from "../models/view-event.ts";
 import type { ViewKeyEvent } from "../models/view-key-event.ts";
 import type { ViewNewWindowEvent } from "../models/view-new-window-event.ts";
 import type { ViewRefusalEvent } from "../models/view-refusal-event.ts";
+import { NavigationStarts } from "./navigation-starts.ts";
 import { PaneHearing } from "./pane-hearing.ts";
 import { WebViewEventReader } from "./web-view-event-reader.ts";
 
@@ -158,6 +159,7 @@ export class PaneController {
     this.isClosed = true;
     this.unsubscribe();
     this.listeners.clear();
+    NavigationStarts.forget(this);
     this.hearing.clear();
     this.view?.close();
   }
@@ -176,6 +178,7 @@ export class PaneController {
   private startNavigation(): IWebViewHandle {
     const view: IWebViewHandle = this.requireView();
     this.followNavigation();
+    NavigationStarts.tell(this);
     return view;
   }
 

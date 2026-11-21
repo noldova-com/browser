@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PageAction, PageRefusal, type TypedAddressAnswer, TypedAddressAnswerKind, TypedAddressRequest } from "@noldova/browser.protocol";
+import { PageAction, PageRefusal, type TypedAddressAllowed, TypedAddressAnswerKind, type TypedAddressRefused, TypedAddressRequest } from "@noldova/browser.protocol";
 import { WebViewAction, type WebViewNavigation } from "@noldova/desktop.protocol";
 import { type IPermissionDetail, type IToolDescriptor, PermissionOption, type ToolCall, ToolContent, type ToolResult,
   ToolRisk } from "@noldova/desktop.runtime";
@@ -109,7 +109,7 @@ export class NavigateTool implements IBrowserTool {
       await this.kit.askAsync(activity, call, ToolKit.request(Resources.navigateAction, Resources.formatOpenTitle(target), target, details, ToolRisk.Low, ToolKit.lowRiskOptions), progress);
       return;
     }
-    const judged: TypedAddressAnswer = this.kit.origins.judge(target);
+    const judged: TypedAddressAllowed | TypedAddressRefused = this.kit.origins.judge(target);
     if (judged.kind === TypedAddressAnswerKind.Refused)
       throw new AddressRefusedException(judged.reason);
     if (await this.kit.origins.isAllowedAsync(page.profileKey, judged.origin)) {

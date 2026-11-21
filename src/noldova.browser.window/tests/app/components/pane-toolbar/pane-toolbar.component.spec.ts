@@ -29,7 +29,7 @@ import { ZoomFixture } from "../../../fixtures/zoom.fixture.ts";
 @Component({
   imports: [PaneToolbarComponent],
   template: `<div class="frame" style="margin-top: 20rem" [style.width.px]="width()"><nol-browser-toolbar [controller]="controller()" [openLink]="openLink()" noticeId="notice-1" refusalId="refusal-1" [shownAddress]="shownAddress()" (addressEntered)="entered.push($event)"
-    (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
+    (entryLeft)="left = left + 1" (clearBrowsingData)="cleared = cleared + 1" (findRequested)="findings = findings + 1" /></div>
     <div class="probe" style="background: var(--nol-input); border: 1px solid var(--nol-input-border); color: var(--nol-text-strong); outline: 1px solid var(--nol-accent)"></div>
     <div class="muted" style="color: var(--nol-text-muted); border-radius: var(--nol-radius-small); height: var(--nol-field-height)"></div>
     <div class="error" style="border: 1px solid var(--nol-error)"></div><h2 id="refusal-1">This workspace doesn't allow refused.example</h2>`
@@ -41,6 +41,7 @@ class HostComponent {
   public readonly shownAddress: WritableSignal<string | null> = signal(null);
   public readonly entered: string[] = [];
   public cleared: number = 0;
+  public left: number = 0;
   public findings: number = 0;
   public readonly toolbar: Signal<PaneToolbarComponent> = viewChild.required(PaneToolbarComponent);
 }
@@ -799,6 +800,76 @@ describe("PaneToolbarComponent", () => {
     expect(fixture.componentInstance.entered).toEqual(["  example.com/docs "]);
   });
 
+  it("enters the address once while Enter is held, ignoring its repeats", async () => {
+    await loadAsync("https://one.example/");
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("two.example");
+    field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    for (let i = 0; i < 3; i++)
+      field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true }));
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.entered).toEqual(["two.example"]);
+  });
+
+  it("tells the pane that Stop and Escape leave the entered address, and Escape puts the page's address back", async () => {
+    await commitAsync("https://one.example/");
+    await showAsync(state("https://one.example/", true));
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("two.example{Enter}");
+    button("Stop").click();
+    await fixture.whenStable();
+    const stopped: [number, string] = [fixture.componentInstance.left, field().value];
+    await showAsync(state("https://one.example/"));
+    await userEvent.click(field());
+    field().select();
+    await userEvent.keyboard("three.example{Escape}");
+    await fixture.whenStable();
+
+    expect([stopped, [fixture.componentInstance.left, field().value]]).toEqual([[1, "two.example"], [2, "https://one.example/"]]);
+  });
+
+  it("hides the lock beside typed text, an entered address and its refusal, and shows it again once Escape puts the page's address back", async () => {
+    await loadAsync("https://one.example/");
+    const lock = (): string | undefined => element.querySelector(".nol-browser-toolbar-address > .nol-browser-toolbar-glyph")?.textContent?.trim();
+    const seen: (string | undefined)[] = [lock()];
+    await userEvent.click(field());
+    seen.push(lock());
+    field().select();
+    await userEvent.keyboard("http://plain.example");
+    await fixture.whenStable();
+    seen.push(lock());
+    await userEvent.keyboard("{Enter}");
+    controller.refuseAddress(TypedAddressRefusal.NotWeb);
+    await fixture.whenStable();
+    seen.push(lock());
+    await userEvent.keyboard("{Escape}");
+    await fixture.whenStable();
+    seen.push(lock());
+
+    expect(seen).toEqual(["lock", "lock", undefined, undefined, "lock"]);
+  });
+
+  it("shows the lock or \"Not secure\" only while the field shows the page's own address, and neither beside an address the pane gives in its place", async () => {
+    const marks = (): [string | undefined, boolean] => [element.querySelector(".nol-browser-toolbar-address > .nol-browser-toolbar-glyph")?.textContent?.trim(),
+      element.querySelector(".nol-browser-toolbar-security") !== null];
+    const seen: [string | undefined, boolean][] = [];
+    const pairs: [string, string][] = [["https://one.example/", "http://plain.example/"], ["http://plain.example/", "https://one.example/"], ["https://one.example/", "https://one.example/"]];
+    for (const [page, given] of pairs) {
+      await loadAsync(page);
+      fixture.componentInstance.shownAddress.set(given);
+      await fixture.whenStable();
+      seen.push(marks());
+      fixture.componentInstance.shownAddress.set(null);
+      await fixture.whenStable();
+      seen.push(marks());
+    }
+
+    expect(seen).toEqual([[undefined, false], ["lock", false], [undefined, false], [undefined, true], ["lock", false], ["lock", false]]);
+  });
+
   it("shows the address it's given in place of the page's own, until the person edits it, again after Escape, and the page's once it's taken away", async () => {
     await loadAsync("https://one.example/");
     fixture.componentInstance.shownAddress.set("https://example.com/pricing");
@@ -861,16 +932,15 @@ describe("PaneToolbarComponent", () => {
     expect([field().value, field().getAttribute("aria-invalid"), field().getAttribute("aria-describedby")]).toEqual(["localhost:3000", "true", "notice-1"]);
   });
 
-  it("names both the not-secure note and the notice while a refused address is marked invalid over an http page", async () => {
+  it("names the notice, without the not-secure note, while a refused typed address is marked invalid over an http page", async () => {
     await loadAsync("http://plain.example/");
     await userEvent.click(field());
     field().select();
     await userEvent.keyboard("file:///etc/hosts{Enter}");
     controller.refuseAddress(TypedAddressRefusal.NotWeb);
     await fixture.whenStable();
-    const mark: HTMLElement | null = element.querySelector(".nol-browser-toolbar-security");
 
-    expect(field().getAttribute("aria-describedby")).toBe(`${mark?.id} notice-1`);
+    expect([element.querySelector(".nol-browser-toolbar-security"), field().getAttribute("aria-describedby")]).toEqual([null, "notice-1"]);
   });
 
   it("follows the page only for its own controller, and keeps an edit made after Enter", async () => {
@@ -959,8 +1029,8 @@ describe("PaneToolbarComponent", () => {
       fixture.componentInstance.toolbar().markRefused(controller);
       await fixture.whenStable();
 
-      expect(unanswered.slice(0, 2)).toEqual([null, undefined]);
-      expect([field().value, ...mark()]).toEqual(["refused.example", "true", "This workspace doesn't allow refused.example", refusedColour, refusedStyle, refusedWidth, shown]);
+      expect([...unanswered.slice(0, 2), unanswered[5] < shown]).toEqual([null, undefined, true]);
+      expect([field().value, ...mark()]).toEqual(["refused.example", "true", "This workspace doesn't allow refused.example", refusedColour, refusedStyle, refusedWidth, unanswered[5]]);
       await userEvent.click(field());
       await userEvent.keyboard("{End}/docs");
       await fixture.whenStable();
@@ -973,9 +1043,9 @@ describe("PaneToolbarComponent", () => {
       await loadAsync("https://one.example/");
       const left: ReturnType<typeof mark> = mark();
 
-      expect([edited.slice(0, 3), edited[4] === refusedStyle && edited[3] === refusedColour, edited[6]]).toEqual([["refused.example/docs", null, undefined], false, shown]);
+      expect([edited.slice(0, 3), edited[4] === refusedStyle && edited[3] === refusedColour, edited[6]]).toEqual([["refused.example/docs", null, undefined], false, unanswered[5]]);
       expect(again.slice(0, 2)).toEqual(["true", "This workspace doesn't allow refused.example"]);
-      expect([field().value, left.slice(0, 2), left[3] === refusedStyle && left[2] === refusedColour, left[5]]).toEqual(["refused.example/docs", [null, undefined], false, shown]);
+      expect([field().value, left.slice(0, 2), left[3] === refusedStyle && left[2] === refusedColour, left[5]]).toEqual(["refused.example/docs", [null, undefined], false, unanswered[5]]);
     });
   }
 

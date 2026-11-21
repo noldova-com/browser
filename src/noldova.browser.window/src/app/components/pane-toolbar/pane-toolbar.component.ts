@@ -70,8 +70,6 @@ export class PaneToolbarComponent {
   protected readonly isLoading: Signal<boolean> = computed(() => this.status().state === PaneState.Loading);
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
   protected readonly isAvailable: Signal<boolean> = computed(() => this.status().state !== PaneState.Unavailable);
-  protected readonly isInsecure: Signal<boolean> = computed(() => this.status().url.startsWith(Resources.insecureScheme));
-  protected readonly isSecure: Signal<boolean> = computed(() => this.status().url.startsWith(Resources.secureScheme));
   protected readonly shown: Signal<string> = computed(() => this.shownAddress() ?? this.status().url);
   protected readonly shownHost: Signal<string | null> = computed(() => {
     const url: string = this.shown();
@@ -81,6 +79,9 @@ export class PaneToolbarComponent {
     return host === "" ? null : host;
   });
   protected readonly address: Signal<string> = computed(() => this.draft() ?? this.shown());
+  private readonly shownPage: Signal<string> = computed(() => this.address() === this.status().url ? this.address() : "");
+  protected readonly isInsecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.insecureScheme));
+  protected readonly isSecure: Signal<boolean> = computed(() => this.shownPage().startsWith(Resources.secureScheme));
   // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading
   // while the pane shows that refusal.
   private readonly isAnswerRefused: WritableSignal<boolean> = signal(false);
@@ -111,6 +112,7 @@ export class PaneToolbarComponent {
   public readonly refusalId = input<string | null>(null);
   public readonly shownAddress = input<string | null>(null);
   public readonly addressEntered = output<string>();
+  public readonly entryLeft = output<void>();
   public readonly clearBrowsingData = output<void>();
   public readonly findRequested = output<void>();
 
@@ -179,6 +181,7 @@ export class PaneToolbarComponent {
   public stopPage(): boolean {
     if (!this.isLoading())
       return false;
+    this.entryLeft.emit();
     const press: number = ++this.stopPresses;
     this.standingStop = press;
     this.run(this.controller().stopAsync().catch((error: unknown) => {
@@ -221,7 +224,7 @@ export class PaneToolbarComponent {
   }
 
   protected pressFieldKey(event: KeyboardEvent): void {
-    if (event.isComposing || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)
+    if (event.isComposing || event.repeat || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)
       return;
     if (event.key === Resources.enterKey)
       this.enter();
@@ -280,6 +283,7 @@ export class PaneToolbarComponent {
 
   private cancel(): void {
     this.restore();
+    this.entryLeft.emit();
     this.controller().dismissAddress();
     this.conceal();
   }

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { BrowsingDataRequest, OpenPagesRequest, PageRecord, PageRequest, PageStopRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
+import { BrowsingDataRequest, OpenPagesRequest, PageRecord, PageRequest, PageStopRequest, type TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 
 import { PageInstanceInvalidException } from "../exceptions/page-instance-invalid.exception.ts";
 import { PageUrlInvalidException } from "../exceptions/page-url-invalid.exception.ts";
@@ -27,6 +27,13 @@ export class PageRequests {
     const redirect: TypedRedirectRequest = WindowRequests.read(() => TypedRedirectRequest.fromJson(params));
     PageRequests.checkRecord(redirect.instance, redirect.profileKey, redirect.url);
     return redirect;
+  }
+
+  public static readTypedAddress(params: JsonValue): TypedAddressRequest {
+    const request: TypedAddressRequest = TypedAddressRequests.read(params);
+    if (request.instance !== null)
+      PageRequests.checkInstance(request.instance);
+    return request;
   }
 
   public static readPage(params: JsonValue): PageRequest {
