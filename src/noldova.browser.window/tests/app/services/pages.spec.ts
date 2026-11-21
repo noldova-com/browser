@@ -612,10 +612,12 @@ describe("Pages", () => {
     expect([requestsOf(BrowserMethods.holdPages), context.logs]).toEqual([[], ["The window's open pages weren't read, so another window may open one of them too: Error."]]);
   });
 
-  it("forgets the page of each tab the person closes, one that never showed too, until the part closes", () => {
-    const unshown: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+  it("forgets the page of each tab the person closes, one that never showed too, so the app's instance takes a claim again, until the part closes", async () => {
+    const unshown: string = pages.open("workspace-1", "https://docs.example.com/");
+    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? Promise.resolve({ agentName: null, isClaimed: false, isHere: false, record: null }) : declared(method, parameters);
 
     context.closeByPerson(unshown);
+    await expect(pages.openAsync("workspace-1", null, unshown)).rejects.toThrow(PageInAnotherWindowException);
     pages.close();
     context.closeByPerson(unshown);
 
