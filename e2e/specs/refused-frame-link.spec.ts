@@ -14,7 +14,6 @@ const TITLE = "Links";
 const VIEW = ".nol-browser-page-view";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 const FRAME_BOX = "JSON.stringify(document.querySelector(\"iframe\").getBoundingClientRect())";
-// A frame of another site at the page's top left, whose one link is at the frame's top left, so the person's click lands on it.
 const PAGE = (frame: string): string => `<!doctype html><title>${TITLE}</title><body style="margin:0">`
   + `<iframe src="${frame}" style="display:block;width:320px;height:160px;border:0"></iframe>`;
 const FRAME = (target: string): string => "<!doctype html><title>Frame</title><body style=\"margin:0\">"
