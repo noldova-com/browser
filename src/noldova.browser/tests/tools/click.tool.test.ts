@@ -508,6 +508,33 @@ describe("ClickTool", () => {
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ElementNotVisibleException, { reason: "Refused", moduleCode: "browser.notVisible" });
   });
 
+  it("says an element the engine doesn't lay out, as under display: none, can't be clicked, and scrolls nothing", async () => {
+    bench.surface.fail("DOM.getContentQuads", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Could not compute content quads."));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ElementNotVisibleException, { reason: "Refused", moduleCode: "browser.notVisible" });
+    expect([bench.methods.includes("DOM.scrollIntoViewIfNeeded"), mouseEvents()]).toEqual([false, []]);
+  });
+
+  it("fails as the engine's refusal on any other failure reading the element's box", async () => {
+    bench.surface.fail("DOM.getContentQuads", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Gone"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ProtocolFailedException, { moduleCode: "browser.protocol" });
+  });
+
+  it("says an element that lost its box in the scroll can't be clicked", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    ShopPage.serve(bench, ShopPage.BANNER);
+    let isScrolled: boolean = false;
+    bench.surface.answerWith("DOM.scrollIntoViewIfNeeded", () => {
+      isScrolled = true;
+      return {};
+    });
+    bench.surface.answerWith("DOM.getContentQuads", () => ({ quads: isScrolled ? [] : [[10, 10, 30, 10, 30, 20, 10, 20]] }));
+
+    await CallFailures.expectAsync(settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }))), ElementNotVisibleException, { reason: "Refused" });
+    expect([isScrolled, mouseEvents()]).toEqual([true, []]);
+  });
+
   it.each<[string, JsonObject, string]>([
     ["boxes that aren't a list", { quads: {} }, "DOM.getContentQuads"],
     ["a box without four points", { quads: [[1, 2, 3, 4]] }, "DOM.getContentQuads"],
