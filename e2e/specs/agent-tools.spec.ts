@@ -200,7 +200,7 @@ test.describe("the agent tools on a real page", () => {
     const docs = await servers.startAsync("docs.localhost", { "/": PREFILLED });
     const bindings = await openAsync(app, docs);
     const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
-    const fields = [/- textbox "Email" \[(e\d+)\]/u, /- textbox "Notes" \[(e\d+)\]/u, /- textbox "Bio" \[(e\d+)\]/u].map(t => referenceOf(snapshot, t));
+    const fields = [/- textbox "Email" .*\[(e\d+)\]$/u, /- textbox "Notes" .*\[(e\d+)\]$/u, /- textbox "Bio" .*\[(e\d+)\]$/u].map(t => referenceOf(snapshot, t));
     const typeAsync = async (reference: string, text: string): Promise<void> => {
       await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
       await callAsync(app, bindings, "browser_type", { reference, text });
