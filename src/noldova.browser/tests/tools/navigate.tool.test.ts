@@ -39,7 +39,7 @@ const HISTORY: JsonObject = { currentIndex: 1, entries: [
 describe("NavigateTool", () => {
   let bench: ToolBench;
   let tool: NavigateTool;
-  let frames: JsonObject[];
+  let shown: JsonObject;
 
   afterEach(() => {
     vi.useRealTimers();
@@ -49,11 +49,14 @@ describe("NavigateTool", () => {
   beforeEach(() => {
     bench = new ToolBench();
     bench.keep("workspace-1", ["https://docs.example"]);
-    frames = [frame("https://docs.example/guide", "https://docs.example", "L1"), frame("https://docs.example/next", "https://docs.example", "L2")];
-    bench.surface.answerWith("Page.getFrameTree", () => (frames.length > 1 ? frames.shift() : frames[0]) ?? {});
+    shown = frame("https://docs.example/guide", "https://docs.example", "L1");
+    bench.surface.answerWith("Page.getFrameTree", () => shown);
     bench.surface.answer("Page.getNavigationHistory", HISTORY);
     bench.surface.answer("Accessibility.getFullAXTree", { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Next steps" } }] });
-    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+    bench.surface.afterNavigation = (viewId: string): void => {
+      shown = frame("https://docs.example/next", "https://docs.example", "L2");
+      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+    };
     tool = new NavigateTool(bench.kit);
   });
 
@@ -80,7 +83,7 @@ describe("NavigateTool", () => {
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
     expect(bench.sendingMarks).toBe(1);
-    expect(bench.methods).toEqual(["Page.enable", "Page.getFrameTree", "Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree"]);
+    expect(bench.methods).toEqual(["Page.enable", "Page.getFrameTree", "Page.getFrameTree", "Page.getFrameTree", "Accessibility.getFullAXTree", "Page.getFrameTree"]);
     expect(bench.surface.calls[3]?.params).toEqual({ depth: 1 });
   });
 
@@ -190,6 +193,20 @@ describe("NavigateTool", () => {
     expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
   });
 
+  it.each<[string, JsonObject, JsonObject]>([
+    ["opening a URL, when the page went to another address", { url: "https://docs.example/next" }, frame("https://docs.example/other", "https://docs.example", "L3")],
+    ["a reload, when the page loaded a new document at its address", { action: "reload" }, frame("https://docs.example/guide", "https://docs.example", "L3")]
+  ])("moves nowhere and fails as stale on %s by the time the person allows the move", async (_case: string, input: JsonObject, moved: JsonObject) => {
+    bench.permissions.automaticDecision = null;
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call(input));
+    await bench.permissions.raised;
+    shown = moved;
+    bench.permissions.answerNext(PermissionDecision.AllowedOnce);
+
+    await CallFailures.expectAsync(running, PageChangedAfterGrantException, { reason: "Stale" });
+    expect([bench.surface.navigations, bench.sendingMarks]).toEqual([[], 0]);
+  });
+
   it("reloads the current page, judged by its own origin, without reading the history", async () => {
     await bench.runAsync(tool, bench.call({ action: "reload" }));
 
@@ -282,6 +299,6 @@ describe("NavigateTool", () => {
     bench.surface.afterNavigation = () => controller.abort("Cancelled");
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }, controller)), CallCancelledException, { kind: "Cancelled" });
-    expect([bench.methods, bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree"], 0]);
+    expect([bench.methods, bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree", "Page.getFrameTree"], 0]);
   });
 });

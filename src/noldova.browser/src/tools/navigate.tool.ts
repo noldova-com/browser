@@ -61,6 +61,9 @@ export class NavigateTool implements IBrowserTool {
       const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
       const target: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
       await this.askAsync(activity, call, page, frame.url, target.url, progress);
+      const granted: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      if (granted.documentId !== frame.documentId || granted.url !== frame.url)
+        throw new PageChangedAfterGrantException();
       if (target.index !== null) {
         const now: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
         if (now.index !== target.index || now.url !== target.url)
