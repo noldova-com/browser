@@ -97,7 +97,7 @@ describe("webViews.json", () => {
 
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({
       methods: methods.map(t => ({ name: t })),
-      events: ["Page.loadEventFired", "Page.frameStartedNavigating", "Page.frameNavigated", "Page.navigatedWithinDocument", "Runtime.consoleAPICalled", "Runtime.exceptionThrown", "Runtime.executionContextCreated",
+      events: ["Page.loadEventFired", "Page.frameRequestedNavigation", "Page.frameStartedNavigating", "Page.frameStoppedLoading", "Page.frameNavigated", "Page.navigatedWithinDocument", "Runtime.consoleAPICalled", "Runtime.exceptionThrown", "Runtime.executionContextCreated",
         "Runtime.executionContextDestroyed", "Runtime.executionContextsCleared", "Runtime.bindingCalled", "Log.entryAdded"],
       newWindows: true
     });

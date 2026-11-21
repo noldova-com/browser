@@ -53,7 +53,7 @@ export class PressKeyTool implements IBrowserTool {
     const input: JsonObject = InputValidator.readObject(call.arguments);
     const key: string = InputValidator.readText(input, Resources.keyField, Resources.maximumKeyLength);
     const definition: KeyDefinition | null = KeyEvents.find(key);
-    if (definition === null)
+    if (Object.isNull(definition))
       throw new UnknownKeyException(key);
     const modifiers: readonly string[] = PressKeyTool.readModifiers(input[Resources.modifiersField] ?? []);
     const page: SessionPage = this.kit.pages.find(call);
@@ -64,20 +64,20 @@ export class PressKeyTool implements IBrowserTool {
       const read: FocusRead = await this.readFocusedAsync(page.viewId, options);
       const node: AccessibilityNode | null = read.node;
       const focused: number | null = node?.backendNodeId ?? null;
-      const facts: ElementFacts | null = focused === null ? null : await this.kit.readElementAsync(page.viewId, focused, options);
-      const risk: ToolRisk = facts === null ? PressKeyTool.classifyUnseen(read, key, keys) : RiskClassifier.classifyKey(key, facts.path, facts.form);
+      const facts: ElementFacts | null = Object.isNull(focused) ? null : await this.kit.readElementAsync(page.viewId, focused, options);
+      const risk: ToolRisk = Object.isNull(facts) ? PressKeyTool.classifyUnseen(read, key, keys) : RiskClassifier.classifyKey(key, facts.path, facts.form);
       const chord: string = [...modifiers, key].join(Resources.keyChordSeparator);
       const details: IPermissionDetail[] = [
         PermissionCards.page(frame.url, facts?.page.title ?? ""),
         { label: Resources.keyLabel, kind: PermissionDetailKind.Text, value: chord }
       ];
-      if (node !== null && facts !== null)
+      if (!Object.isNull(node) && !Object.isNull(facts))
         details.push(...PermissionCards.element(facts, new ShownElement(node.role, node.name, RiskClassifier.isSecretField(facts.path))));
-      if (facts !== null && RiskClassifier.submitsKey(key, facts.path))
+      if (!Object.isNull(facts) && RiskClassifier.submitsKey(key, facts.path))
         details.push(...PermissionCards.sends(facts));
       const canTakeOver: boolean = RiskClassifier.isSecretField(facts?.path ?? null) && !RiskClassifier.isSubmittingKey(key);
       await this.kit.askAsync(activity, call, ToolKit.request(Resources.pressKeyAction, PermissionCards.keyTitle(facts, key, chord, frame.origin), frame.origin, details, risk,
-        ToolKit.actingOptions(risk, canTakeOver)), progress, focused === null ? null : async () => {
+        ToolKit.actingOptions(risk, canTakeOver)), progress, Object.isNull(focused) ? null : async () => {
         const handing: CallOptions = ToolKit.handingOver(options);
         await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, handing);
         await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: focused }, handing);
@@ -85,15 +85,16 @@ export class PressKeyTool implements IBrowserTool {
       await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
       if (((await this.readFocusedAsync(page.viewId, options)).node?.backendNodeId ?? null) !== focused)
         throw new PageChangedAfterGrantException();
-      if (focused !== null && facts !== null)
+      if (!Object.isNull(focused) && !Object.isNull(facts))
         await this.kit.confirmRiskAsync(page.viewId, focused, facts, risk, now => RiskClassifier.classifyKey(key, now.path, now.form), options);
 
-      await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, keys.down, keys.up, ViewCalls.holding(options));
-      // A key other than Enter or Space submits no form and follows no link by itself, so a document changed by now ends the call as
-      // uncertain, even when the page's own handler of the key navigated.
-      if (!Resources.activatingKeys.includes(key))
-        await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
-      return this.kit.doneAsync(page.viewId, Resources.pressed, null, options);
+      return this.kit.doneAsync(page.viewId, frame.frameId, Resources.pressed, null, options, async () => {
+        await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, keys.down, keys.up, ViewCalls.holding(options));
+        // A key other than Enter or Space submits no form and follows no link by itself, so a document changed by now ends the call as
+        // uncertain, even when the page's own handler of the key navigated.
+        if (!Resources.activatingKeys.includes(key))
+          await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
+      });
     });
   }
 
@@ -102,7 +103,7 @@ export class PressKeyTool implements IBrowserTool {
       throw new ArgumentNotOneOfException(Resources.modifiersField, Resources.keyModifiers);
     const modifiers: string[] = [];
     for (const modifier of value) {
-      if (typeof modifier !== "string" || !Resources.keyModifiers.includes(modifier) || modifiers.includes(modifier))
+      if (!Object.isString(modifier) || !Resources.keyModifiers.includes(modifier) || modifiers.includes(modifier))
         throw new ArgumentNotOneOfException(Resources.modifiersField, Resources.keyModifiers);
       modifiers.push(modifier);
     }

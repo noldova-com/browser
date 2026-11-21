@@ -61,7 +61,7 @@ export class TypeTool implements IBrowserTool {
         details.push(...PermissionCards.sends(facts));
       // A field with no quads can still take the focus and the text; one the engine doesn't lay out, such as one under display: none, can't.
       const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options, () => new FieldNotVisibleException());
-      if (box !== null)
+      if (!Object.isNull(box))
         activity.aim(box, null);
       const request: IPermissionRequest = ToolKit.request(Resources.typeAction, PermissionCards.typeTitle(facts, shown, isSubmitting, frame.origin), frame.origin, details, risk,
         ToolKit.actingOptions(risk, !isSubmitting));
@@ -83,12 +83,13 @@ export class TypeTool implements IBrowserTool {
         await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, deleting.down, deleting.up, ViewCalls.holding(options));
       // Typing doesn't navigate by itself, so a document changed by now went before or under the text, which ends the call as uncertain.
       await this.kit.confirmDocumentAsync(page.viewId, frame.documentId, options);
-      if (isSubmitting) {
+      return this.kit.doneAsync(page.viewId, frame.frameId, Resources.typed, shown, options, async () => {
+        if (!isSubmitting)
+          return;
         await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options, () => new NotSubmittedException());
         const keys: KeyPress = KeyEvents.press(Resources.enterKey, 0);
         await this.kit.calls.pressAsync(page.viewId, Resources.dispatchKeyEventMethod, keys.down, keys.up, ViewCalls.holding(options));
-      }
-      return this.kit.doneAsync(page.viewId, Resources.typed, shown, options);
+      });
     });
   }
 }

@@ -11,10 +11,20 @@ import { describe, expect, it } from "vitest";
 
 import { ShownElement } from "../../src/models/shown-element.ts";
 import { ShownPage } from "../../src/models/shown-page.ts";
+import { Resources } from "../../src/resources.ts";
 import { ToolResults } from "../../src/services/tool-results.ts";
 import type { JsonObject } from "../../src/types/json-value.ts";
 
 const PAGE: ShownPage = new ShownPage("https://shop.test/cart?token=1", "Cart");
+
+// A page and an element that carry a field beyond their own, which the structured fields leave out.
+class OriginPage extends ShownPage {
+  public readonly origin: string = "https://shop.test";
+}
+
+class ValuedElement extends ShownElement {
+  public readonly value: string = "4321";
+}
 
 describe("ToolResults", () => {
   it("returns the module's own text as trusted, with the page as its structured fields", () => {
@@ -35,7 +45,7 @@ describe("ToolResults", () => {
   });
 
   it("gives an action's result as the module's word, then the page's URL as the page's content, and the element it acted on", () => {
-    const result: ToolResult = ToolResults.done("Clicked.", "https://shop.test", PAGE, new ShownElement("button", "Pay", false));
+    const result: ToolResult = ToolResults.done("Clicked.", "https://shop.test", PAGE, new ShownElement("button", "Pay", false), true);
 
     expect(result.content.map(t => [t.value, t.origin])).toEqual([
       ["Clicked.", null],
@@ -45,9 +55,15 @@ describe("ToolResults", () => {
     expect(result.structured).toEqual({ page: { url: "https://shop.test/cart", title: "Cart" }, element: { role: "button", name: "Pay", isSecret: false } });
   });
 
+  it("says last that a navigation the action started is still loading", () => {
+    const result: ToolResult = ToolResults.done("Pressed.", "https://shop.test", PAGE, null, false);
+
+    expect(result.content.map(t => [t.value, t.origin]).slice(-2)).toEqual([["URL: https://shop.test/cart?token=1", "https://shop.test"], [Resources.stillLoading, null]]);
+  });
+
   it("copies only the page's and the element's own fields into the structured fields", () => {
-    const page: ShownPage & { origin: string } = { ...PAGE, origin: "https://shop.test" };
-    const element: { role: string; name: string; isSecret: boolean; value: string } = { role: "textbox", name: "PIN", isSecret: true, value: "4321" };
+    const page: OriginPage = new OriginPage("https://shop.test/cart?token=1", "Cart");
+    const element: ValuedElement = new ValuedElement("textbox", "PIN", true);
 
     expect(ToolResults.shown(page, element)).toEqual({ page: { url: "https://shop.test/cart", title: "Cart" }, element: { role: "textbox", name: "PIN", isSecret: true } });
     expect(ToolResults.shown(page, null)).toEqual({ page: { url: "https://shop.test/cart", title: "Cart" } });

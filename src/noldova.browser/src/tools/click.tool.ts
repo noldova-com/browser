@@ -22,6 +22,7 @@ import type { ElementFacts } from "../models/element-facts.ts";
 import type { ElementReference } from "../models/element-reference.ts";
 import type { FrameFacts } from "../models/frame-facts.ts";
 import type { PageActivity } from "../models/page-activity.ts";
+import { PointRead } from "../models/point-read.ts";
 import type { SessionPage } from "../models/session-page.ts";
 import type { ShownElement } from "../models/shown-element.ts";
 import { ToolDescriptors } from "../models/tool-descriptors.ts";
@@ -62,7 +63,7 @@ export class ClickTool implements IBrowserTool {
       const shown: ShownElement = await this.kit.readShownElementAsync(page.viewId, element.backendNodeId, facts, options);
       const risk: ToolRisk = RiskClassifier.classifyClick(facts.path, facts.form);
       const box: PageBox | null = await this.kit.readBoxAsync(page.viewId, element.backendNodeId, options);
-      if (box !== null)
+      if (!Object.isNull(box))
         activity.aim(box, null);
       const details: IPermissionDetail[] = [PermissionCards.page(frame.url, facts.page.title), ...PermissionCards.element(facts, shown)];
       if (RiskClassifier.submitsClick(facts.path))
@@ -74,9 +75,8 @@ export class ClickTool implements IBrowserTool {
 
       const confirmRiskAsync = (): Promise<void> => this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk,
         now => RiskClassifier.classifyClick(now.path, now.form), options);
-      await this.layout.holdAsync(page.viewId, options,
-        isLaidOut => this.pressAsync(page.viewId, element.backendNodeId, button, clickCount, isLaidOut, activity, options, confirmRiskAsync));
-      return this.kit.doneAsync(page.viewId, Resources.clicked, shown, options);
+      return this.kit.doneAsync(page.viewId, frame.frameId, Resources.clicked, shown, options, () => this.layout.holdAsync(page.viewId, options,
+        isLaidOut => this.pressAsync(page.viewId, element.backendNodeId, button, clickCount, isLaidOut, activity, options, confirmRiskAsync)));
     });
   }
 
@@ -85,7 +85,7 @@ export class ClickTool implements IBrowserTool {
     if (!JsonShapes.isObject(viewport))
       throw new MalformedReplyException();
     const { pageX: x, pageY: y }: JsonObject = viewport;
-    if (typeof x !== "number" || typeof y !== "number")
+    if (!Object.isNumber(x) || !Object.isNumber(y))
       throw new MalformedReplyException();
     return new PagePoint(x, y);
   }
@@ -94,7 +94,7 @@ export class ClickTool implements IBrowserTool {
   private static isInView(reply: JsonObject, point: PagePoint): boolean {
     const viewport: JsonValue | undefined = reply[Resources.cssVisualViewportField];
     const { clientWidth: width, clientHeight: height }: JsonObject = JsonShapes.isObject(viewport) ? viewport : {};
-    if (typeof width !== "number" || typeof height !== "number")
+    if (!Object.isNumber(width) || !Object.isNumber(height))
       throw new MalformedReplyException();
     return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
   }
@@ -110,39 +110,40 @@ export class ClickTool implements IBrowserTool {
   // once it rests, and after a scroll the point is read again once two reads a moment apart agree, as the page may still move.
   private async pressAsync(viewId: string, backendNodeId: number, button: MouseButton, clickCount: number, isLaidOut: boolean, activity: PageActivity,
     options: CallOptions, confirmRiskAsync: () => Promise<void>): Promise<void> {
-    let [quad, metrics]: [readonly number[] | null, JsonObject] = isLaidOut
+    let read: PointRead = isLaidOut
       ? await this.settleAsync(viewId, backendNodeId, options)
       : await this.readPointAsync(viewId, backendNodeId, options);
     // An element with no box has nothing a scroll could bring into view, and the engine refuses to scroll one it doesn't lay out.
-    if (quad === null)
+    if (Object.isNull(read.quad))
       throw new ElementNotVisibleException();
-    const isShown: boolean = await this.isShownAsync(viewId, backendNodeId, quad, metrics, options);
+    const isShown: boolean = await this.isShownAsync(viewId, backendNodeId, read.quad, read.metrics, options);
     if (!isShown) {
       await this.kit.calls.sendAsync(viewId, Resources.scrollIntoViewIfNeededMethod, { backendNodeId }, options);
-      [quad, metrics] = await this.settleAsync(viewId, backendNodeId, options);
+      read = await this.settleAsync(viewId, backendNodeId, options);
     }
-    if (quad === null)
+    const quad: readonly number[] | null = read.quad;
+    if (Object.isNull(quad))
       throw new ElementNotVisibleException();
     const centre: PagePoint = ContentQuads.toCentre(quad);
     const { x, y }: PagePoint = centre;
     activity.aim(ContentQuads.toBox(quad), centre);
-    const scroll: PagePoint = ClickTool.readScroll(metrics);
+    const scroll: PagePoint = ClickTool.readScroll(read.metrics);
     if (!isShown)
       await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
-    const mouse: { x: number; y: number; button: "left" | "middle" | "right" } = { x, y, button: Resources.mouseButtonNames[button] };
+    const buttonName: "left" | "middle" | "right" = Resources.mouseButtonNames[button];
     await this.kit.calls.sendAsync(viewId, Resources.dispatchMouseEventMethod, { type: Resources.mouseMovedType, x, y }, options);
     for (let count: number = 1; count <= clickCount; count++) {
       await this.confirmUnmovedAsync(viewId, backendNodeId, quad, scroll, options);
       await confirmRiskAsync();
-      await this.kit.calls.pressAsync(viewId, Resources.dispatchMouseEventMethod, { type: Resources.mousePressedType, ...mouse, clickCount: count },
-        { type: Resources.mouseReleasedType, ...mouse, clickCount: count }, ViewCalls.holding(options));
+      await this.kit.calls.pressAsync(viewId, Resources.dispatchMouseEventMethod, { type: Resources.mousePressedType, x, y, button: buttonName, clickCount: count },
+        { type: Resources.mouseReleasedType, x, y, button: buttonName, clickCount: count }, ViewCalls.holding(options));
     }
   }
 
   private async confirmUnmovedAsync(viewId: string, backendNodeId: number, quad: readonly number[], scroll: PagePoint, options: CallOptions): Promise<void> {
     const now: readonly number[] | null = await this.kit.readQuadAsync(viewId, backendNodeId, options);
     const scrolled: PagePoint = await this.readScrollAsync(viewId, options);
-    if (now === null || now.some((t, index) => t !== quad[index]) || scrolled.x !== scroll.x || scrolled.y !== scroll.y)
+    if (Object.isNull(now) || now.some((t, index) => t !== quad[index]) || scrolled.x !== scroll.x || scrolled.y !== scroll.y)
       throw new PageChangedAfterGrantException();
     const { x, y }: PagePoint = ContentQuads.toCentre(quad);
     await this.confirmTopmostAsync(viewId, backendNodeId, x + scroll.x, y + scroll.y, options);
@@ -159,19 +160,19 @@ export class ClickTool implements IBrowserTool {
   }
 
   // The element's first box and the page's metrics, read together.
-  private async readPointAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<[readonly number[] | null, JsonObject]> {
+  private async readPointAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<PointRead> {
     const quad: readonly number[] | null = await this.kit.readQuadAsync(viewId, backendNodeId, options);
-    return [quad, await this.kit.calls.sendAsync(viewId, Resources.getLayoutMetricsMethod, {}, options)];
+    return new PointRead(quad, await this.kit.calls.sendAsync(viewId, Resources.getLayoutMetricsMethod, {}, options));
   }
 
   // The element's box and the page's metrics once two reads a moment apart agree, or the last of a few reads; a page still moving then
   // fails the check before the press.
-  private async settleAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<[readonly number[] | null, JsonObject]> {
-    let read: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
+  private async settleAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<PointRead> {
+    let read: PointRead = await this.readPointAsync(viewId, backendNodeId, options);
     for (let count: number = 1; count < Resources.settleReads; count++) {
       await ClickTool.pauseAsync(options.signal);
-      const next: [readonly number[] | null, JsonObject] = await this.readPointAsync(viewId, backendNodeId, options);
-      const isSame: boolean = JSON.stringify([next[0], ClickTool.readScroll(next[1])]) === JSON.stringify([read[0], ClickTool.readScroll(read[1])]);
+      const next: PointRead = await this.readPointAsync(viewId, backendNodeId, options);
+      const isSame: boolean = JSON.stringify([next.quad, ClickTool.readScroll(next.metrics)]) === JSON.stringify([read.quad, ClickTool.readScroll(read.metrics)]);
       read = next;
       if (isSame)
         break;
@@ -206,7 +207,7 @@ export class ClickTool implements IBrowserTool {
     const hit: JsonObject = await this.kit.calls.sendAsync(viewId, Resources.getNodeForLocationMethod,
       { x: Math.round(documentX), y: Math.round(documentY), includeUserAgentShadowDOM: false }, options);
     const topmost: JsonValue | undefined = hit[Resources.backendNodeIdField];
-    if (typeof topmost !== "number")
+    if (!Object.isNumber(topmost))
       throw new MalformedReplyException();
     if (topmost === backendNodeId)
       return true;

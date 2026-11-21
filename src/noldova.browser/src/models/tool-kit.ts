@@ -27,6 +27,7 @@ import { ConsoleBuffers } from "../services/console-buffers.ts";
 import { ContentQuads } from "../services/content-quads.ts";
 import { FrameTreeReader } from "../services/frame-tree.reader.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
+import { NavigationWatch } from "../services/navigation-watch.ts";
 import { NodeFactsReader } from "../services/node-facts.reader.ts";
 import { PageChanges } from "../services/page-changes.ts";
 import { PermissionGate } from "../services/permission-gate.ts";
@@ -173,7 +174,7 @@ export class ToolKit {
       await this.gate.askAsync(call, request, progress);
     }
     catch (error) {
-      if (handOverAsync !== null && error instanceof HandedOverException) {
+      if (!Object.isNull(handOverAsync) && error instanceof HandedOverException) {
         activity.handOver();
         await handOverAsync().catch((failure: unknown) => {
           if (!(failure instanceof CallFailureException))
@@ -195,7 +196,7 @@ export class ToolKit {
 
   public async readBoxAsync(viewId: string, backendNodeId: number, options: CallOptions, notLaidOut: (() => CallFailureException) | null = null): Promise<PageBox | null> {
     const quad: readonly number[] | null = await this.readQuadAsync(viewId, backendNodeId, options, notLaidOut);
-    return quad === null ? null : ContentQuads.toBox(quad);
+    return Object.isNull(quad) ? null : ContentQuads.toBox(quad);
   }
 
   // The element's first box, or null for one with none: the engine answers no quads for some, and refuses the call for one it doesn't lay
@@ -208,7 +209,7 @@ export class ToolKit {
     catch (error) {
       if (!(error instanceof ProtocolFailedException && error.cause instanceof WebViewFailureException && error.cause.failure.message === Resources.noContentQuads))
         throw error;
-      if (notLaidOut !== null)
+      if (!Object.isNull(notLaidOut))
         throw notLaidOut();
       return null;
     }
@@ -226,7 +227,7 @@ export class ToolKit {
   public async confirmRiskAsync(viewId: string, backendNodeId: number, granted: ElementFacts, risk: ToolRisk, classify: (facts: ElementFacts) => ToolRisk,
     options: CallOptions, rose: () => CallFailureException = () => new RiskRoseException()): Promise<void> {
     const now: ElementFacts = await this.readElementAsync(viewId, backendNodeId, options);
-    if (granted.path !== null && now.path === null)
+    if (!Object.isNull(granted.path) && Object.isNull(now.path))
       throw new PageChangedAfterGrantException();
     if (risk !== ToolRisk.High && classify(now) === ToolRisk.High)
       throw rose();
@@ -239,12 +240,12 @@ export class ToolKit {
     if (reference instanceof ElementReference)
       return reference;
     const objectId: string | null = await this.changes.findSnapshotElementAsync(viewId, reference.index, options);
-    if (objectId === null)
+    if (Object.isNull(objectId))
       throw new StaleReferenceException();
     try {
       const node: JsonValue | undefined = (await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId }, options))[Resources.nodeField];
       const backendNodeId: JsonValue | undefined = JsonShapes.isObject(node) ? node[Resources.backendNodeIdField] : undefined;
-      if (typeof backendNodeId !== "number")
+      if (!Object.isNumber(backendNodeId))
         throw new MalformedReplyException();
       return new ElementReference(viewId, documentId, backendNodeId);
     }
@@ -259,13 +260,13 @@ export class ToolKit {
       const reply: JsonObject = await this.changes.readElementAsync(viewId, element.objectId, options);
       const path: readonly NodeFacts[] | null = NodeFactsReader.readPath(reply);
       // Only a submit is rated by its form, so only then is the form read, which on a page wrapped in one form is the whole page.
-      const isSubmitting: boolean = path !== null && (RiskClassifier.submitsClick(path) || RiskClassifier.submitsEnter(path));
+      const isSubmitting: boolean = !Object.isNull(path) && (RiskClassifier.submitsClick(path) || RiskClassifier.submitsEnter(path));
       const form: JsonObject | null = isSubmitting ? await this.changes.readFormAsync(viewId, element.objectId, options) : null;
       // The world is found by its context number, which a navigation can pass to the new document's own world, whose script could change
       // what the function reads, so the facts count only from the document the world was found in.
       if ((await this.readFrameAsync(viewId, options)).documentId !== element.documentId)
         throw new StaleReferenceException();
-      return NodeFactsReader.readElement(reply, form === null ? null : NodeFactsReader.readSubtree(form));
+      return NodeFactsReader.readElement(reply, Object.isNull(form) ? null : NodeFactsReader.readSubtree(form));
     }
     finally {
       await this.changes.releaseAsync(viewId, element.objectId, options);
@@ -292,15 +293,31 @@ export class ToolKit {
     const nodes: readonly AccessibilityNode[] = AccessibilitySnapshot.readNodes(
       await this.calls.sendAsync(viewId, Resources.getPartialAXTreeMethod, { backendNodeId, fetchRelatives: false }, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes))).nodes;
     const node: AccessibilityNode | undefined = nodes.find(t => t.backendNodeId === backendNodeId);
-    if (node === undefined)
+    if (Object.isUndefined(node))
       throw new MalformedReplyException();
     const target: NodeFacts | undefined = facts.path?.at(-1);
-    return new ShownElement(node.role, node.name, target === undefined || RiskClassifier.isSecret(target));
+    return new ShownElement(node.role, node.name, Object.isUndefined(target) || RiskClassifier.isSecret(target));
   }
 
-  public async doneAsync(viewId: string, message: string, element: ShownElement | null, options: CallOptions): Promise<ToolResult> {
+  // Sends the input `send` gives and reports the call done. An input that makes the page navigate its main frame in place, as a link's click
+  // or a form's Enter does, is reported once that navigation loaded, with the page it loaded, or as still loading when the call's time ends
+  // first. The page asks for the navigation while it handles the input, and answers a call only after that, so the call after the input
+  // lets its request arrive before the wait is decided.
+  public async doneAsync(viewId: string, frameId: string, message: string, element: ShownElement | null, options: CallOptions,
+    send: () => Promise<void>): Promise<ToolResult> {
+    await this.calls.sendAsync(viewId, Resources.enableMethod, {}, options);
+    const watch: NavigationWatch = new NavigationWatch(this.webViews, viewId, frameId);
+    let isLoaded: boolean;
+    try {
+      await send();
+      await this.calls.sendAsync(viewId, Resources.enableMethod, {}, options);
+      isLoaded = await watch.waitAsync(options.deadline - Resources.readMarginMilliseconds, options.signal);
+    }
+    finally {
+      watch[Symbol.dispose]();
+    }
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
-    return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element);
+    return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element, isLoaded);
   }
 
   // The view keeps drawing while hidden only while it is marked, and a document it loads hidden takes no press until it draws, so a call
@@ -308,7 +325,7 @@ export class ToolKit {
   // stops being marked first, and the control holds the new mark from its request, so a control that ends meanwhile still ends it.
   private async controlAsync(activity: PageActivity, viewId: string): Promise<void> {
     const marked: string | null = activity.markedViewId;
-    if (marked !== null && marked !== viewId)
+    if (!Object.isNull(marked) && marked !== viewId)
       this.letGo(marked);
     activity.mark(viewId);
     try {

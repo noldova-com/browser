@@ -315,6 +315,10 @@ export class Resources {
   public static readonly entryAddedEvent: "Log.entryAdded" = "Log.entryAdded";
   public static readonly frameNavigatedEvent: "Page.frameNavigated" = "Page.frameNavigated";
   public static readonly frameStartedNavigatingEvent: "Page.frameStartedNavigating" = "Page.frameStartedNavigating";
+  public static readonly frameRequestedNavigationEvent: "Page.frameRequestedNavigation" = "Page.frameRequestedNavigation";
+  public static readonly frameStoppedLoadingEvent: "Page.frameStoppedLoading" = "Page.frameStoppedLoading";
+  public static readonly dispositionField: string = "disposition";
+  public static readonly currentTabDisposition: string = "currentTab";
   public static readonly navigationTypeField: string = "navigationType";
   public static readonly sameDocumentNavigationTypes: readonly string[] = ["sameDocument", "historySameDocument"];
   public static readonly navigatedWithinDocumentEvent: "Page.navigatedWithinDocument" = "Page.navigatedWithinDocument";

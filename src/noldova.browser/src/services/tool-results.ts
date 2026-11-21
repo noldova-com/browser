@@ -19,9 +19,11 @@ export class ToolResults {
     return new ToolResult([ToolContent.fromText(text, null)], ToolResults.shown(page, null));
   }
 
-  public static done(message: string, origin: string, page: ShownPage, element: ShownElement | null): ToolResult {
-    return new ToolResult([ToolContent.fromText(message, null), ...ToolResults.untrusted(origin, [ToolContent.fromText(Resources.formatUrl(page.url), origin)])],
-      ToolResults.shown(page, element));
+  // `isLoaded` is false when a navigation the call started was still loading as the call ended.
+  public static done(message: string, origin: string, page: ShownPage, element: ShownElement | null, isLoaded: boolean): ToolResult {
+    const loading: readonly ToolContent[] = isLoaded ? [] : [ToolContent.fromText(Resources.stillLoading, null)];
+    return new ToolResult([ToolContent.fromText(message, null), ...ToolResults.untrusted(origin, [ToolContent.fromText(Resources.formatUrl(page.url), origin)]),
+      ...loading], ToolResults.shown(page, element));
   }
 
   public static page(origin: string, content: readonly ToolContent[], page: ShownPage): ToolResult {
@@ -35,14 +37,14 @@ export class ToolResults {
   public static shown(page: ShownPage, element: ShownElement | null): JsonObject {
     const text: number = BrowserLimits.maximumShownTextLength;
     const shownPage: JsonObject = { url: ToolResults.cut(ToolResults.shownUrl(page.url), BrowserLimits.maximumShownUrlLength), title: ToolResults.cut(page.title, text) };
-    return element === null
+    return Object.isNull(element)
       ? { page: shownPage }
       : { page: shownPage, element: { role: ToolResults.cut(element.role, text), name: ToolResults.cut(element.name, text), isSecret: element.isSecret } };
   }
 
   private static shownUrl(url: string): string {
     const parsed: URL | null = URL.parse(url);
-    if (parsed === null)
+    if (Object.isNull(parsed))
       return "";
     if (parsed.origin !== Resources.opaqueOrigin)
       return `${parsed.origin}${parsed.pathname}`;

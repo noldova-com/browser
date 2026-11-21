@@ -8,6 +8,7 @@
 
 import { inflateSync } from "node:zlib";
 
+import "@noldova/context.core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
@@ -36,6 +37,9 @@ document.getElementById("buy").addEventListener("click", () => seen.push("click"
 document.getElementById("name").addEventListener("input", t => seen.push("input " + t.target.value));
 console.info("tools page ready");</script>`;
 const NEXT = `<!doctype html><title>${NEXT_TITLE}</title><p>Next page</p>`;
+// A page with a link to the next page and a search form whose Enter sends it there.
+const LINKS = `<!doctype html><title>${START_TITLE}</title><a href="/next">Go next</a>
+<form action="/next"><input name="q" aria-label="Query"></form>`;
 // A page whose search field replaces itself with a new one, and focuses it, the first time it takes the focus, as some sites' search
 // fields do, and records each value a field takes.
 const SWAPPING = `<!doctype html><title>${START_TITLE}</title><label for="q">Search</label><input id="q" type="search">
@@ -60,7 +64,7 @@ for (const id of ["agree", "level"])
   document.getElementById(id).addEventListener("keydown", event => window.keys.push(id + " " + event.key));</script>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return Object.isObject(value) && !Array.isArray(value);
 }
 
 function contentOf(result: JsonValue): readonly JsonObject[] {
@@ -69,24 +73,30 @@ function contentOf(result: JsonValue): readonly JsonObject[] {
 }
 
 function textsOf(result: JsonValue): string[] {
-  return contentOf(result).map(t => t["text"]).filter((t): t is string => typeof t === "string");
+  return contentOf(result).map(t => t["text"]).filter((t): t is string => Object.isString(t));
 }
 
 function referenceOf(snapshot: string, line: RegExp): string {
-  const reference = snapshot.split("\n").map(t => line.exec(t)?.[1]).find(t => t !== undefined) ?? "";
+  const reference = snapshot.split("\n").map(t => line.exec(t)?.[1]).find(t => !Object.isUndefined(t)) ?? "";
   expect(reference, `No line matches ${String(line)}: ${snapshot}`).not.toBe("");
   return reference;
 }
 
 // The width and height a PNG's header holds, which follow its 8-byte signature and the IHDR chunk's length and type.
-function pngSizeOf(bytes: Buffer): readonly [number, number] {
-  expect(bytes.subarray(0, 8).toString("hex"), "The image isn't a PNG.").toBe("89504e470d0a1a0a");
-  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+class PngSize {
+  public readonly width: number;
+  public readonly height: number;
+
+  public constructor(bytes: Buffer) {
+    expect(bytes.subarray(0, 8).toString("hex"), "The image isn't a PNG.").toBe("89504e470d0a1a0a");
+    this.width = bytes.readUInt32BE(16);
+    this.height = bytes.readUInt32BE(20);
+  }
 }
 
 // The red, green and blue of an 8-bit RGB or RGBA PNG's pixel, from its IDAT chunks inflated and its rows unfiltered down to the pixel's.
 function pngPixelOf(bytes: Buffer, x: number, y: number): readonly number[] {
-  const [width] = pngSizeOf(bytes);
+  const width = new PngSize(bytes).width;
   const [depth = 0, colour = 0] = [bytes[24], bytes[25]];
   expect([depth, [2, 6].includes(colour)], "The PNG isn't 8-bit RGB or RGBA.").toEqual([8, true]);
   const channels = colour === 6 ? 4 : 3;
@@ -182,6 +192,35 @@ test.describe("the agent tools on a real page", () => {
     expect([clicked, typed].map(t => t.includes(`URL: ${docs.url("/")}`))).toEqual([true, true]);
     expect(await seenAsync(app, docs)).toEqual(["click", "input Ada"]);
     expect(await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('name').value")).toBe("Ada");
+  });
+
+  test("a click on a link and typing with Enter in a form report the page they loaded", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": LINKS, "/next": NEXT, "/next?q=lamp": NEXT });
+    const bindings = await openAsync(app, docs);
+    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const link = referenceOf(snapshot, /- link "Go next"[^[]*\[(e\d+)\]/u);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
+    const release = docs.hold("/next");
+
+    const clicking = callAsync(app, bindings, "browser_click", { reference: link });
+    await expect.poll(() => docs.requests.some(t => t.path === "/next"), { message: "The click never asked for the next page." }).toBe(true);
+    release();
+    const clicked = textsOf(await clicking);
+
+    expect(clicked.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/next")}`]);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
+    await callAsync(app, bindings, "browser_navigate", { url: docs.url("/") });
+    const again = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const query = referenceOf(again, /- textbox "Query" \[(e\d+)\]$/u);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
+    const releaseQuery = docs.hold("/next?q=lamp");
+
+    const typing = callAsync(app, bindings, "browser_type", { reference: query, text: "lamp", submit: true });
+    await expect.poll(() => docs.requests.some(t => t.path === "/next?q=lamp"), { message: "Enter never sent the form." }).toBe(true);
+    releaseQuery();
+    const typed = textsOf(await typing);
+
+    expect(typed.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/next?q=lamp")}`]);
   });
 
   test("typing into a field that replaces itself on focus types nothing and fails as a changed page, and typing again after a new snapshot works", async ({ app, servers }) => {
@@ -298,8 +337,8 @@ test.describe("the agent tools on a real page", () => {
     const images = contentOf(result).filter(t => t["mimeType"] === "image/png");
     expect(images, "The result holds no one PNG image.").toHaveLength(1);
     const data = images[0]?.["data"];
-    const bytes = Buffer.from(typeof data === "string" ? data : "", "base64");
-    const [width, height] = pngSizeOf(bytes);
+    const bytes = Buffer.from(Object.isString(data) ? data : "", "base64");
+    const { width, height } = new PngSize(bytes);
     expect(textsOf(result)[0]).toBe(`A screenshot of ${width} by ${height} pixels.`);
     expect(Math.abs(width / height - Number(viewWidth) / Number(viewHeight)), "The image's shape isn't the view's.").toBeLessThan(0.02);
     // Left of the button and above it, so only the page's background is there.

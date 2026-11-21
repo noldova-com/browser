@@ -97,10 +97,10 @@ describe("ClickTool", () => {
     }]);
     expect(bench.methods).toEqual(["Page.getFrameTree", "Page.getFrameTree", "Page.enable", "Runtime.disable", "Runtime.enable", "Log.enable", "Runtime.discardConsoleEntries", "Page.createIsolatedWorld", "Runtime.callFunctionOn", "DOM.describeNode", "Runtime.releaseObject", "Page.getFrameTree",
       "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree",
-      "Page.getLayoutMetrics",
+      "Page.enable", "Page.getLayoutMetrics",
       "DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Input.dispatchMouseEvent", "DOM.getContentQuads",
-      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.getFrameTree", "Accessibility.getFullAXTree",
-      "Page.getFrameTree"]);
+      "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject", "Input.dispatchMouseEvent", "Input.dispatchMouseEvent", "Page.enable", "Page.getFrameTree",
+      "Accessibility.getFullAXTree", "Page.getFrameTree"]);
     expect(bench.surface.calls.find(t => t.method === "Accessibility.getPartialAXTree")?.params).toEqual({ backendNodeId: ShopPage.LINK, fetchRelatives: false });
     expect(mouseEvents()).toEqual([
       { type: "mouseMoved", x: 20, y: 15 },
@@ -481,7 +481,7 @@ describe("ClickTool", () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK), clickCount: 2 }));
 
     const check: readonly string[] = ["DOM.getContentQuads", "Page.getLayoutMetrics", "DOM.getNodeForLocation", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject"];
-    expect(bench.methods.slice(24, -3)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
+    expect(bench.methods.slice(25, -4)).toEqual(["Input.dispatchMouseEvent", ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent",
       ...check, "Input.dispatchMouseEvent", "Input.dispatchMouseEvent"]);
   });
 

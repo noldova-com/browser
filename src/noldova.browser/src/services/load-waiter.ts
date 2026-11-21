@@ -26,7 +26,7 @@ export class LoadWaiter implements Disposable {
   public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null, frameId: string | null) {
     let isNewDocument: boolean = false;
     let started: JsonValue | undefined;
-    let isCommitted: boolean = frameId === null;
+    let isCommitted: boolean = Object.isNull(frameId);
     this.stop = relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
       if (event.method === Resources.loadEvent && isCommitted)
         this.loaded.resolve();
@@ -37,13 +37,18 @@ export class LoadWaiter implements Disposable {
       }
       else if (event.method === Resources.frameNavigatedEvent) {
         const frame: JsonValue | undefined = event.params[Resources.frameField];
-        isNewDocument ||= within !== null && LoadWaiter.idOf(frame) === within.frameId;
-        isCommitted ||= started !== undefined && LoadWaiter.isCommit(frame, frameId, started);
+        isNewDocument ||= !Object.isNull(within) && LoadWaiter.idOf(frame) === within.frameId;
+        isCommitted ||= !Object.isUndefined(started) && LoadWaiter.isCommit(frame, frameId, started);
       }
-      else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && within !== null && event.params[Resources.frameIdField] === within.frameId
+      else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && !Object.isNull(within) && event.params[Resources.frameIdField] === within.frameId
         && event.params[Resources.urlField] === within.url)
         this.loaded.resolve();
     });
+  }
+
+  // Ends the wait as a load would, for a navigation that ends without one.
+  public end(): void {
+    this.loaded.resolve();
   }
 
   public waitAsync(until: number, signal: AbortSignal): Promise<boolean> {
