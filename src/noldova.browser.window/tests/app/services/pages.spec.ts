@@ -342,6 +342,22 @@ describe("Pages", () => {
     expect([isRefused, pages.refusals().has(tab.id)]).toEqual([true, false]);
   });
 
+  it("keeps no refusal that comes after the person closed its tab, so its page opened again shows none, and keeps one once it opened again", async () => {
+    const tab = await openAsync();
+    const navigating: JsonObject = { instance: tab.id, activity: "call-1", agentName: "Scout", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
+    const refusing: JsonObject = { ...navigating, state: "Ended", refusal: { url: "https://docs.example.com/pricing", origin: "https://docs.example.com" } };
+    context.emit(BrowserEvents.pageActivity, navigating);
+
+    context.closeByPerson(tab.id);
+    pages.release(tab);
+    context.emit(BrowserEvents.pageActivity, refusing);
+    pages.open("workspace-1", null, tab.id);
+    const isRefusedOnOpen: boolean = pages.refusals().has(tab.id);
+    context.emit(BrowserEvents.pageActivity, { ...refusing, activity: "call-2" });
+
+    expect([isRefusedOnOpen, pages.refusals().has(tab.id)]).toEqual([false, true]);
+  });
+
   it("forgets the refused navigations once the part deactivates", () => {
     const navigating: JsonObject = { instance: "page-1", activity: "call-1", agentName: "Scout", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
     context.emit(BrowserEvents.pageActivity, navigating);
