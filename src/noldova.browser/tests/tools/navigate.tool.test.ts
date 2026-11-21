@@ -50,6 +50,12 @@ describe("NavigateTool", () => {
     shown = frame(url, new URL(url).origin, "L2");
   }
 
+  // The main frame takes the new document, then that document loads.
+  function loadNew(viewId: string): void {
+    bench.surface.emitProtocolEvent(viewId, "Page.frameNavigated", { frame: { id: "F1", loaderId: "L2" } });
+    bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+  }
+
   afterEach(() => {
     vi.useRealTimers();
     bench[Symbol.dispose]();
@@ -66,7 +72,7 @@ describe("NavigateTool", () => {
     bench.surface.answer("Accessibility.getFullAXTree", { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Next steps" } }] });
     bench.surface.afterNavigation = (viewId: string): void => {
       land();
-      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+      loadNew(viewId);
     };
     tool = new NavigateTool(bench.kit);
   });
@@ -230,7 +236,7 @@ describe("NavigateTool", () => {
       pages = moved;
       current = moved.length - 1;
       land();
-      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+      loadNew(viewId);
     };
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call(input)), LandedElsewhereException, { reason: "Stale", moduleCode: "browser.landedElsewhere" });
@@ -247,7 +253,7 @@ describe("NavigateTool", () => {
       pages = [...entries.slice(0, index), url];
       current = index;
       shown = frame(url, "https://docs.example", "L2");
-      bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+      loadNew(viewId);
     };
 
     const result: ToolResult = await bench.runAsync(tool, bench.call({ url }));
@@ -301,6 +307,19 @@ describe("NavigateTool", () => {
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://docs.example/next" })), NavigationRefusedException, { reason: "Refused" });
     expect(bench.sendingMarks).toBe(1);
+  });
+
+  it("waits past the load of the document it leaves, still loading from an earlier move, and says the page is still loading", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", { timestamp: 1 });
+
+    const running: Promise<ToolResult> = bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }, new AbortController(), ToolBench.SESSION, 2_050));
+    await ToolBench.settleAsync();
+    await vi.advanceTimersByTimeAsync(50);
+    const result: ToolResult = await running;
+
+    expect([result.content[1]?.value, result.content[2]?.value]).toEqual(["URL: https://docs.example/guide\nTitle: Next steps",
+      "The page is still loading; wait for it with browser_wait_for before you act on it."]);
   });
 
   it("says the page is still loading when its load doesn't come before the time to read it", async () => {

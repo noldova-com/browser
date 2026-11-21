@@ -9,6 +9,7 @@
 import type { IWebViewRelay, WebViewProtocolEvent } from "@noldova/desktop.runtime";
 
 import { Resources } from "../resources.ts";
+import type { FrameFacts } from "../models/frame-facts.ts";
 import type { WithinDocumentMove } from "../models/within-document-move.ts";
 import type { JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
@@ -20,13 +21,19 @@ export class LoadWaiter implements Disposable {
 
   // `within` is a move that may stay in its document, such as back to an entry a page pushed or to a fragment: such a move fires no load, so its
   // frame's navigation to its URL ends the wait too, unless the frame took a new document first, whose load the wait is for.
-  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null) {
+  // `left` is the document a move leaves: its load counts only once its frame took another document, so the load of a document still loading
+  // from an earlier move doesn't end the wait. With none, as for a wait for the page's next load, any load counts.
+  public constructor(relay: IWebViewRelay, viewId: string, within: WithinDocumentMove | null, left: FrameFacts | null) {
     let isNewDocument: boolean = false;
+    let isLeft: boolean = left === null;
     this.stop = relay.onProtocolEvent(viewId, (event: WebViewProtocolEvent) => {
-      if (event.method === Resources.loadEvent)
+      if (event.method === Resources.loadEvent && isLeft)
         this.loaded.resolve();
-      else if (event.method === Resources.frameNavigatedEvent && within !== null && LoadWaiter.idOf(event.params[Resources.frameField]) === within.frameId)
-        isNewDocument = true;
+      else if (event.method === Resources.frameNavigatedEvent) {
+        const frame: JsonValue | undefined = event.params[Resources.frameField];
+        isNewDocument ||= within !== null && LoadWaiter.idOf(frame) === within.frameId;
+        isLeft ||= left !== null && LoadWaiter.idOf(frame) === left.frameId && LoadWaiter.loaderOf(frame) !== left.documentId;
+      }
       else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && within !== null && event.params[Resources.frameIdField] === within.frameId
         && event.params[Resources.urlField] === within.url)
         this.loaded.resolve();
@@ -61,6 +68,10 @@ export class LoadWaiter implements Disposable {
 
   private static idOf(frame: JsonValue | undefined): JsonValue | undefined {
     return JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
+  }
+
+  private static loaderOf(frame: JsonValue | undefined): JsonValue | undefined {
+    return JsonShapes.isObject(frame) ? frame[Resources.loaderIdField] : undefined;
   }
 
   public [Symbol.dispose](): void {
