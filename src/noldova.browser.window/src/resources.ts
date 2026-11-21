@@ -145,6 +145,7 @@ export class Resources {
   public static readonly newPageKey: string = "newPage";
   public static readonly focusAddressKey: string = "focusAddress";
   public static readonly findKey: string = "find";
+  public static readonly stopKey: string = "stop";
   public static readonly reloadChord: string = "Mod+R";
   public static readonly reloadFunctionKey: string = "F5";
   public static readonly newPageChord: string = "Mod+T";

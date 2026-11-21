@@ -1220,6 +1220,21 @@ describe("PageComponent", () => {
     expect([inField.defaultPrevented, inToolbar.defaultPrevented, loaded.defaultPrevented, view.calls.filter(t => t === "stop")]).toEqual([false, true, false, ["stop"]]);
   });
 
+  it("stops a loading page from the stop key Noldova Desktop sends from the page, and does nothing for one that comes once the page has loaded", async () => {
+    const view: FakeWebView = await placeAsync();
+    view.emit(new ViewStateEvent("https://two.example/", "Two", true, true, false));
+    await stableAsync();
+
+    view.emitOther(WebViewEventKind.Key, { name: "stop" });
+    await vi.waitFor(() => expect(view.calls).toContain("stop"));
+    view.emit(new ViewStateEvent("https://two.example/", "Two", false, true, false));
+    await stableAsync();
+    view.emitOther(WebViewEventKind.Key, { name: "stop" });
+    await stableAsync();
+
+    expect([view.calls.filter(t => t === "stop"), button("Reload", "Stop").getAttribute("aria-label")]).toEqual([["stop"], "Reload"]);
+  });
+
   it("focuses the address field with its whole address selected from the focus address key, in the page and in the toolbar, ahead of the app's commands", async () => {
     const view: FakeWebView = await placeAsync();
     const selection = (): [boolean, number | null, number | null, number] => [document.activeElement === field(), field().selectionStart, field().selectionEnd, field().value.length];

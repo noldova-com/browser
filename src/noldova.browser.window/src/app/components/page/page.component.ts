@@ -17,6 +17,7 @@ import { Announcer, DialogService } from "@noldova/ui.components.angular";
 import { Resources } from "../../../resources.ts";
 import { EntryAnswer } from "../../enums/entry-answer.ts";
 import { PaneState } from "../../enums/pane-state.ts";
+import type { OpenedPage } from "../../models/opened-page.ts";
 import type { PaneTab } from "../../models/pane-tab.ts";
 import type { RefusedPage } from "../../models/refused-page.ts";
 import { MarkLayer } from "../../services/mark-layer.ts";
@@ -60,7 +61,7 @@ export class PageComponent {
   private trackedView: IWebViewHandle | null = null;
   private markLayer: MarkLayer | null = null;
   private isDestroyed: boolean = false;
-  private readonly isMarked: Signal<boolean> = computed(() => this.mark() !== null);
+  private readonly isMarked: Signal<boolean> = computed(() => !Object.isNull(this.mark()));
   private readonly zoom: WritableSignal<number> = signal(1);
 
   protected readonly pageId: string = `${Resources.pageId}${PageComponent.count++}`;
@@ -74,7 +75,7 @@ export class PageComponent {
   protected readonly placedTab: Signal<PaneTab | null> = computed(() => {
     const tab = this.tab();
     this.version();
-    return tab !== null && tab.view !== null && tab.showsPage && this.refusal() === null ? tab : null;
+    return !Object.isNull(tab) && !Object.isNull(tab.view) && tab.showsPage && Object.isNull(this.refusal()) ? tab : null;
   });
   protected readonly refusal: Signal<RefusedPage | null> = computed(() => this.pages.refusals().get(this.instance()) ?? null);
   protected readonly refusedAddress: Signal<string | null> = computed(() => this.refusal()?.url ?? null);
@@ -88,15 +89,15 @@ export class PageComponent {
     const tab = this.tab();
     this.version();
     const activity: PageActivity | undefined = this.pages.activities().get(this.instance());
-    return tab === null || activity === undefined ? null : activity;
+    return Object.isNull(tab) || Object.isUndefined(activity) ? null : activity;
   });
   protected readonly mark: Signal<PageActivity | null> = computed(() => {
     const tab = this.placedTab();
     this.version();
-    if (tab === null)
+    if (Object.isNull(tab))
       return null;
     const activity: PageActivity | undefined = this.pages.activities().get(this.instance());
-    return activity !== undefined && (activity.action === PageAction.Clicking || activity.action === PageAction.Typing) && activity.box !== null ? activity : null;
+    return !Object.isUndefined(activity) && (activity.action === PageAction.Clicking || activity.action === PageAction.Typing) && !Object.isNull(activity.box) ? activity : null;
   });
 
   public readonly instance = input.required<string>();
@@ -108,7 +109,7 @@ export class PageComponent {
       this.isDestroyed = true;
       this.release();
       const tab = this.tab();
-      if (tab !== null)
+      if (!Object.isNull(tab))
         this.pages.release(tab);
     });
     effect(() => {
@@ -118,7 +119,7 @@ export class PageComponent {
     // Noldova Desktop brings an open document forward rather than creating it again, so a page opened again under the instance of a tab that
     // couldn't open shows here.
     effect(() => {
-      const opened: { readonly instance: string } | null = this.pages.opened();
+      const opened: OpenedPage | null = this.pages.opened();
       untracked(() => {
         if (opened?.instance === this.instance() && this.isForgotten()) {
           this.isForgotten.set(false);
@@ -144,28 +145,28 @@ export class PageComponent {
     });
     effect(onCleanup => {
       const tab = this.tab();
-      if (tab !== null)
+      if (!Object.isNull(tab))
         onCleanup(tab.controller.onChange(() => this.version.update(t => t + 1)));
     });
     effect(onCleanup => {
       const tab = this.tab();
-      if (tab === null)
+      if (Object.isNull(tab))
         return;
       this.zoom.set(tab.controller.zoom);
       onCleanup(tab.controller.onZoom(t => this.zoom.set(t)));
     });
     effect(onCleanup => {
       const tab = this.tab();
-      if (tab !== null)
+      if (!Object.isNull(tab))
         onCleanup(tab.controller.onKey(t => untracked(() => this.runKey(tab, t.name))));
     });
     effect(() => {
-      if (this.placedTab() !== null && this.host.querySelector(Resources.pageStateSelector)?.contains(this.host.ownerDocument.activeElement) === true)
+      if (!Object.isNull(this.placedTab()) && this.host.querySelector(Resources.pageStateSelector)?.contains(this.host.ownerDocument.activeElement) === true)
         untracked(() => this.focusToolbar());
     });
     effect(() => {
       const activity: PageActivity | null = this.activity();
-      if ((activity === null || activity.state === PageActivityState.Asking)
+      if ((Object.isNull(activity) || activity.state === PageActivityState.Asking)
         && this.host.querySelector(Resources.agentBarSelector)?.contains(this.host.ownerDocument.activeElement) === true)
         untracked(() => this.focusToolbar());
     });
@@ -173,7 +174,7 @@ export class PageComponent {
       const isMarked: boolean = this.isMarked();
       const view: IWebViewHandle | null = this.placedTab()?.view ?? null;
       const mark: PageActivity | null = untracked(() => this.mark());
-      if (!isMarked || view === null || mark === null)
+      if (!isMarked || Object.isNull(view) || Object.isNull(mark))
         return;
       const layer: MarkLayer = MarkLayer.open(view, mark, untracked(() => this.zoom()), error => this.errors.handleError(error));
       this.markLayer = layer;
@@ -185,17 +186,17 @@ export class PageComponent {
     effect(() => {
       const mark: PageActivity | null = this.mark();
       const zoom: number = this.zoom();
-      if (mark !== null)
+      if (!Object.isNull(mark))
         untracked(() => this.markLayer?.update(mark, zoom));
     });
     afterRenderEffect(() => {
       this.version();
       const view: IWebViewHandle | null = this.tab()?.view ?? null;
-      const isPlaced: boolean = this.placedTab() !== null;
+      const isPlaced: boolean = !Object.isNull(this.placedTab());
       if (view !== this.trackedView) {
         this.release();
         this.trackedView = view;
-        if (view !== null)
+        if (!Object.isNull(view))
           this.tracker = new PlaceholderTracker(this.view().nativeElement, view);
       }
       this.tracker?.place(isPlaced);
@@ -204,10 +205,10 @@ export class PageComponent {
 
   protected pressKey(event: KeyboardEvent): void {
     const tab = this.tab();
-    if (tab === null || event.defaultPrevented || event.isComposing || event.repeat)
+    if (Object.isNull(tab) || event.defaultPrevented || event.isComposing || event.repeat)
       return;
     const name: string | null = PageKeys.nameOf(event, this.platform);
-    if (name !== null) {
+    if (!Object.isNull(name)) {
       event.preventDefault();
       this.runKey(tab, name);
     }
@@ -224,7 +225,7 @@ export class PageComponent {
     if (state === PaneState.Empty || state === PaneState.Unavailable)
       return;
     const bar: FindBarComponent | undefined = this.findBar();
-    if (bar === undefined)
+    if (Object.isUndefined(bar))
       this.isFinding.set(true);
     else
       bar.focus();
@@ -270,7 +271,7 @@ export class PageComponent {
   protected answerRefusal(tab: PaneTab, url: string | null): void {
     this.pages.dismissRefusal(this.instance());
     this.focusToolbar();
-    if (url !== null)
+    if (!Object.isNull(url))
       this.goTo(tab, url);
   }
 
@@ -295,7 +296,7 @@ export class PageComponent {
 
   private show(instance: string): void {
     this.pages.showAsync(instance).then(tab => {
-      if (tab === null)
+      if (Object.isNull(tab))
         this.isForgotten.set(!this.isDestroyed);
       else if (this.isDestroyed)
         this.pages.release(tab);
@@ -320,6 +321,8 @@ export class PageComponent {
       this.toolbar()?.focusAddress();
     else if (name === Resources.findKey)
       this.openFind(tab);
+    else if (name === Resources.stopKey)
+      this.toolbar()?.stopPage();
   }
 
   private release(): void {

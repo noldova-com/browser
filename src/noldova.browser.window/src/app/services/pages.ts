@@ -24,6 +24,7 @@ import { PageActivityEventMalformedException } from "../exceptions/page-activity
 import { PageInAnotherWindowException } from "../exceptions/page-in-another-window.exception.ts";
 import { PageOnOtherWorkspaceException } from "../exceptions/page-on-other-workspace.exception.ts";
 import { PagesInactiveException } from "../exceptions/pages-inactive.exception.ts";
+import { OpenedPage } from "../models/opened-page.ts";
 import { OpeningPage } from "../models/opening-page.ts";
 import { PageShowing } from "../models/page-showing.ts";
 import type { PaneStatus } from "../models/pane-status.ts";
@@ -58,7 +59,7 @@ export class Pages {
   private readonly refused: WritableSignal<ReadonlyMap<string, RefusedPage>> = signal(new Map<string, RefusedPage>());
   private readonly heldElsewhere: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
-  private readonly lastOpened: WritableSignal<{ readonly instance: string } | null> = signal(null);
+  private readonly lastOpened: WritableSignal<OpenedPage | null> = signal(null);
   private readonly opening: Map<string, OpeningPage> = new Map<string, OpeningPage>();
   private readonly showing: Set<PageShowing> = new Set<PageShowing>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
@@ -76,7 +77,7 @@ export class Pages {
   public readonly refusals: Signal<ReadonlyMap<string, RefusedPage>> = this.refused.asReadonly();
   public readonly elsewhere: Signal<ReadonlySet<string>> = this.heldElsewhere.asReadonly();
   // A new object each open, so a tab that couldn't open its page notices it opened again; a page another window held shows through elsewhere.
-  public readonly opened: Signal<{ readonly instance: string } | null> = this.lastOpened.asReadonly();
+  public readonly opened: Signal<OpenedPage | null> = this.lastOpened.asReadonly();
 
   public constructor(context: IWindowPartContext) {
     this.context = context;
@@ -196,7 +197,7 @@ export class Pages {
       this.lastAsked.set(opener.id, instance);
     this.agentPages.openTabs([instance]);
     if (!this.heldElsewhere().has(instance))
-      this.lastOpened.set({ instance });
+      this.lastOpened.set(new OpenedPage(instance));
     return instance;
   }
 

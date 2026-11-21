@@ -78,5 +78,8 @@
     { "name": "newPage", "keys": ["Mod+T"] },
     { "name": "focusAddress", "keys": ["Mod+L"] },
     { "name": "find", "keys": ["Mod+F"] }
+  ],
+  "loadingKeys": [
+    { "name": "stop", "keys": ["Escape"] }
   ]
 }

@@ -83,6 +83,10 @@ describe("webViews.json", () => {
       { name: "focusAddress", keys: ["Mod+L"] }, { name: "find", keys: ["Mod+F"] }] });
   });
 
+  it("declares Escape as the loading key that stops a loading page, which reaches the page once it has loaded", async () => {
+    expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ loadingKeys: [{ name: "stop", keys: ["Escape"] }] });
+  });
+
   it("declares the debugging calls and the events the built tools send and take, and takes its views' new windows", async () => {
     const methods: readonly string[] = ["Page.enable", "Page.getFrameTree", "Page.getNavigationHistory", "Page.getLayoutMetrics", "Page.createIsolatedWorld",
       "Page.captureScreenshot", "Runtime.enable", "Runtime.disable", "Runtime.discardConsoleEntries", "Runtime.addBinding", "Runtime.callFunctionOn", "Runtime.releaseObject", "Log.enable",
