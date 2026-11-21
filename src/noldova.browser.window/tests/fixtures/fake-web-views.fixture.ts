@@ -404,9 +404,13 @@ export class FakeWebViews {
   private held: Promise<void> | null = null;
 
   public readonly views: FakeWebView[] = [];
+  public readonly names: (string | null)[] = [];
 
   public constructor() {
-    this.webViews.answer("openAsync", (pane, profileKey) => this.openAsync(pane, profileKey));
+    this.webViews.answer("openAsync", (pane, profileKey, options) => {
+      this.names.push(options?.name ?? null);
+      return this.openAsync(pane, profileKey);
+    });
   }
 
   public script(url: string, script: NavigationScript): void {

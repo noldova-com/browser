@@ -910,6 +910,22 @@ describe("Pages", () => {
     ]);
   });
 
+  it("opens each view named as the app's browser for its refused pages, or as this browser while the app's name is unknown", async () => {
+    let answerName: (name: JsonValue) => void = () => undefined;
+    context = new WindowContext();
+    context.answerRequest = (method, parameters) => method === BrowserMethods.readAppName ? new Promise<JsonValue>(t => {
+      answerName = t;
+    }) : declared(method, parameters);
+    pages = new Pages(context);
+
+    await openAsync();
+    answerName(WindowContext.appName);
+    await vi.waitFor(() => expect(pages.appName()).toBe(WindowContext.appName));
+    await openAsync();
+
+    expect(context.views.names).toEqual(["This browser", `${WindowContext.appName}'s browser`]);
+  });
+
   it("keeps the address the record has while the page shows none yet", async () => {
     const tab = await openAsync("https://docs.example.com/");
 
