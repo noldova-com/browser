@@ -32,7 +32,7 @@ export class LoadWaiter implements Disposable {
       else if (event.method === Resources.frameNavigatedEvent) {
         const frame: JsonValue | undefined = event.params[Resources.frameField];
         isNewDocument ||= within !== null && LoadWaiter.idOf(frame) === within.frameId;
-        isLeft ||= left !== null && LoadWaiter.idOf(frame) === left.frameId && LoadWaiter.loaderOf(frame) !== left.documentId;
+        isLeft ||= left !== null && LoadWaiter.isAnotherDocument(frame, left);
       }
       else if (event.method === Resources.navigatedWithinDocumentEvent && !isNewDocument && within !== null && event.params[Resources.frameIdField] === within.frameId
         && event.params[Resources.urlField] === within.url)
@@ -70,8 +70,9 @@ export class LoadWaiter implements Disposable {
     return JsonShapes.isObject(frame) ? frame[Resources.idField] : undefined;
   }
 
-  private static loaderOf(frame: JsonValue | undefined): JsonValue | undefined {
-    return JsonShapes.isObject(frame) ? frame[Resources.loaderIdField] : undefined;
+  // Whether the navigated frame is the one the move leaves, now with another document.
+  private static isAnotherDocument(frame: JsonValue | undefined, left: FrameFacts): boolean {
+    return JsonShapes.isObject(frame) && frame[Resources.idField] === left.frameId && frame[Resources.loaderIdField] !== left.documentId;
   }
 
   public [Symbol.dispose](): void {
