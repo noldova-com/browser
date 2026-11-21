@@ -101,6 +101,7 @@ describe.each(SCENARIOS)("$name", (scenario: IScenario) => {
     bench.surface.answer("Page.getLayoutMetrics", { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 }, cssContentSize: { width: 800, height: 1200 },
       visualViewport: { clientWidth: 800 } });
     bench.surface.answer("Page.captureScreenshot", { data: "iVBORw0KGgo=" });
+    bench.surface.answer("Page.getNavigationHistory", { currentIndex: 1, entries: [{ url: "https://shop.test/cart/" }, { url: "https://shop.test/next" }] });
     bench.surface.afterNavigation = (viewId: string): void => bench.surface.emitProtocolEvent(viewId, "Page.loadEventFired", {});
     tool = scenario.create(bench.kit);
     bench.checkAs(tool.descriptor);

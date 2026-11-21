@@ -9,6 +9,9 @@
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
 import type { IRuntimeWebViews } from "@noldova/desktop.runtime";
 
+import type { ViewCalls } from "../services/view-calls.ts";
+import type { JsonValue } from "../types/json-value.ts";
+import type { CallOptions } from "./call-options.ts";
 import type { FrameFacts } from "./frame-facts.ts";
 import { HistoryTarget } from "./history-target.ts";
 import { NavigationMove } from "./navigation-move.ts";
@@ -32,5 +35,11 @@ export class UrlMove extends NavigationMove {
 
   public async goAsync(webViews: IRuntimeWebViews, viewId: string): Promise<WebViewNavigation> {
     return await webViews.navigateAsync(viewId, this.url);
+  }
+
+  public async isLandedAsync(calls: ViewCalls, viewId: string, left: FrameFacts, _target: HistoryTarget, landed: FrameFacts, options: CallOptions): Promise<boolean> {
+    const [current, entries]: [number, readonly JsonValue[]] = await NavigationMove.readHistoryAsync(calls, viewId, options);
+    const before: JsonValue | undefined = entries[current - 1];
+    return before === undefined || landed.url === left.url || NavigationMove.readEntryUrl(before) === left.url;
   }
 }
