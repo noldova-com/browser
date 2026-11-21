@@ -15,6 +15,7 @@ import { ArgumentTooLongException } from "../../src/exceptions/argument-too-long
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
 import { NotSubmittedException } from "../../src/exceptions/not-submitted.exception.ts";
+import { OutcomeUncertainException } from "../../src/exceptions/outcome-uncertain.exception.ts";
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
@@ -202,6 +203,21 @@ describe("TypeTool", () => {
     const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(99), text: "red shoes" }));
 
     expect(result.structured).toEqual({ page: { url: "https://shop.test/cart/", title: "Cart" }, element: { role: "generic", name: "", isSecret: true } });
+  });
+
+  it.each<[string, string, string]>([
+    ["inserted text", "red", "Input.insertText"],
+    ["an empty text's Delete", "", "Input.dispatchKeyEvent"]
+  ])("ends as uncertain, pressing no Enter, when the page went to another document after its last read, found after the %s", async (_case: string, text: string, input: string) => {
+    bench.checkAs(tool.descriptor);
+    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(sent(input).length === 0 ? "L1" : "L2"));
+    const progress: ActionProgress = new ActionProgress(() => undefined);
+
+    const failure: ToolFailure | null = await tool.callAsync(bench.call({ reference: reference(ShopPage.SEARCH), text, submit: true }), progress)
+      .then(() => null, (error: unknown) => ToolFailures.forCall(error, progress, tool.descriptor.isResumable !== true));
+
+    expect([failure, sent("Input.dispatchKeyEvent").filter(t => t["key"] === "Enter")])
+      .toEqual([new OutcomeUncertainException(ToolFailureCode.Stale, null).toFailure(), []]);
   });
 
   it("clears the field for an empty text: it selects what the field holds and presses Delete, inserting nothing", async () => {

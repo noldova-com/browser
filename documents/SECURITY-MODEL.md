@@ -377,6 +377,9 @@ A high-risk request has an action of its own, the tool's action with `Secret` af
 A click, typing or key reads its element's risk again right before each action: typing after it focuses the field, a click before each press, a key before it sends, and typing that submits reads the form again before its Enter.
 If the page made the element a secret field, or gave the form it would submit a secret field, while the card waited or in a handler of the focus, scroll, move or an earlier press, the risk has risen to high, so the action isn't sent, the call ends with `browser.riskRose`, or `browser.notSubmitted` when only the Enter was held back, and the agent's next call asks at high risk.
 Only the round trip between that read and the action is left for a page's script to change the element in.
+The same round trip is left for the page to go to another document, by its own timer or redirect, or the person's click, so an input can land on a page the card didn't name.
+Typing can't navigate by itself, so `browser_type` reads the frame's document again after its text, before any Enter, and ends the call as `OutcomeUncertain` when it changed.
+A click, Enter or another key can navigate by itself, through a link, a form or the page's own key handlers, so a later document can't show that the page moved first, and their window stays open until Noldova Desktop checks the page right before each input, as [desktop#455](https://github.com/noldova-com/desktop/issues/455) asks.
 A click in a field that turned secret keeps going, since a click in a secret field is medium risk.
 Whether a low-risk action asks is the app's policy: an app may ask, and offer to allow that tool's low-risk actions for the rest of the conversation.
 Which calls on the view a tool uses to classify an action is in [ARCHITECTURE.md](ARCHITECTURE.md#tools).
