@@ -1059,6 +1059,18 @@ describe("PageComponent", () => {
     expect(context.closed).toEqual(["4a1c7e2b-9d3f-4e8a-b6c5-0f1e2d3c4b5a"]);
   });
 
+  it("shows a page opened again under the instance of a restored page it couldn't open", async () => {
+    const instance: string = "4a1c7e2b-9d3f-4e8a-b6c5-0f1e2d3c4b5a";
+    await showAsync(instance);
+    const forgotten: string | undefined = heading();
+
+    pages.open("workspace-1", "https://one.example/", instance);
+
+    await vi.waitFor(() => expect(surface().views.map(t => [t.profileKey, t.calls[0]])).toEqual([["workspace-1", "navigate https://one.example/"]]));
+    await vi.waitFor(() => expect(element.querySelector("nol-browser-toolbar")).not.toBeNull());
+    expect(forgotten).toBe("This page can't open again");
+  });
+
   it("says another window has a restored page, without a toolbar or view, and shows the page once this window claims it on an open", async () => {
     const instance: string = "4a1c7e2b-9d3f-4e8a-b6c5-0f1e2d3c4b5a";
     const record = { instance, profileKey: "workspace-2", url: "https://status.example.com/" };

@@ -54,6 +54,7 @@ export class Pages {
   private readonly refused: WritableSignal<ReadonlyMap<string, RefusedPage>> = signal(new Map<string, RefusedPage>());
   private readonly heldElsewhere: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
   private readonly shownInstances: WritableSignal<ReadonlySet<string>> = signal(new Set<string>());
+  private readonly lastOpened: WritableSignal<{ readonly instance: string } | null> = signal(null);
   private readonly opening: Map<string, boolean> = new Map<string, boolean>();
   private readonly firstLoads: Map<PaneTab, () => void> = new Map<PaneTab, () => void>();
   private readonly renamers: Set<() => void> = new Set<() => void>();
@@ -68,6 +69,8 @@ export class Pages {
   public readonly activities: Signal<ReadonlyMap<string, PageActivity>> = this.current.asReadonly();
   public readonly refusals: Signal<ReadonlyMap<string, RefusedPage>> = this.refused.asReadonly();
   public readonly elsewhere: Signal<ReadonlySet<string>> = this.heldElsewhere.asReadonly();
+  // A new object each open, so a tab that couldn't open its page notices it opened again; a page another window held shows through elsewhere.
+  public readonly opened: Signal<{ readonly instance: string } | null> = this.lastOpened.asReadonly();
 
   public constructor(context: IWindowPartContext) {
     this.context = context;
@@ -76,6 +79,7 @@ export class Pages {
     this.stopActivities = context.onEvent(BrowserEvents.pageActivity, t => this.receiveActivity(t));
     this.stopClosing = context.onDocumentClosed(Resources.pageDocument, t => {
       this.markElsewhere(t, false);
+      this.pending.delete(t);
       this.dismissRefusal(t);
       this.closed.add(t);
       this.agentPages.closeTab(t);
@@ -180,6 +184,8 @@ export class Pages {
     if (opener !== null)
       this.lastAsked.set(opener.id, instance);
     this.agentPages.openTabs([instance]);
+    if (!this.heldElsewhere().has(instance))
+      this.lastOpened.set({ instance });
     return instance;
   }
 
