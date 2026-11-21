@@ -46,8 +46,15 @@ test.describe("a refused link in a frame", () => {
     }, { message: "The frame never saw the pointer over its link." }).toEqual(["Out\nOver"]);
     await app.window.mouse.click(box.x + 50, box.y + 20);
 
+    // PROBE desktop#472, not for merge: print views.log on a failure, since this run keeps no report.
+    try {
     await expect.poll(() => app.viewPages.frameTextsAsync(docs.url("/")), { message: "The frame never showed the refusal, as the frames' texts." })
       .toEqual([expect.stringContaining(`${AppBrowser.productName}'s browser doesn't open ${other.origin}`)]);
+    }
+    catch (error: unknown) {
+      console.log(`PROBE472 views.log\n${(await app.viewPages.takeLogAsync()).join("\n")}\nPROBE472 END`);
+      throw error;
+    }
     expect([await app.viewPages.frameTextsAsync(docs.url("/")), await app.viewPages.runAtAsync(docs.url("/"), FRAME_BOX)], "The frame's refusal lost its text or its box.")
       .toEqual([[expect.stringContaining(`Its address isn't one ${AppBrowser.productName}'s browser opens.`)], frameBox]);
     expect([await app.window.locator(PAGE_STATE_HEADING).allTextContents(), (await app.viewPages.listAsync()).map(t => t.url)], "The pane left the page for the frame's refusal.")
