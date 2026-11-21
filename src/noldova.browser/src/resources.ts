@@ -195,6 +195,7 @@ export class Resources {
   public static readonly maximumDeadlineMilliseconds: number = 60_000;
   public static readonly waitAnswerMarginMilliseconds: number = 5_000;
   public static readonly urlField: string = "url";
+  public static readonly urlFragmentField: string = "urlFragment";
   public static readonly titleField: string = "title";
   public static readonly roleField: string = "role";
   public static readonly nameField: string = "name";

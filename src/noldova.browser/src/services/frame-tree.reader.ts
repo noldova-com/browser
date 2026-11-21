@@ -19,7 +19,7 @@ export class FrameTreeReader {
     const frame: JsonValue | undefined = JsonShapes.isObject(tree) ? tree[Resources.frameField] : undefined;
     if (!JsonShapes.isObject(frame))
       throw new MalformedReplyException();
-    const url: JsonValue | undefined = frame[Resources.urlField];
+    const url: JsonValue | undefined = FrameTreeReader.urlOf(frame);
     const origin: JsonValue | undefined = frame[Resources.securityOriginField];
     const documentId: JsonValue | undefined = frame[Resources.loaderIdField];
     const frameId: JsonValue | undefined = frame[Resources.idField];
@@ -27,5 +27,12 @@ export class FrameTreeReader {
     if (typeof url !== "string" || typeof origin !== "string" || typeof documentId !== "string" || typeof frameId !== "string")
       throw new MalformedReplyException();
     return new FrameFacts(url, PageOrigin.of(origin), documentId, frameId, typeof failed === "string" ? failed : null);
+  }
+
+  // A frame's whole URL: the protocol gives its fragment apart, in `urlFragment`, with its "#".
+  public static urlOf(frame: JsonObject): JsonValue | undefined {
+    const url: JsonValue | undefined = frame[Resources.urlField];
+    const fragment: JsonValue | undefined = frame[Resources.urlFragmentField];
+    return typeof url === "string" && typeof fragment === "string" ? `${url}${fragment}` : url;
   }
 }

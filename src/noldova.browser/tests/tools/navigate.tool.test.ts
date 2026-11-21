@@ -27,8 +27,11 @@ import type { JsonObject } from "../../src/types/json-value.ts";
 import { CallFailures } from "../fixtures/call-failures.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
+// The engine gives a URL's fragment apart from the frame's URL.
 function frame(url: string, origin: string, loaderId: string): JsonObject {
-  return { frameTree: { frame: { id: "F1", loaderId, url, securityOrigin: origin } } };
+  const [address, fragment]: string[] = url.split("#");
+  const parts: JsonObject = fragment === undefined ? {} : { urlFragment: `#${fragment}` };
+  return { frameTree: { frame: { id: "F1", loaderId, url: address ?? url, securityOrigin: origin, ...parts } } };
 }
 
 describe("NavigateTool", () => {
@@ -386,6 +389,36 @@ describe("NavigateTool", () => {
     const result: ToolResult = await running;
 
     expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toEqual([]);
+  });
+
+  it("answers with the URL's fragment, which the engine gives apart from the frame's URL", async () => {
+    bench.surface.afterNavigation = (viewId: string): void => {
+      land();
+      shown = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://docs.example/guide", urlFragment: "#setup", securityOrigin: "https://docs.example" } } };
+      bench.surface.emitProtocolEvent(viewId, "Page.navigatedWithinDocument", { frameId: "F1", url: "https://docs.example/guide#setup" });
+    };
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ url: "https://docs.example/guide#setup" }));
+
+    expect(result.content[1]?.value).toBe("URL: https://docs.example/guide#setup\nTitle: Next steps");
+  });
+
+  it("lands going back to an entry at a fragment", async () => {
+    pages = ["https://docs.example/guide#setup", "https://docs.example/next"];
+    shown = frame("https://docs.example/next", "https://docs.example", "L1");
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ action: "back" }));
+
+    expect(result.content[1]?.value).toBe("URL: https://docs.example/guide#setup\nTitle: Next steps");
+  });
+
+  it("lands opening a URL from a page at a fragment, whose history entry keeps it", async () => {
+    pages = ["https://docs.example/start", "https://docs.example/guide#setup"];
+    shown = frame("https://docs.example/guide#setup", "https://docs.example", "L1");
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }));
+
+    expect(result.content[1]?.value).toBe("URL: https://docs.example/next\nTitle: Next steps");
   });
 
   it("waits on a reload for its load, which a navigation within the document doesn't end", async () => {

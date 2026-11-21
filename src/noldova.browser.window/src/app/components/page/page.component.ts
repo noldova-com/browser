@@ -115,6 +115,17 @@ export class PageComponent {
       const instance = this.instance();
       untracked(() => this.show(instance));
     });
+    // Noldova Desktop brings an open document forward rather than creating it again, so a page opened again under the instance of a tab that
+    // couldn't open shows here.
+    effect(() => {
+      const opened: { readonly instance: string } | null = this.pages.opened();
+      untracked(() => {
+        if (opened?.instance === this.instance() && this.isForgotten()) {
+          this.isForgotten.set(false);
+          this.show(opened.instance);
+        }
+      });
+    });
     let wasElsewhere: boolean = false;
     effect(() => {
       const isElsewhere: boolean = this.isElsewhere();
