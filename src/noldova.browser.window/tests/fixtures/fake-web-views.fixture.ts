@@ -17,6 +17,7 @@ import { ViewCloseEvent } from "../../src/app/models/view-close-event.ts";
 import { ViewCrashEvent } from "../../src/app/models/view-crash-event.ts";
 import type { ViewEvent } from "../../src/app/models/view-event.ts";
 import { ViewLoadFailureEvent } from "../../src/app/models/view-load-failure-event.ts";
+import { ViewNewWindowEvent } from "../../src/app/models/view-new-window-event.ts";
 import { ViewRefusalEvent } from "../../src/app/models/view-refusal-event.ts";
 import { ViewRequestRefusalEvent } from "../../src/app/models/view-request-refusal-event.ts";
 import { ViewStateEvent } from "../../src/app/models/view-state-event.ts";
@@ -48,6 +49,7 @@ export class WebViewValues {
 
 export class FakeWebView implements IWebViewHandle {
   private static readonly MODULE: string = "browser";
+  private static readonly FOREGROUND_TAB: string = "foreground-tab";
   private static readonly CLOSED: string = "The web view is closed.";
   private static readonly KINDS: Readonly<Record<ViewEvent["kind"], WebViewEventKind>> = {
     [ViewEventKind.Closed]: WebViewEventKind.Closed,
@@ -147,8 +149,16 @@ export class FakeWebView implements IWebViewHandle {
 
   public emit(event: ViewEvent): void {
     const { kind, ...details } = event;
-    const written: WebViewDetails = event instanceof ViewRequestRefusalEvent ? { ...details, request: Resources.refusedRequestNames[event.request] } : details;
-    this.send(new WebViewEvent(FakeWebView.MODULE, this.id, FakeWebView.KINDS[kind], written));
+    this.send(new WebViewEvent(FakeWebView.MODULE, this.id, FakeWebView.KINDS[kind], FakeWebView.write(event, details)));
+  }
+
+  private static write(event: ViewEvent, details: WebViewDetails): WebViewDetails {
+    if (event instanceof ViewRequestRefusalEvent)
+      return { ...details, request: Resources.refusedRequestNames[event.request] };
+    if (event instanceof ViewNewWindowEvent)
+      return { address: event.address, hadRecentInput: event.hadRecentInput, origin: event.origin,
+        disposition: event.isBackgroundTab ? Resources.backgroundTabDisposition : FakeWebView.FOREGROUND_TAB, fromPress: event.isFromPress };
+    return details;
   }
 
   public emitOther(kind: WebViewEventKind, details: WebViewDetails): void {
