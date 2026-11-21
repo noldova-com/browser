@@ -14,7 +14,7 @@ import { WebViewEventKind } from "@noldova/desktop.protocol";
 import { LinkPlace, WindowPartTokens } from "@noldova/desktop.window";
 import { Announcer, DefaultTheme, ThemeMode } from "@noldova/ui.components.angular";
 import { AppearanceFixture } from "@noldova/ui.components.angular/testing";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { userEvent } from "vitest/browser";
 
 import { PageComponent } from "../../../../src/app/components/page/page.component.ts";
@@ -1086,6 +1086,24 @@ describe("PageComponent", () => {
 
     expect([heading(), element.querySelector("nol-browser-toolbar"), surface().views.map(t => t.isClosed)]).toEqual(["This page moved to another window", null, [true]]);
   });
+
+  for (const isInside of [true, false]) {
+    it(`moves the focus ${isInside ? "from the address field to the state's Close" : "nowhere from outside the page"} when another window takes the shown page`, async () => {
+      const outside: HTMLButtonElement = document.body.appendChild(document.createElement("button"));
+      onTestFinished(() => outside.remove());
+      const instance: string = pages.open("workspace-1", "https://one.example/");
+      await showAsync(instance);
+      context.openDocuments = [instance];
+      answerWith(BrowserMethods.holdPages, () => ({ agents: [], refused: [instance] }));
+      (isInside ? field() : outside).focus();
+
+      await pages.reportOpenAsync();
+      await fixture?.whenStable();
+
+      const close: HTMLButtonElement = find<HTMLButtonElement>("button.nol-browser-page-state-action");
+      expect([heading(), close.textContent?.trim(), document.activeElement === close, document.activeElement === outside]).toEqual(["This page moved to another window", "Close", isInside, !isInside]);
+    });
+  }
 
   it("says a restored page whose record the runtime part can't read can't open again, without a toolbar, closes its document on Close, and hands the failure to the error handler", async () => {
     const failure: Error = new Error("The database is closed.");

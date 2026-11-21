@@ -97,6 +97,7 @@ Its look follows the app's design, whose rules this section writes out.
   An `instance` whose record outlived its tab, such as a page open at quit that no window restored, is no window's, so it opens here, at the address its record keeps when the run asks for the same workspace and no address, as a new tab when the page never went anywhere; a page Noldova Desktop refuses to open lets go of the claim, with `browser.letGoPage`, and keeps its record.
   A part that closed while its claim was on its way opens nothing, and lets go of the page when the claim made it the window's.
   A restored tab claims its page as it first shows, since another window may claim it before this window reports its tabs: a page another window has opens no view, and its tab says "This page moved to another window", with what to do and Close, which stays true once that window lets the page go.
+  A shown page that another window takes while the focus is inside it, such as in its address field, hands the focus to that Close.
   Such a tab holds nothing here, so a later run that opens its `instance` claims it again, and once this window has the page the tab opens its view, at the address the record keeps.
   The module opens no page by itself.
 - **Title:** each page's instance is a new UUID unless the app picked one, and its tab is titled with its address, or "New tab" without one, until the page has a title; then the page's title, or its address while it has none.
