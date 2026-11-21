@@ -7,7 +7,7 @@
  */
 
 // What came of an address the person entered: the page went there, Noldova Desktop refused its navigation, the page stayed, as for an
-// address the runtime part's check refused or a later entry that took its place, or the person left it for another navigation or Escape.
+// address the runtime part's check refused or a later entry that took its place, or it was left for another navigation, Escape or an agent's call.
 export const EntryAnswer = {
   Gone: "Gone",
   Refused: "Refused",
