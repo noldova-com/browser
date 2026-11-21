@@ -23,6 +23,12 @@ describe("FrameTreeReader", () => {
     expect(FrameTreeReader.read(reply)).toStrictEqual(new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1"));
   });
 
+  it("reads the top frame's URL with its fragment, which the protocol gives apart", () => {
+    const reply: JsonObject = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://docs.example/guide", urlFragment: "#setup", securityOrigin: "https://docs.example" } } };
+
+    expect(FrameTreeReader.read(reply).url).toBe("https://docs.example/guide#setup");
+  });
+
   it("reads a blank tab's and a data URL's origin as the module's opaque origin", () => {
     const read = (url: string, securityOrigin: string): string => FrameTreeReader.read({ frameTree: { frame: { id: "F1", loaderId: "L1", url, securityOrigin } } }).origin;
 

@@ -67,6 +67,11 @@ describe("ConsoleEventsReader", () => {
     expect(ConsoleEventsReader.read("Page.frameNavigated", { frame: { id: "F2", parentId: "F1", url: "https://ads.test/", securityOrigin: "https://ads.test" } })).toBeNull();
   });
 
+  it("reads a navigation of the top frame to a URL with a fragment, which the protocol gives apart", () => {
+    expect(ConsoleEventsReader.read("Page.frameNavigated", { frame: { id: "F1", url: "https://shop.test/cart", urlFragment: "#items", securityOrigin: "https://shop.test" } }))
+      .toStrictEqual(new ConsoleNavigationEvent("https://shop.test/cart#items", "https://shop.test"));
+  });
+
   it("reads a navigation to a page with an opaque origin as the module's opaque origin", () => {
     expect([
       ConsoleEventsReader.read("Page.frameNavigated", { frame: { id: "F1", url: "about:blank", securityOrigin: "://" } }),
