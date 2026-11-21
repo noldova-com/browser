@@ -20,7 +20,15 @@ describe("FrameTreeReader", () => {
       childFrames: [{ frame: { id: "F2", loaderId: "L2", url: "https://ads.example/", securityOrigin: "https://ads.example" } }]
     } };
 
-    expect(FrameTreeReader.read(reply)).toStrictEqual(new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1"));
+    expect(FrameTreeReader.read(reply)).toStrictEqual(new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1", null));
+  });
+
+  it("reads the address a failed load couldn't reach, beside the error page's own", () => {
+    const reply: JsonObject = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "chrome-error://chromewebdata/", unreachableUrl: "https://docs.example/guide", securityOrigin: "://" } } };
+
+    const facts: FrameFacts = FrameTreeReader.read(reply);
+
+    expect([facts.url, facts.origin, facts.failedUrl]).toEqual(["chrome-error://chromewebdata/", "browser:opaque", "https://docs.example/guide"]);
   });
 
   it("reads a blank tab's and a data URL's origin as the module's opaque origin", () => {

@@ -12,8 +12,14 @@ import { FrameFacts } from "../../src/models/frame-facts.ts";
 
 describe("FrameFacts", () => {
   it("keeps its fields", () => {
-    const frameFacts: FrameFacts = new FrameFacts("https://shop.test/cart", "https://shop.test", "L1", "F1");
+    const frameFacts: FrameFacts = new FrameFacts("https://shop.test/cart", "https://shop.test", "L1", "F1", null);
 
-    expect([frameFacts.url, frameFacts.origin, frameFacts.documentId]).toEqual(["https://shop.test/cart", "https://shop.test", "L1"]);
+    expect([frameFacts.url, frameFacts.origin, frameFacts.documentId, frameFacts.address]).toEqual(["https://shop.test/cart", "https://shop.test", "L1", "https://shop.test/cart"]);
+  });
+
+  it("is at the address that failed to load while it shows the engine's error page", () => {
+    const frameFacts: FrameFacts = new FrameFacts("chrome-error://chromewebdata/", "browser:opaque", "L1", "F1", "https://shop.test/cart");
+
+    expect([frameFacts.url, frameFacts.address]).toEqual(["chrome-error://chromewebdata/", "https://shop.test/cart"]);
   });
 });

@@ -269,6 +269,22 @@ describe("NavigateTool", () => {
     expect(bench.methods).not.toContain("Page.getNavigationHistory");
   });
 
+  it("reloads a page that failed to load at the address that failed, judged by its origin, and answers once the page loaded there", async () => {
+    shown = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "chrome-error://chromewebdata/", unreachableUrl: "https://docs.example/guide", securityOrigin: "://" } } };
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ action: "reload" }));
+
+    expect([bench.permissions.requests[0]?.subject, bench.permissions.requests[0]?.details, bench.surface.navigations, result.content[1]?.value]).toEqual([
+      "https://docs.example",
+      [
+        { label: "From", kind: PermissionDetailKind.Text, value: "https://docs.example/guide" },
+        { label: "To", kind: PermissionDetailKind.Text, value: "https://docs.example/guide" }
+      ],
+      [{ viewId: "view-1", target: WebViewAction.Reload }],
+      "URL: https://docs.example/guide\nTitle: Next steps"
+    ]);
+  });
+
   it("goes back to a blank page as low risk", async () => {
     pages = ["about:blank", "https://docs.example/guide"];
 

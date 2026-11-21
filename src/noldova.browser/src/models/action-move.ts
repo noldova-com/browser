@@ -28,7 +28,7 @@ export class ActionMove extends NavigationMove {
 
   public async readTargetAsync(calls: ViewCalls, viewId: string, frame: FrameFacts, options: CallOptions): Promise<HistoryTarget> {
     if (this.action === WebViewAction.Reload)
-      return new HistoryTarget(null, frame.url);
+      return new HistoryTarget(null, frame.address);
     const [current, entries]: [number, readonly JsonValue[]] = await NavigationMove.readHistoryAsync(calls, viewId, options);
     const index: number = this.action === WebViewAction.Back ? current - 1 : current + 1;
     const entry: JsonValue | undefined = entries[index];
@@ -46,7 +46,7 @@ export class ActionMove extends NavigationMove {
     return await webViews.actAsync(viewId, this.action);
   }
 
-  public isLandedAsync(_calls: ViewCalls, _viewId: string, left: FrameFacts, target: HistoryTarget, landed: FrameFacts): Promise<boolean> {
-    return Promise.resolve(landed.url === (this.action === WebViewAction.Reload ? left.url : target.url));
+  public isLandedAsync(_calls: ViewCalls, _viewId: string, _left: FrameFacts, target: HistoryTarget, landed: FrameFacts): Promise<boolean> {
+    return Promise.resolve(landed.url === target.url);
   }
 }

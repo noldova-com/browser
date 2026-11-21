@@ -20,7 +20,7 @@ import type { JsonObject } from "../../src/types/json-value.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
 describe("UrlMove", () => {
-  const LEFT: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1");
+  const LEFT: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1", null);
   let bench: ToolBench;
 
   beforeEach(() => {
@@ -36,7 +36,7 @@ describe("UrlMove", () => {
   }
 
   function isLandedAsync(url: string): Promise<boolean> {
-    return new UrlMove(url).isLandedAsync(bench.kit.calls, ToolBench.VIEW, LEFT, new HistoryTarget(null, url), new FrameFacts(url, "https://docs.example", "L2", "F1"), options());
+    return new UrlMove(url).isLandedAsync(bench.kit.calls, ToolBench.VIEW, LEFT, new HistoryTarget(null, url), new FrameFacts(url, "https://docs.example", "L2", "F1", null), options());
   }
 
   it("targets its URL, with no history entry to check again, without asking the page", async () => {
@@ -48,7 +48,7 @@ describe("UrlMove", () => {
   });
 
   it("may stay in the frame's document, at its target's URL", () => {
-    const frame: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1");
+    const frame: FrameFacts = new FrameFacts("https://docs.example/guide", "https://docs.example", "L1", "F1", null);
 
     expect(new UrlMove("https://docs.example/guide#setup").readWithinDocument(frame, new HistoryTarget(null, "https://docs.example/guide#setup")))
       .toStrictEqual(new WithinDocumentMove("F1", "https://docs.example/guide#setup"));
