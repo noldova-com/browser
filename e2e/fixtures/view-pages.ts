@@ -78,7 +78,9 @@ interface IViewPageContents {
   isCrashed(): boolean;
   sendInputEvent(event: { type: "keyDown" | "keyUp"; keyCode: string; modifiers: string[] }): void;
   on(event: "did-navigate", listener: (event: unknown, url: string) => void): void;
-  on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean) => void): void;
+  on(event: "did-frame-navigate", listener: (event: unknown, url: string, code: number, status: string, isMainFrame: boolean, processId: number) => void): void;
+  on(event: "did-fail-load", listener: (event: unknown, code: number, description: string, url: string, isMainFrame: boolean) => void): void;
+  on(event: "render-process-gone", listener: (event: unknown, details: { readonly reason: string }) => void): void;
   on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
   on(event: "destroyed", listener: () => void): void;
   removeListener(event: "destroyed", listener: () => void): void;
@@ -178,6 +180,11 @@ export class ViewPages {
         };
         note("created");
         contents.on("did-start-navigation", (details: IViewNavigationStart) => note(`starts ${details.url}${details.isMainFrame ? "" : " in a frame"}${details.isSameDocument ? " in the same document" : ""}`));
+        contents.on("did-frame-navigate", (_navigated: unknown, url: string, code: number, _status: string, isMainFrame: boolean, processId: number) =>
+          note(`commits ${url} ${String(code)}${isMainFrame ? "" : " in a frame"} in process ${String(processId)}`));
+        contents.on("did-fail-load", (_failed: unknown, code: number, description: string, url: string, isMainFrame: boolean) =>
+          note(`fails ${url} ${String(code)} ${description}${isMainFrame ? "" : " in a frame"}`));
+        contents.on("render-process-gone", (_gone: unknown, details: { readonly reason: string }) => note(`renderer gone, ${details.reason}`));
         contents.on("destroyed", () => note("destroyed"));
         if (!watched.has(contents.session)) {
           watched.add(contents.session);
@@ -198,7 +205,8 @@ export class ViewPages {
     return new ViewPages(application);
   }
 
-  // The views' creations, navigation starts and destructions, each with its time, for a failed test's attachment.
+  // The views' creations, navigation starts, commits with their frame's process, failed loads, ended renderers and destructions, each with
+  // its time, for a failed test's attachment.
   public async takeLogAsync(): Promise<readonly string[]> {
     return this.application.evaluate(() => globalThis.noldovaViewLog?.splice(0) ?? []);
   }
@@ -442,6 +450,12 @@ export class ViewPages {
         throw new Error(`The view at ${pageUrl} has no renderer process of its own to end: ${pid}.`);
       process.kill(pid, "SIGKILL");
     }, url);
+  }
+
+  // Whether the main process saw the renderer of the views at the URL end; it fires `render-process-gone` in the same step.
+  public async isCrashedAtAsync(url: string): Promise<boolean> {
+    return this.application.evaluate(({ webContents }, pageUrl: string): boolean =>
+      webContents.getAllWebContents().some((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl && t.isCrashed()), url);
   }
 
   public async runAsync(script: string): Promise<string> {
