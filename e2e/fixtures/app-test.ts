@@ -16,9 +16,22 @@ import { TestApp } from "./test-app.ts";
 
 export { expect } from "playwright/test";
 
-export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; waitsForStart: boolean; expectedViolations: readonly string[]; servers: FixtureServers; loopbackProxy: RecordingProxy; app: TestApp; guard: LoopbackGuard }>({
+// The fixtures every spec gets, and the options a spec may set with test.use.
+interface IAppFixtures {
+  readonly dataFiles: Readonly<Record<string, string>>;
+  readonly waitsForStart: boolean;
+  readonly deviceScale: number | null;
+  readonly expectedViolations: readonly string[];
+  readonly servers: FixtureServers;
+  readonly loopbackProxy: RecordingProxy;
+  readonly app: TestApp;
+  readonly guard: LoopbackGuard;
+}
+
+export const test = base.extend<IAppFixtures>({
   dataFiles: [{}, { option: true }],
   waitsForStart: [true, { option: true }],
+  deviceScale: [null, { option: true }],
   expectedViolations: [[], { option: true }],
   servers: async ({}, use, testInfo) => {
     const servers = new FixtureServers();
@@ -45,8 +58,8 @@ export const test = base.extend<{ dataFiles: Readonly<Record<string, string>>; w
       await proxy.closeAsync();
     }
   },
-  app: async ({ dataFiles, waitsForStart, loopbackProxy }, use, testInfo) => {
-    const app = await TestApp.launchAsync(testInfo, dataFiles, LaunchSettings.forRun(loopbackProxy.address));
+  app: async ({ dataFiles, waitsForStart, deviceScale, loopbackProxy }, use, testInfo) => {
+    const app = await TestApp.launchAsync(testInfo, dataFiles, LaunchSettings.forRun(loopbackProxy.address, deviceScale));
     // The test's status is still "passed" when the start throws, as Playwright records the error after this teardown.
     let isStarted = false;
     try {

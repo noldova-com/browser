@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 export class LaunchSetting {
   public readonly arguments: readonly string[];
   public readonly reason: string;
@@ -22,7 +24,7 @@ export class LaunchSettings {
     + "a refused download writes nothing reads a new folder and never the account's own Downloads, which macOS lets a process read only once the person grants it.";
   public static readonly HOST_RESOLVER_RULES: string = "MAP *.test 127.0.0.1, EXCLUDE localhost, EXCLUDE *.localhost, EXCLUDE 127.0.0.1, MAP * ~NOTFOUND";
 
-  public static forRun(proxy: string): readonly LaunchSetting[] {
+  public static forRun(proxy: string, deviceScale: number | null = null): readonly LaunchSetting[] {
     return [
       new LaunchSetting(["--disable-gpu"], "GPU acceleration off, as in the base's workflows, so a run draws the same on a runner with no GPU."),
       new LaunchSetting(["--disable-software-rasterizer"], "No software stand-in for the GPU, as in the base's workflows."),
@@ -34,7 +36,9 @@ export class LaunchSettings {
       new LaunchSetting([`--proxy-server=${proxy}`],
         "Sends every request for an address that isn't loopback to the recording proxy, which records it and answers none, so a request the base fails to refuse never leaves the machine."),
       new LaunchSetting(["--proxy-bypass-list=*.test"], "Lets the .test names reach their fixture servers on 127.0.0.1, as loopback addresses do."),
-      ...process.platform === "darwin" ? [new LaunchSetting(["-ApplePersistenceIgnoreState", "YES"], "No restored windows from an earlier run on macOS.")] : []
+      ...process.platform === "darwin" ? [new LaunchSetting(["-ApplePersistenceIgnoreState", "YES"], "No restored windows from an earlier run on macOS.")] : [],
+      ...Object.isNull(deviceScale) ? [] : [new LaunchSetting([`--force-device-scale-factor=${String(deviceScale)}`],
+        "Forces the device scale factor, only in the screenshot scale workflow, so its captures have the scale it names on any display.")]
     ];
   }
 }
