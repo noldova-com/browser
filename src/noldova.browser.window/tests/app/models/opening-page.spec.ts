@@ -9,14 +9,16 @@
 import { describe, expect, it } from "vitest";
 
 import { OpeningPage } from "../../../src/app/models/opening-page.ts";
+import { PagePlace } from "../../../src/app/models/page-place.ts";
 
 describe("OpeningPage", () => {
   it("keeps the page's place, and says another window took the page only once it is taken", () => {
-    const opening: OpeningPage = new OpeningPage({ profileKey: "workspace-1", url: "https://docs.example.com/" });
+    const place: PagePlace = new PagePlace("workspace-1", "https://docs.example.com/");
+    const opening: OpeningPage = new OpeningPage(place);
     const before: boolean = opening.isTaken;
 
     opening.take();
 
-    expect([opening.place, before, opening.isTaken]).toEqual([{ profileKey: "workspace-1", url: "https://docs.example.com/" }, false, true]);
+    expect([opening.place, before, opening.isTaken]).toEqual([place, false, true]);
   });
 });

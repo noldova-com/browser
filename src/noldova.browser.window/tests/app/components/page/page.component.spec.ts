@@ -32,8 +32,89 @@ import { EmulatedMediaFixture } from "../../../fixtures/emulated-media.fixture.t
 import { FakeWebView, type FakeWebViews } from "../../../fixtures/fake-web-views.fixture.ts";
 import { ForcedColorsFixture } from "../../../fixtures/forced-colors.fixture.ts";
 import { LiveRegionFixture } from "../../../fixtures/live-region.fixture.ts";
+import { MissingPartError } from "../../../fixtures/missing-part.error.ts";
 import { MotionFixture } from "../../../fixtures/motion.fixture.ts";
 import { WindowContext } from "../../../fixtures/window-context.fixture.ts";
+
+class RoundedBounds {
+  public readonly x: number;
+  public readonly y: number;
+  public readonly width: number;
+  public readonly height: number;
+
+  public constructor(x: number, y: number, width: number, height: number) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+  }
+}
+
+class StateActionCase {
+  public readonly name: typeof PaneState.Failed | typeof PaneState.Refused | typeof PaneState.Crashed;
+  public readonly label: string;
+
+  public constructor(name: typeof PaneState.Failed | typeof PaneState.Refused | typeof PaneState.Crashed, label: string) {
+    this.name = name;
+    this.label = label;
+  }
+}
+
+class TypedRefusalCase {
+  public readonly reason: string;
+  public readonly address: string;
+
+  public constructor(reason: string, address: string) {
+    this.reason = reason;
+    this.address = address;
+  }
+}
+
+class ContrastPair {
+  public readonly name: string;
+  public readonly ratio: number;
+  public readonly minimum: number;
+
+  public constructor(name: string, ratio: number, minimum: number) {
+    this.name = name;
+    this.ratio = ratio;
+    this.minimum = minimum;
+  }
+}
+
+class FocusContrastCase {
+  public readonly name: string;
+  public readonly target: () => HTMLElement;
+  public readonly measure: () => number;
+
+  public constructor(name: string, target: () => HTMLElement, measure: () => number) {
+    this.name = name;
+    this.target = target;
+    this.measure = measure;
+  }
+}
+
+class BarActionCase {
+  public readonly name: string;
+  public readonly action: number;
+
+  public constructor(name: string, action: number) {
+    this.name = name;
+    this.action = action;
+  }
+}
+
+class FocusCueCase {
+  public readonly name: string;
+  public readonly target: () => HTMLElement;
+  public readonly ring: () => HTMLElement;
+
+  public constructor(name: string, target: () => HTMLElement, ring: () => HTMLElement) {
+    this.name = name;
+    this.target = target;
+    this.ring = ring;
+  }
+}
 
 @Component({
   imports: [PageComponent],
@@ -66,8 +147,8 @@ describe("PageComponent", () => {
 
   function find<T extends HTMLElement = HTMLElement>(selector: string): T {
     const found: T | null = element.querySelector<T>(selector);
-    if (found === null)
-      throw new Error(`The page has no ${selector}.`);
+    if (Object.isNull(found))
+      throw new MissingPartError(`${selector} on the page`);
     return found;
   }
 
@@ -77,9 +158,9 @@ describe("PageComponent", () => {
 
   function button(...names: string[]): HTMLButtonElement {
     const found: HTMLButtonElement | undefined = [...find("nol-browser-toolbar").querySelectorAll<HTMLButtonElement>("button")]
-      .find(t => names.includes(t.getAttribute("aria-label") ?? ""));
-    if (found === undefined)
-      throw new Error(`The toolbar has no ${names.join(" or ")} button.`);
+      .find(t => names.some(name => t.getAttribute("aria-label") === name));
+    if (Object.isUndefined(found))
+      throw new MissingPartError(`${names.join(" or ")} button on the toolbar`);
     return found;
   }
 
@@ -89,14 +170,38 @@ describe("PageComponent", () => {
 
   function stateAction(name: string): HTMLButtonElement {
     const found: HTMLButtonElement | undefined = stateActions(name)[0];
-    if (found === undefined)
-      throw new Error(`The page's state has no ${name} action.`);
+    if (Object.isUndefined(found))
+      throw new MissingPartError(`${name} action on the page's state`);
     return found;
   }
 
   function menuItem(name: string): HTMLButtonElement | undefined {
     return [...document.querySelectorAll<HTMLButtonElement>(".nol-browser-toolbar-menu button")]
       .find(t => t.querySelector(".nol-menu-item-label")?.textContent?.trim() === name);
+  }
+
+  function openedInstance(index: number = -1): string {
+    const opened = context.opened.at(index);
+    if (Object.isUndefined(opened))
+      throw new MissingPartError(`page document opened at ${index}`);
+    return opened.instance;
+  }
+
+  function describedText(): string | undefined {
+    const id: string | null = field().getAttribute("aria-describedby");
+    if (Object.isNull(id))
+      throw new MissingPartError("aria-describedby on the address field");
+    const described: HTMLElement | null = document.getElementById(id);
+    if (Object.isNull(described))
+      throw new MissingPartError(`element with the id ${id} the address field's aria-describedby names`);
+    return described.textContent?.trim();
+  }
+
+  function nameOf(control: HTMLElement): string {
+    const name: string | undefined = control.getAttribute("aria-label") ?? control.textContent?.trim();
+    if (Object.isUndefined(name))
+      throw new MissingPartError("name, aria-label or text, on a button");
+    return name;
   }
 
   function heading(): string | undefined {
@@ -107,8 +212,8 @@ describe("PageComponent", () => {
     return element.querySelector(".nol-browser-request-notice-message")?.textContent?.trim();
   }
 
-  function boundsOf(box: DOMRect): { x: number; y: number; width: number; height: number } {
-    return { x: Math.round(box.left), y: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
+  function boundsOf(box: DOMRect): RoundedBounds {
+    return new RoundedBounds(Math.round(box.left), Math.round(box.top), Math.round(box.width), Math.round(box.height));
   }
 
   function rem(pixels: number): number {
@@ -145,7 +250,7 @@ describe("PageComponent", () => {
     fixture.autoDetectChanges();
     const native: unknown = fixture.nativeElement;
     if (!(native instanceof HTMLElement))
-      throw new Error("The fixture has no element.");
+      throw new MissingPartError("element in the fixture");
     element = native;
   }
 
@@ -158,8 +263,8 @@ describe("PageComponent", () => {
   async function openAsync(url: string | null = null, width: number = 640): Promise<FakeWebView> {
     await showAsync(pages.open("workspace-1", url), width);
     const view: FakeWebView | undefined = surface().views.at(-1);
-    if (view === undefined)
-      throw new Error("The page opened no view.");
+    if (Object.isUndefined(view))
+      throw new MissingPartError("view the page opened");
     return view;
   }
 
@@ -197,7 +302,7 @@ describe("PageComponent", () => {
     context = new WindowContext();
     const answer: (method: string, parameters: JsonValue) => Promise<JsonValue> = context.answerRequest;
     context.answerRequest = (method: string, parameters: JsonValue) => method !== BrowserMethods.allowTypedAddress ? answer(method, parameters)
-      : allowed === null ? Promise.resolve({ kind: "Allowed", origin: "https://example.com" }) : Promise.reject(allowed);
+      : Object.isNull(allowed) ? Promise.resolve({ kind: "Allowed", origin: "https://example.com" }) : Promise.reject(allowed);
     pages = new Pages(context);
     AppearanceFixture.apply();
     TestBed.configureTestingModule({
@@ -292,13 +397,13 @@ describe("PageComponent", () => {
     expect(errors).toEqual([]);
   });
 
-  for (const [name, label] of [[PaneState.Failed, "Try again"], [PaneState.Refused, "Back"], [PaneState.Crashed, "Reload"]] as const) {
-    it(`moves the focus to Reload before ${label} takes the ${name} page's message away, which then shows the page`, async () => {
-      const view: FakeWebView = await stateAsync(name);
+  for (const row of [new StateActionCase(PaneState.Failed, "Try again"), new StateActionCase(PaneState.Refused, "Back"), new StateActionCase(PaneState.Crashed, "Reload")]) {
+    it(`moves the focus to Reload before ${row.label} takes the ${row.name} page's message away, which then shows the page`, async () => {
+      const view: FakeWebView = await stateAsync(row.name);
       const action = find<HTMLButtonElement>("button.nol-browser-page-state-action");
       action.focus();
 
-      expect(action.textContent?.trim()).toBe(label);
+      expect(action.textContent?.trim()).toBe(row.label);
       action.click();
       await stableAsync();
 
@@ -324,16 +429,16 @@ describe("PageComponent", () => {
     await stableAsync();
     const stops = [button("Back"), field(), button("More"), find("button.nol-browser-request-notice-action"), find("button.nol-browser-page-state-action")];
     find<HTMLButtonElement>("button.before").focus();
-    const forward: Element[] = [];
-    const backward: Element[] = [];
+    const forward: (Element | null)[] = [];
+    const backward: (Element | null)[] = [];
 
     for (let index = 0; index < stops.length; index++) {
       await userEvent.tab();
-      forward.push(document.activeElement ?? document.body);
+      forward.push(document.activeElement);
     }
     for (let index = 1; index < stops.length; index++) {
       await userEvent.tab({ shift: true });
-      backward.push(document.activeElement ?? document.body);
+      backward.push(document.activeElement);
     }
 
     expect([forward, backward]).toEqual([stops, stops.slice(0, -1).reverse()]);
@@ -401,8 +506,8 @@ describe("PageComponent", () => {
     await stableAsync();
 
     await vi.waitFor(() => expect(document.activeElement === button("Reload", "Stop")).toBe(true));
-    expect([context.opened.at(-1)?.title, element.querySelector(".nol-browser-toolbar-popup") === null]).toEqual(["https://ads.example.com/", true]);
-    await pages.showAsync(context.opened.at(-1)?.instance ?? "");
+    expect([context.opened.at(-1)?.title, Object.isNull(element.querySelector(".nol-browser-toolbar-popup"))]).toEqual(["https://ads.example.com/", true]);
+    await pages.showAsync(openedInstance());
     expect(surface().views.at(-1)?.profileKey).toBe("workspace-1");
   });
 
@@ -413,7 +518,7 @@ describe("PageComponent", () => {
     await stableAsync();
 
     await vi.waitFor(() => expect([context.settings.get("browser.popupSites"), document.activeElement === button("Reload", "Stop")]).toEqual(["one.example", true]));
-    expect([context.opened.at(-1)?.title, element.querySelector(".nol-browser-toolbar-popup") === null]).toEqual(["https://ads.example.com/", true]);
+    expect([context.opened.at(-1)?.title, Object.isNull(element.querySelector(".nol-browser-toolbar-popup"))]).toEqual(["https://ads.example.com/", true]);
   });
 
   it("moves the focus to Reload when the notice holding it goes with the page's next load", async () => {
@@ -440,7 +545,7 @@ describe("PageComponent", () => {
     expect(errors).toEqual([]);
   });
 
-  async function actAsync(state: "Acting" | "Asking" | "Ended", instance: string = context.opened.at(-1)?.instance ?? "", aimed: JsonObject = {}): Promise<void> {
+  async function actAsync(state: "Acting" | "Asking" | "Ended", instance: string = openedInstance(), aimed: JsonObject = {}): Promise<void> {
     context.emit(BrowserEvents.pageActivity, { instance, activity: "call-1", agentName: "Scout", action: "Clicking", state, box: null, point: null, refusal: null, isHandedOver: false, ...aimed });
     await stableAsync();
   }
@@ -473,7 +578,7 @@ describe("PageComponent", () => {
   it("stops the teammate's calls on the page from the bar's Stop, and takes the page over from its Take over", async () => {
     await placeAsync();
     await actAsync("Acting");
-    const instance: string = context.opened.at(-1)?.instance ?? "";
+    const instance: string = openedInstance();
 
     find<HTMLButtonElement>(".nol-browser-agent-bar-action:last-child").click();
     find<HTMLButtonElement>(".nol-browser-agent-bar-action:first-of-type").click();
@@ -486,19 +591,20 @@ describe("PageComponent", () => {
     await actAsync("Acting");
     const [takeOver, stop] = [...element.querySelectorAll<HTMLButtonElement>(".nol-browser-agent-bar-action")];
     button("More").focus();
-    const order: Element[] = [];
+    const order: (Element | null)[] = [];
 
     for (let index = 0; index < 2; index++) {
       await userEvent.tab();
-      order.push(document.activeElement ?? document.body);
+      order.push(document.activeElement);
     }
     await userEvent.tab({ shift: true });
-    order.push(document.activeElement ?? document.body);
+    order.push(document.activeElement);
 
     expect(order).toEqual([takeOver, stop, takeOver]);
   });
 
-  for (const state of ["Asking", "Ended"] as const) {
+  const leavingStates: readonly ("Asking" | "Ended")[] = ["Asking", "Ended"];
+  for (const state of leavingStates) {
     it(`moves the focus from the bar's Stop to Reload when the call ${state === "Asking" ? "starts asking" : "ends"}, and leaves a focus elsewhere alone`, async () => {
       await placeAsync();
       await actAsync("Acting");
@@ -527,10 +633,10 @@ describe("PageComponent", () => {
     await vi.waitFor(() => {
       const ring: DOMRect | undefined = view.layerElement?.querySelector(".nol-browser-agent-mark-ring")?.getBoundingClientRect();
       const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
-      expect(ring === undefined ? null : [ring.left - area.left, ring.top - area.top]).toEqual([40 - rem / 4, 30 - rem / 4]);
+      expect(Object.isUndefined(ring) ? null : [ring.left - area.left, ring.top - area.top]).toEqual([40 - rem / 4, 30 - rem / 4]);
     });
     const marks: NodeListOf<Element> = element.querySelectorAll("nol-browser-agent-mark");
-    expect([view.layersOpened, marks.length, view.layerElement?.contains(marks.item(0)), element.querySelector("nol-browser-agent-bar") !== null])
+    expect([view.layersOpened, marks.length, view.layerElement?.contains(marks.item(0)), !Object.isNull(element.querySelector("nol-browser-agent-bar"))])
       .toEqual([1, 1, true, true]);
     await actAsync("Ended", undefined, { box });
     expect(view.layerElement).toBeNull();
@@ -545,7 +651,7 @@ describe("PageComponent", () => {
     const ring = (): readonly number[] | null => {
       const drawn: DOMRect | undefined = view.layerElement?.querySelector(".nol-browser-agent-mark-ring")?.getBoundingClientRect();
       const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
-      return drawn === undefined ? null : [drawn.left - area.left, drawn.top - area.top, drawn.width, drawn.height];
+      return Object.isUndefined(drawn) ? null : [drawn.left - area.left, drawn.top - area.top, drawn.width, drawn.height];
     };
 
     await actAsync("Acting", undefined, { box });
@@ -565,7 +671,7 @@ describe("PageComponent", () => {
     await actAsync("Acting", undefined, { box: { x: 40, y: 30, width: 120, height: 24 } });
 
     await vi.waitFor(() => expectErrors([failure]));
-    expect([view.layerElement, element.querySelector("nol-browser-agent-bar") !== null]).toEqual([null, true]);
+    expect([view.layerElement, !Object.isNull(element.querySelector("nol-browser-agent-bar"))]).toEqual([null, true]);
   });
 
   it("leaves the page live for a longer call or an element with no box, with the bar alone", async () => {
@@ -574,7 +680,7 @@ describe("PageComponent", () => {
     await actAsync("Acting", undefined, { action: "Waiting", box: { x: 0, y: 0, width: 10, height: 10 } });
     await actAsync("Acting", undefined, { action: "Typing" });
 
-    expect([element.querySelector("nol-browser-agent-mark"), view.isShown, element.querySelector("nol-browser-agent-bar") !== null]).toEqual([null, true, true]);
+    expect([element.querySelector("nol-browser-agent-mark"), view.isShown, !Object.isNull(element.querySelector("nol-browser-agent-bar"))]).toEqual([null, true, true]);
   });
 
   function expectOverView(overlay: Element, view: FakeWebView): void {
@@ -586,7 +692,7 @@ describe("PageComponent", () => {
     const bottom: number = Math.min(box.bottom, page.bottom);
     const hit: Element | null = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
 
-    expect([right > left && bottom > top, hit !== null && overlay.contains(hit), view.isShown, view.element.checkVisibility({ visibilityProperty: true })])
+    expect([right > left && bottom > top, !Object.isNull(hit) && overlay.contains(hit), view.isShown, view.element.checkVisibility({ visibilityProperty: true })])
       .toEqual([true, true, true, true]);
   }
 
@@ -600,11 +706,13 @@ describe("PageComponent", () => {
     const menu: Element = await vi.waitFor(() => {
       const found: Element | null = document.querySelector(".nol-browser-toolbar-menu");
       expect(found).not.toBeNull();
-      return found ?? document.body;
+      if (Object.isNull(found))
+        throw new MissingPartError("open menu on the toolbar");
+      return found;
     });
 
     expectOverView(menu, view);
-    expect([element.querySelector("nol-browser-agent-bar") !== null, document.querySelector("nol-browser-agent-mark") !== null]).toEqual([true, true]);
+    expect([!Object.isNull(element.querySelector("nol-browser-agent-bar")), !Object.isNull(document.querySelector("nol-browser-agent-mark"))]).toEqual([true, true]);
     await userEvent.keyboard("{Escape}");
     await stableAsync();
   });
@@ -617,21 +725,23 @@ describe("PageComponent", () => {
     return vi.waitFor(() => {
       const dialog: HTMLElement | null = document.querySelector<HTMLElement>("nol-browser-clear-data-dialog");
       expect(dialog).not.toBeNull();
-      return dialog ?? document.body;
+      if (Object.isNull(dialog))
+        throw new MissingPartError("open clear browsing data dialog");
+      return dialog;
     });
   }
 
   function dialogButton(dialog: HTMLElement, name: "clear" | "cancel"): HTMLButtonElement {
     const found: HTMLButtonElement | null = dialog.querySelector<HTMLButtonElement>(`button.nol-browser-clear-data-${name}`);
-    if (found === null)
-      throw new Error(`The dialog has no ${name} button.`);
+    if (Object.isNull(found))
+      throw new MissingPartError(`${name} button in the dialog`);
     return found;
   }
 
   function dialogPart(dialog: HTMLElement, selector: string): HTMLElement {
     const found: HTMLElement | null = dialog.querySelector<HTMLElement>(selector);
-    if (found === null)
-      throw new Error(`The dialog has no ${selector}.`);
+    if (Object.isNull(found))
+      throw new MissingPartError(`${selector} in the dialog`);
     return found;
   }
 
@@ -704,7 +814,7 @@ describe("PageComponent", () => {
   });
 
   async function refuseAsync(): Promise<void> {
-    const instance: string = context.opened.at(-1)?.instance ?? "";
+    const instance: string = openedInstance();
     const navigating: JsonObject = { instance, activity: "call-1", agentName: "Scout", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false };
     context.emit(BrowserEvents.pageActivity, navigating);
     context.emit(BrowserEvents.pageActivity, { ...navigating, state: "Ended", refusal: { url: "https://example.com/pricing", origin: "https://example.com" } });
@@ -732,7 +842,7 @@ describe("PageComponent", () => {
     stateAction("Not now").click();
 
     await vi.waitFor(() => expect(view.isShown).toBe(true));
-    expect([requestsOf(BrowserMethods.allowTypedAddress), element.querySelector(".nol-browser-page-state"), document.activeElement?.closest("nol-browser-toolbar") !== null, field().value])
+    expect([requestsOf(BrowserMethods.allowTypedAddress), element.querySelector(".nol-browser-page-state"), !Object.isNull(document.activeElement?.closest("nol-browser-toolbar")), field().value])
       .toEqual([[], null, true, "https://one.example/"]);
   });
 
@@ -755,7 +865,7 @@ describe("PageComponent", () => {
     await vi.waitFor(() => expect(view.calls).toEqual(["mount", "navigate https://example.com/docs"]));
     await stableAsync();
 
-    expect([field().value, field().getAttribute("aria-invalid"), document.getElementById(field().getAttribute("aria-describedby") ?? "")?.textContent?.trim()])
+    expect([field().value, field().getAttribute("aria-invalid"), describedText()])
       .toEqual(["example.com/docs", "true", heading()]);
     expect(heading()).toContain("example.com");
   });
@@ -778,7 +888,7 @@ describe("PageComponent", () => {
     await typeAsync("fixed.example");
     await vi.waitFor(() => expect(requestsOf(BrowserMethods.allowTypedAddress)).toHaveLength(2));
     await stableAsync();
-    const held: [string, string | null, string | undefined] = [field().value, field().getAttribute("aria-invalid"), heading()];
+    const held: (string | null | undefined)[] = [field().value, field().getAttribute("aria-invalid"), heading()];
     allow({ kind: "Allowed", origin: "https://fixed.example" });
     await vi.waitFor(() => expect(view.calls).toContain("navigate https://fixed.example/"));
     await stableAsync();
@@ -835,7 +945,7 @@ describe("PageComponent", () => {
 
     await vi.waitFor(() => expect(notice()).toBe("Type a web address, such as example.com."));
     expect([requestsOf(BrowserMethods.allowTypedAddress), field().value, field().getAttribute("aria-invalid")]).toEqual([[], "release notes", "true"]);
-    expect(document.getElementById(field().getAttribute("aria-describedby") ?? "")?.textContent?.trim()).toBe("Type a web address, such as example.com.");
+    expect(describedText()).toBe("Type a web address, such as example.com.");
   });
 
   it("says the address couldn't be allowed, marks the field and hands the failure to the error handler when the runtime part's request fails", async () => {
@@ -888,10 +998,10 @@ describe("PageComponent", () => {
     expect([field().value, notice(), stateActions("Try again").length]).toEqual(["https://gone.example/", undefined, 1]);
   });
 
-  it.each<[string, string]>([
-    ["Credentials", "https://user:hunter2@example.com/"],
-    ["TooLong", `https://example.com/${"a".repeat(64)}`]
-  ])("heads a %s refusal with the address, never the origin, so no user name or password shows in the heading or the announcement", async (reason: string, address: string) => {
+  it.each([
+    new TypedRefusalCase("Credentials", "https://user:hunter2@example.com/"),
+    new TypedRefusalCase("TooLong", `https://example.com/${"a".repeat(64)}`)
+  ])("heads a $reason refusal with the address, never the origin, so no user name or password shows in the heading or the announcement", async ({ reason, address }: TypedRefusalCase) => {
     await stateAsync(PaneState.Failed);
     refuseTyped(reason);
     const said: string[] = [];
@@ -952,7 +1062,7 @@ describe("PageComponent", () => {
 
     hold();
 
-    expect([region === null, await spoken, LiveRegionFixture.region() === region]).toEqual([false, "Type an address to open a page", true]);
+    expect([Object.isNull(region), await spoken, LiveRegionFixture.region() === region]).toEqual([false, "Type an address to open a page", true]);
   });
 
   it("marks the page area busy while its page loads, until it loads or fails", async () => {
@@ -1009,7 +1119,7 @@ describe("PageComponent", () => {
     view.emit(new ViewStateEvent("https://one.example/", "One", true, true, false));
     await actAsync("Acting");
 
-    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => t.getAttribute("aria-label") ?? t.textContent?.trim() ?? "").filter(t => t.startsWith("Stop")))
+    expect([...element.querySelectorAll<HTMLButtonElement>("button")].map(t => nameOf(t)).filter(t => t.startsWith("Stop")))
       .toEqual(["Stop", "Stop teammate"]);
   });
 
@@ -1036,7 +1146,7 @@ describe("PageComponent", () => {
 
   it("lets go of its view when the document closes, and has the runtime part forget the page", async () => {
     const view: FakeWebView = await placeAsync();
-    const instance: string = context.opened[0]?.instance ?? "";
+    const instance: string = openedInstance(0);
 
     context.closeByPerson(instance);
     fixture?.componentInstance.isShown.set(false);
@@ -1067,7 +1177,7 @@ describe("PageComponent", () => {
 
     await showAsync(pages.open("workspace-1", "https://one.example/"));
 
-    expect([surface().views, element.querySelector("nol-browser-toolbar") !== null, heading()]).toEqual([[], true, `${WindowContext.appName}'s browser can't show pages here`]);
+    expect([surface().views, !Object.isNull(element.querySelector("nol-browser-toolbar")), heading()]).toEqual([[], true, `${WindowContext.appName}'s browser can't show pages here`]);
   });
 
   it("says a restored page it keeps no record of can't open again, without a toolbar, and closes its document on Close", async () => {
@@ -1178,9 +1288,9 @@ describe("PageComponent", () => {
 
     view.emitOther(WebViewEventKind.Key, { name: "newPage" });
     const pressed: KeyboardEvent = press(button("Back"), withMod("t", "KeyT"));
-    const shown = await pages.showAsync(context.opened.at(-1)?.instance ?? "");
+    const shown = await pages.showAsync(openedInstance());
 
-    expect([pressed.defaultPrevented, context.opened.map(t => [t.title, t.after]), shown === null ? null : shown.controller.status.state, surface().views.at(-1)?.profileKey])
+    expect([pressed.defaultPrevented, context.opened.map(t => [t.title, t.after]), Object.isNull(shown) ? null : shown.controller.status.state, surface().views.at(-1)?.profileKey])
       .toEqual([true, [["https://one.example/", null], ["New tab", null], ["New tab", null]], PaneState.Empty, "workspace-1"]);
     expect(view.calls.filter(t => t === "reload")).toEqual([]);
   });
@@ -1198,10 +1308,10 @@ describe("PageComponent", () => {
     view.element.focus();
     const inView: boolean = pages.canOpenBeside(null);
     pages.openBeside(null);
-    const shown = await pages.showAsync(context.opened.at(-1)?.instance ?? "");
+    const shown = await pages.showAsync(openedInstance());
 
     expect([outside, inToolbar, inView, find("nol-browser-page").getAttribute("data-instance") === context.opened[0]?.instance]).toEqual([false, true, true, true]);
-    expect([context.opened.map(t => [t.title, t.after]), shown === null ? null : shown.controller.status.state, surface().views.at(-1)?.profileKey])
+    expect([context.opened.map(t => [t.title, t.after]), Object.isNull(shown) ? null : shown.controller.status.state, surface().views.at(-1)?.profileKey])
       .toEqual([[["https://one.example/", null], ["New tab", null], ["New tab", null]], PaneState.Empty, "workspace-1"]);
   });
 
@@ -1237,7 +1347,7 @@ describe("PageComponent", () => {
 
   it("focuses the address field with its whole address selected from the focus address key, in the page and in the toolbar, ahead of the app's commands", async () => {
     const view: FakeWebView = await placeAsync();
-    const selection = (): [boolean, number | null, number | null, number] => [document.activeElement === field(), field().selectionStart, field().selectionEnd, field().value.length];
+    const selection = (): (boolean | number | null)[] => [document.activeElement === field(), field().selectionStart, field().selectionEnd, field().value.length];
 
     view.emitOther(WebViewEventKind.Key, { name: "focusAddress" });
     await stableAsync();
@@ -1264,10 +1374,12 @@ describe("PageComponent", () => {
     view.emitOther(WebViewEventKind.Key, { name: "find" });
     await stableAsync();
     await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
-    const [toolbar, bar, area] = [find("nol-browser-toolbar"), find("nol-browser-find-bar"), find(".nol-browser-page-view")].map(t => t.getBoundingClientRect());
+    const toolbar: DOMRect = find("nol-browser-toolbar").getBoundingClientRect();
+    const bar: DOMRect = find("nol-browser-find-bar").getBoundingClientRect();
+    const area: DOMRect = find(".nol-browser-page-view").getBoundingClientRect();
 
     expect(tags(find("nol-browser-page"))).toEqual(["nol-browser-toolbar", "nol-browser-find-bar", "div"]);
-    expect([Math.round((bar?.top ?? 0) - (toolbar?.bottom ?? 0)), Math.round((area?.top ?? 0) - (bar?.bottom ?? 0))]).toEqual([0, 0]);
+    expect([Math.round(bar.top - toolbar.bottom), Math.round(area.top - bar.bottom)]).toEqual([0, 0]);
     await vi.waitFor(() => expect(boundsOf(view.element.getBoundingClientRect())).toEqual(boundsOf(find(".nol-browser-page-view").getBoundingClientRect())));
   });
 
@@ -1409,31 +1521,31 @@ describe("PageComponent colors", () => {
 
   function find(selector: string): HTMLElement {
     const found = element.querySelector<HTMLElement>(selector) ?? document.querySelector<HTMLElement>(selector);
-    if (found === null)
-      throw new Error(`Nothing matches ${selector}.`);
+    if (Object.isNull(found))
+      throw new MissingPartError(`element that matches ${selector}`);
     return found;
   }
 
   function button(...names: string[]): HTMLElement {
     const found: HTMLButtonElement | undefined = [...find("nol-browser-toolbar").querySelectorAll<HTMLButtonElement>("button")]
-      .find(t => names.includes(t.getAttribute("aria-label") ?? ""));
-    if (found === undefined)
-      throw new Error(`The toolbar has no ${names.join(" or ")} button.`);
+      .find(t => names.some(name => t.getAttribute("aria-label") === name));
+    if (Object.isUndefined(found))
+      throw new MissingPartError(`${names.join(" or ")} button on the toolbar`);
     return found;
   }
 
   function within(host: HTMLElement | undefined, selector: string): HTMLElement {
     const found: HTMLElement | null | undefined = host?.querySelector<HTMLElement>(selector);
-    if (found === null || found === undefined)
-      throw new Error(`Nothing matches ${selector}.`);
+    if (Object.isNullOrUndefined(found))
+      throw new MissingPartError(`element that matches ${selector}`);
     return found;
   }
 
   function stateAction(name: string): HTMLElement {
     const found: HTMLElement | undefined = [...element.querySelectorAll<HTMLElement>(".nol-browser-page-state-action")]
       .find(t => t.textContent?.trim() === name);
-    if (found === undefined)
-      throw new Error(`The page's state has no ${name} action.`);
+    if (Object.isUndefined(found))
+      throw new MissingPartError(`${name} action on the page's state`);
     return found;
   }
 
@@ -1442,10 +1554,17 @@ describe("PageComponent colors", () => {
       .find(t => t.querySelector(".nol-menu-item-label")?.textContent?.trim() === name);
   }
 
+  function openedInstance(): string {
+    const opened = context.opened.at(-1);
+    if (Object.isUndefined(opened))
+      throw new MissingPartError("page document opened");
+    return opened.instance;
+  }
+
   function field(): HTMLInputElement {
     const found = find("input.nol-browser-toolbar-field");
     if (!(found instanceof HTMLInputElement))
-      throw new Error("The address field isn't an input.");
+      throw new MissingPartError("input as the address field");
     return found;
   }
 
@@ -1456,12 +1575,12 @@ describe("PageComponent colors", () => {
     fixture.autoDetectChanges();
     const native: unknown = fixture.nativeElement;
     if (!(native instanceof HTMLElement))
-      throw new Error("The fixture has no element.");
+      throw new MissingPartError("element in the fixture");
     element = native;
     await vi.waitFor(() => expect(element.querySelector("nol-browser-toolbar")).not.toBeNull());
     const view: FakeWebView | undefined = context.views.views.at(-1);
-    if (view === undefined)
-      throw new Error("The page opened no view.");
+    if (Object.isUndefined(view))
+      throw new MissingPartError("view the page opened");
     return view;
   }
 
@@ -1481,7 +1600,7 @@ describe("PageComponent colors", () => {
   }
 
   async function actAsync(state: "Acting" | "Ended"): Promise<void> {
-    context.emit(BrowserEvents.pageActivity, { instance: context.opened.at(-1)?.instance ?? "", activity: "call-1", agentName: "Scout", action: "Reading", state,
+    context.emit(BrowserEvents.pageActivity, { instance: openedInstance(), activity: "call-1", agentName: "Scout", action: "Reading", state,
       box: null, point: null, refusal: null, isHandedOver: false });
     await fixture?.whenStable();
   }
@@ -1506,8 +1625,8 @@ describe("PageComponent colors", () => {
     find("button.before").focus();
   }
 
-  function below(pairs: readonly (readonly [string, number, number])[]): string[] {
-    return pairs.filter(([, ratio, minimum]) => ratio < minimum).map(([name, ratio, minimum]) => `${name}: ${ratio.toFixed(2)} < ${minimum}`);
+  function below(pairs: readonly ContrastPair[]): string[] {
+    return pairs.filter(t => t.ratio < t.minimum).map(t => `${t.name}: ${t.ratio.toFixed(2)} < ${t.minimum}`);
   }
 
   beforeEach(() => {
@@ -1536,58 +1655,58 @@ describe("PageComponent colors", () => {
     it(`keeps text at 4.5:1 and control edges, state cues and focus at 3:1 against what lies under them, in ${mode}`, async () => {
       AppearanceFixture.apply(DefaultTheme.theme, mode);
       await failedPageAsync();
-      const pairs: (readonly [string, number, number])[] = [
-        ["the state's glyph", ContrastFixture.ofText(find(".nol-browser-page-state-glyph")), 3],
-        ["the state's heading", ContrastFixture.ofText(find(".nol-browser-page-state-heading")), 4.5],
-        ["the state's detail", ContrastFixture.ofText(find(".nol-browser-page-state-detail")), 4.5],
-        ["Try again", ContrastFixture.ofText(stateAction("Try again")), 4.5],
-        ["Copy address", ContrastFixture.ofText(stateAction("Copy address")), 4.5]
+      const pairs: ContrastPair[] = [
+        new ContrastPair("the state's glyph", ContrastFixture.ofText(find(".nol-browser-page-state-glyph")), 3),
+        new ContrastPair("the state's heading", ContrastFixture.ofText(find(".nol-browser-page-state-heading")), 4.5),
+        new ContrastPair("the state's detail", ContrastFixture.ofText(find(".nol-browser-page-state-detail")), 4.5),
+        new ContrastPair("Try again", ContrastFixture.ofText(stateAction("Try again")), 4.5),
+        new ContrastPair("Copy address", ContrastFixture.ofText(stateAction("Copy address")), 4.5)
       ];
       await loadingPageAsync();
       pairs.push(
-        ["Back's glyph", ContrastFixture.ofText(within(button("Back"), ".nol-toolbar-button-glyph")), 3],
-        ["Stop's glyph", ContrastFixture.ofText(within(button("Reload", "Stop"), ".nol-toolbar-button-glyph")), 3],
-        ["More's glyph", ContrastFixture.ofText(within(button("More"), ".nol-toolbar-button-glyph")), 3],
-        ["Not secure", ContrastFixture.ofText(find(".nol-browser-toolbar-security")), 4.5],
-        ["the address's host", ContrastFixture.ofText(find(".nol-browser-toolbar-host")), 4.5],
-        ["the address's path", ContrastFixture.ofText(find(".nol-browser-toolbar-path")), 4.5],
-        ["the address field's border", ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color"), 3],
-        ["the loading bar", ContrastFixture.ofFills(find("nol-progress .nol-progress-bar"), find(".nol-browser-toolbar-row")), 3],
-        ["the notice's glyph", ContrastFixture.ofText(find(".nol-browser-request-notice-glyph")), 3],
-        ["the notice", ContrastFixture.ofText(find(".nol-browser-request-notice-message")), 4.5],
-        ["Open in external browser", ContrastFixture.ofText(find(".nol-browser-request-notice-action")), 4.5]
+        new ContrastPair("Back's glyph", ContrastFixture.ofText(within(button("Back"), ".nol-toolbar-button-glyph")), 3),
+        new ContrastPair("Stop's glyph", ContrastFixture.ofText(within(button("Reload", "Stop"), ".nol-toolbar-button-glyph")), 3),
+        new ContrastPair("More's glyph", ContrastFixture.ofText(within(button("More"), ".nol-toolbar-button-glyph")), 3),
+        new ContrastPair("Not secure", ContrastFixture.ofText(find(".nol-browser-toolbar-security")), 4.5),
+        new ContrastPair("the address's host", ContrastFixture.ofText(find(".nol-browser-toolbar-host")), 4.5),
+        new ContrastPair("the address's path", ContrastFixture.ofText(find(".nol-browser-toolbar-path")), 4.5),
+        new ContrastPair("the address field's border", ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color"), 3),
+        new ContrastPair("the loading bar", ContrastFixture.ofFills(find("nol-progress .nol-progress-bar"), find(".nol-browser-toolbar-row")), 3),
+        new ContrastPair("the notice's glyph", ContrastFixture.ofText(find(".nol-browser-request-notice-glyph")), 3),
+        new ContrastPair("the notice", ContrastFixture.ofText(find(".nol-browser-request-notice-message")), 4.5),
+        new ContrastPair("Open in external browser", ContrastFixture.ofText(find(".nol-browser-request-notice-action")), 4.5)
       );
-      for (const [name, target, measure] of [
-        ["Back's focus ring", () => button("Back"), () => ContrastFixture.ofOutline(button("Back"))],
-        ["the address field's focus border", () => field(), () => ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color")],
-        ["the address while edited", () => field(), () => ContrastFixture.ofText(field())],
-        ["More's focus ring", () => button("More"), () => ContrastFixture.ofOutline(button("More"))],
-        ["the notice action's focus ring", () => find(".nol-browser-request-notice-action"), () => ContrastFixture.ofOutline(find(".nol-browser-request-notice-action"))]
-      ] as const) {
-        await tabToAsync(target());
-        pairs.push([name, measure(), name === "the address while edited" ? 4.5 : 3]);
+      for (const row of [
+        new FocusContrastCase("Back's focus ring", () => button("Back"), () => ContrastFixture.ofOutline(button("Back"))),
+        new FocusContrastCase("the address field's focus border", () => field(), () => ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color")),
+        new FocusContrastCase("the address while edited", () => field(), () => ContrastFixture.ofText(field())),
+        new FocusContrastCase("More's focus ring", () => button("More"), () => ContrastFixture.ofOutline(button("More"))),
+        new FocusContrastCase("the notice action's focus ring", () => find(".nol-browser-request-notice-action"), () => ContrastFixture.ofOutline(find(".nol-browser-request-notice-action")))
+      ]) {
+        await tabToAsync(row.target());
+        pairs.push(new ContrastPair(row.name, row.measure(), row.name === "the address while edited" ? 4.5 : 3));
       }
       await actAsync("Acting");
       pairs.push(
-        ["the bar's glyph", ContrastFixture.ofText(find(".nol-browser-agent-bar-glyph")), 3],
-        ["the bar's message", ContrastFixture.ofText(find(".nol-browser-agent-bar-message")), 4.5],
-        ["the bar's name", ContrastFixture.ofText(find(".nol-browser-agent-bar-name")), 4.5]
+        new ContrastPair("the bar's glyph", ContrastFixture.ofText(find(".nol-browser-agent-bar-glyph")), 3),
+        new ContrastPair("the bar's message", ContrastFixture.ofText(find(".nol-browser-agent-bar-message")), 4.5),
+        new ContrastPair("the bar's name", ContrastFixture.ofText(find(".nol-browser-agent-bar-name")), 4.5)
       );
-      for (const [name, action] of [["Take over", 1], ["Stop teammate", 2]] as const) {
-        const target = (): HTMLElement => find(`.nol-browser-agent-bar-action:nth-of-type(${action})`);
-        pairs.push([name, ContrastFixture.ofText(target()), 4.5]);
+      for (const row of [new BarActionCase("Take over", 1), new BarActionCase("Stop teammate", 2)]) {
+        const target = (): HTMLElement => find(`.nol-browser-agent-bar-action:nth-of-type(${row.action})`);
+        pairs.push(new ContrastPair(row.name, ContrastFixture.ofText(target()), 4.5));
         await tabToAsync(target());
-        pairs.push([`${name}'s focus ring`, ContrastFixture.ofOutline(target()), 3]);
+        pairs.push(new ContrastPair(`${row.name}'s focus ring`, ContrastFixture.ofOutline(target()), 3));
       }
       await actAsync("Ended");
       button("More").click();
       await fixture?.whenStable();
       await vi.waitFor(() => expect(document.querySelectorAll(".nol-browser-toolbar-menu button[nol-menu-item]")).toHaveLength(5));
-      pairs.push(["Copy address in the menu", ContrastFixture.ofText(find(".nol-browser-toolbar-menu button[nol-menu-item] .nol-menu-item-label")), 4.5]);
-      pairs.push(["Zoom's percent in the menu", ContrastFixture.ofText(within(menuItem("Zoom"), ".nol-menu-item-value")), 4.5]);
+      pairs.push(new ContrastPair("Copy address in the menu", ContrastFixture.ofText(find(".nol-browser-toolbar-menu button[nol-menu-item] .nol-menu-item-label")), 4.5));
+      pairs.push(new ContrastPair("Zoom's percent in the menu", ContrastFixture.ofText(within(menuItem("Zoom"), ".nol-menu-item-value")), 4.5));
       await userEvent.keyboard("{Escape}");
       await refuseAddressAsync();
-      pairs.push(["the invalid address field's border", ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color"), 3]);
+      pairs.push(new ContrastPair("the invalid address field's border", ContrastFixture.ofEdge(find(".nol-browser-toolbar-address"), "border-top-color"), 3));
 
       expect(below(pairs)).toEqual([]);
     });
@@ -1604,14 +1723,14 @@ describe("PageComponent colors", () => {
       ["notice", bar.borderTopStyle, bar.borderTopColor],
       ["address field", getComputedStyle(find(".nol-browser-toolbar-address")).borderTopStyle, getComputedStyle(find(".nol-browser-toolbar-address")).borderTopColor]
     ];
-    for (const [name, target, ring] of [
-      ["toolbar button", () => button("Back"), () => button("Back")],
-      ["address field", () => field(), () => find(".nol-browser-toolbar-address")],
-      ["notice action", () => find(".nol-browser-request-notice-action"), () => find(".nol-browser-request-notice-action")]
-    ] as const) {
-      await tabToAsync(target());
-      const style = getComputedStyle(ring());
-      cues.push([`${name} focus`, style.outlineStyle, style.outlineColor, Number.parseFloat(style.outlineWidth) >= 2]);
+    for (const row of [
+      new FocusCueCase("toolbar button", () => button("Back"), () => button("Back")),
+      new FocusCueCase("address field", () => field(), () => find(".nol-browser-toolbar-address")),
+      new FocusCueCase("notice action", () => find(".nol-browser-request-notice-action"), () => find(".nol-browser-request-notice-action"))
+    ]) {
+      await tabToAsync(row.target());
+      const style = getComputedStyle(row.ring());
+      cues.push([`${row.name} focus`, style.outlineStyle, style.outlineColor, Number.parseFloat(style.outlineWidth) >= 2]);
     }
     button("More").click();
     await fixture?.whenStable();
@@ -1639,7 +1758,7 @@ describe("PageComponent colors", () => {
   it("keeps the page's top where it is when a load starts and when it ends, with the bar filling its kept space, in Light, in Dark and under forced colors", async () => {
     const moves: unknown[] = [];
     for (const mode of [ThemeMode.Light, ThemeMode.Dark, null]) {
-      if (mode === null)
+      if (Object.isNull(mode))
         await ForcedColorsFixture.activateAsync();
       else
         AppearanceFixture.apply(DefaultTheme.theme, mode);

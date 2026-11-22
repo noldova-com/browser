@@ -26,16 +26,17 @@ import { PageOnOtherWorkspaceException } from "../exceptions/page-on-other-works
 import { PagesInactiveException } from "../exceptions/pages-inactive.exception.ts";
 import { OpenedPage } from "../models/opened-page.ts";
 import { OpeningPage } from "../models/opening-page.ts";
+import { PagePlace } from "../models/page-place.ts";
 import { PageShowing } from "../models/page-showing.ts";
 import type { PaneStatus } from "../models/pane-status.ts";
 import { PaneTab } from "../models/pane-tab.ts";
 import { RefusedPage } from "../models/refused-page.ts";
+import { ShownPage } from "../models/shown-page.ts";
 import { TypedEntry } from "../models/typed-entry.ts";
 import { TypedLoad } from "../models/typed-load.ts";
 import type { ViewNewWindowEvent } from "../models/view-new-window-event.ts";
 import type { ViewRefusalEvent } from "../models/view-refusal-event.ts";
 import type { AddressReading } from "../types/address-reading.ts";
-import type { PagePlace } from "../types/page-place.ts";
 import { AddressReader } from "./address-reader.ts";
 import { AgentPages } from "./agent-pages.ts";
 import { NavigationStarts } from "./navigation-starts.ts";
@@ -49,7 +50,7 @@ export class Pages {
   // Pages the person closed here while an agent's call ran on them, until that call ends or the page opens again: a refusal that comes after its
   // tab closed, from a card still waiting, isn't kept.
   private readonly closed: Set<string> = new Set<string>();
-  private readonly shown: Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }> = new Map<PaneTab, { readonly place: PagePlace; readonly stop: () => void }>();
+  private readonly shown: Map<PaneTab, ShownPage> = new Map<PaneTab, ShownPage>();
   private readonly lastAsked: Map<string, string> = new Map<string, string>();
   private readonly entries: WeakMap<PaneTab, TypedEntry> = new WeakMap<PaneTab, TypedEntry>();
   private readonly typing: WeakMap<PaneTab, TypedLoad> = new WeakMap<PaneTab, TypedLoad>();
@@ -103,7 +104,7 @@ export class Pages {
 
   public static of(context: IWindowPartContext): Pages {
     const pages: Pages | undefined = Pages.registry.get(context);
-    if (pages === undefined)
+    if (Object.isUndefined(pages))
       throw new PagesInactiveException(null);
     return pages;
   }
@@ -148,7 +149,7 @@ export class Pages {
       this.context.log(Resources.formatOpenPagesNotRead(error));
       return false;
     }
-    if (open === null || open.length === 0)
+    if (Object.isNull(open) || open.length === 0)
       return true;
     let held: HeldPages;
     try {
@@ -177,24 +178,24 @@ export class Pages {
 
   public open(profileKey: string, url: string | null, picked: string | null = null, opener: PaneTab | null = null, isBehind: boolean = false): string {
     const instance: string = picked ?? crypto.randomUUID();
-    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = [...this.shown.entries()].find(t => t[0].id === instance);
-    const place: PagePlace | undefined = shown === undefined ? this.pending.get(instance) ?? this.heldOpening(instance)?.place : shown[1].place;
-    if (place !== undefined) {
+    const shown: ShownPage | undefined = [...this.shown.values()].find(t => t.tab.id === instance);
+    const place: PagePlace | undefined = Object.isUndefined(shown) ? this.pending.get(instance) ?? this.heldOpening(instance)?.place : shown.place;
+    if (!Object.isUndefined(place)) {
       if (place.profileKey !== profileKey)
         throw new PageOnOtherWorkspaceException(instance, profileKey);
-      this.context.openDocument(Resources.pageDocument, instance, shown === undefined ? Resources.formatTabTitle(place.url) : shown[0].title);
+      this.context.openDocument(Resources.pageDocument, instance, Object.isUndefined(shown) ? Resources.formatTabTitle(place.url) : shown.tab.title);
       return instance;
     }
-    this.pending.set(instance, { profileKey, url: url === null ? "" : url });
+    this.pending.set(instance, new PagePlace(profileKey, Object.isNull(url) ? "" : url));
     this.closed.delete(instance);
     try {
-      this.context.openDocument(Resources.pageDocument, instance, url === null ? Resources.newTab : url, this.documentOptions(opener, isBehind));
+      this.context.openDocument(Resources.pageDocument, instance, Object.isNull(url) ? Resources.newTab : url, this.documentOptions(opener, isBehind));
     }
     catch (error) {
       this.pending.delete(instance);
       throw error;
     }
-    if (opener !== null)
+    if (!Object.isNull(opener))
       this.lastAsked.set(opener.id, instance);
     this.agentPages.openTabs([instance]);
     if (!this.heldElsewhere().has(instance))
@@ -235,7 +236,7 @@ export class Pages {
 
   public async goToAsync(tab: PaneTab, text: string): Promise<EntryAnswer> {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
-    if (place === undefined || tab.controller.status.state === PaneState.Unavailable)
+    if (Object.isUndefined(place) || tab.controller.status.state === PaneState.Unavailable)
       return EntryAnswer.Stayed;
     const entry: TypedEntry = new TypedEntry();
     this.entries.set(tab, entry);
@@ -297,7 +298,7 @@ export class Pages {
 
   public openPopup(tab: PaneTab, url: string): void {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
-    if (place !== undefined)
+    if (!Object.isUndefined(place))
       this.open(place.profileKey, url, null, tab);
     tab.controller.dismissPopup();
   }
@@ -313,7 +314,7 @@ export class Pages {
   public openNew(tab: PaneTab): void {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     try {
-      if (place !== undefined && Pages.showsView(tab))
+      if (!Object.isUndefined(place) && Pages.showsView(tab))
         this.open(place.profileKey, null);
     }
     catch (error) {
@@ -323,19 +324,19 @@ export class Pages {
 
   public canOpenBeside(commandArguments: JsonValue): boolean {
     const instance: string | null = Pages.besideOf(commandArguments);
-    return instance !== null && this.shownInstances().has(instance);
+    return !Object.isNull(instance) && this.shownInstances().has(instance);
   }
 
   public openBeside(commandArguments: JsonValue): void {
     const instance: string | null = Pages.besideOf(commandArguments);
     const tab: PaneTab | undefined = [...this.shown.keys()].find(t => t.id === instance);
-    if (tab !== undefined)
+    if (!Object.isUndefined(tab))
       this.openNew(tab);
   }
 
   public async clearBrowsingDataAsync(tab: PaneTab): Promise<void> {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
-    if (place !== undefined)
+    if (!Object.isUndefined(place))
       await this.context.requestAsync(BrowserMethods.clearBrowsingData, new BrowsingDataRequest(place.profileKey).toJson());
   }
 
@@ -344,8 +345,8 @@ export class Pages {
   }
 
   public release(tab: PaneTab): void {
-    const held: { readonly stop: () => void } | undefined = this.shown.get(tab);
-    if (held === undefined)
+    const held: ShownPage | undefined = this.shown.get(tab);
+    if (Object.isUndefined(held))
       return;
     this.shown.delete(tab);
     this.noteShown();
@@ -422,20 +423,20 @@ export class Pages {
     this.agentPages.noteAgent(activity.instance, activity.agentName);
     this.arriving?.push(activity);
     this.current.set(Pages.apply(this.current(), activity));
-    const shown: [PaneTab, { readonly place: PagePlace }] | undefined = activity.state === PageActivityState.Idle ? undefined
-      : [...this.shown].find(([t]) => t.id === activity.instance && this.typing.has(t));
-    if (shown !== undefined)
-      this.endTyping(shown[0], shown[1].place, false);
+    const shown: ShownPage | undefined = activity.state === PageActivityState.Idle ? undefined
+      : [...this.shown.values()].find(t => t.tab.id === activity.instance && this.typing.has(t.tab));
+    if (!Object.isUndefined(shown))
+      this.endTyping(shown.tab, shown.place, false);
     if (activity.action === PageAction.Navigating && activity.state === PageActivityState.Acting)
       for (const tab of this.shown.keys())
         if (tab.id === activity.instance)
           tab.controller.followNavigation();
-    if (activity.refusal !== null && !this.closed.has(activity.instance))
+    if (!Object.isNull(activity.refusal) && !this.closed.has(activity.instance))
       this.refused.set(new Map<string, RefusedPage>(this.refused()).set(activity.instance, new RefusedPage(activity.agentName, activity.refusal.url, activity.refusal.origin)));
     if (activity.state === PageActivityState.Ended)
       this.closed.delete(activity.instance);
     const held: PaneTab | undefined = activity.state === PageActivityState.Ended && activity.isHandedOver ? [...this.shown.keys()].find(t => t.id === activity.instance) : undefined;
-    if (held !== undefined)
+    if (!Object.isUndefined(held))
       this.context.openDocument(Resources.pageDocument, activity.instance, held.title);
   }
 
@@ -449,14 +450,14 @@ export class Pages {
   }
 
   private static besideOf(commandArguments: JsonValue): string | null {
-    return commandArguments === null ? Pages.focusedInstance() : Pages.instanceOf(commandArguments);
+    return Object.isNull(commandArguments) ? Pages.focusedInstance() : Pages.instanceOf(commandArguments);
   }
 
   private static instanceOf(commandArguments: JsonValue): string | null {
     if (!PageAnswers.isObject(commandArguments))
       return null;
     const instance: JsonValue | undefined = commandArguments[Resources.instanceArgument];
-    return commandArguments[Resources.documentArgument] === Resources.pageDocument && typeof instance === "string" ? instance : null;
+    return commandArguments[Resources.documentArgument] === Resources.pageDocument && Object.isString(instance) ? instance : null;
   }
 
   private static focusedInstance(): string | null {
@@ -464,9 +465,9 @@ export class Pages {
   }
 
   private documentOptions(opener: PaneTab | null, isBehind: boolean): IDocumentOptions {
-    if (opener !== null) {
+    if (!Object.isNull(opener)) {
       const last: string | undefined = this.lastAsked.get(opener.id);
-      const after: string = last !== undefined && this.holds(last) ? last : opener.id;
+      const after: string = !Object.isUndefined(last) && this.holds(last) ? last : opener.id;
       const marker: IDocumentMarker = { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) };
       return isBehind ? { after, marker, activate: false } : { after, marker };
     }
@@ -487,11 +488,11 @@ export class Pages {
   // Whether one of an agent's calls runs on the page, rather than the agent only keeping control of it between calls.
   private isCalledOn(instance: string): boolean {
     const state: PageActivityState | undefined = this.current().get(instance)?.state;
-    return state !== undefined && state !== PageActivityState.Idle;
+    return !Object.isUndefined(state) && state !== PageActivityState.Idle;
   }
 
   private holds(instance: string): boolean {
-    return this.pending.has(instance) || this.heldOpening(instance) !== undefined || [...this.shown.keys()].some(t => t.id === instance);
+    return this.pending.has(instance) || !Object.isUndefined(this.heldOpening(instance)) || [...this.shown.keys()].some(t => t.id === instance);
   }
 
   private heldOpening(instance: string): OpeningPage | undefined {
@@ -528,7 +529,7 @@ export class Pages {
 
   private followRedirect(tab: PaneTab, place: PagePlace, event: ViewRefusalEvent): boolean {
     const typing: TypedLoad | undefined = this.typing.get(tab);
-    if (typing === undefined || this.entries.get(tab) !== typing.entry || this.isCalledOn(tab.id) || typing.hops >= Resources.redirectLimit) {
+    if (Object.isUndefined(typing) || this.entries.get(tab) !== typing.entry || this.isCalledOn(tab.id) || typing.hops >= Resources.redirectLimit) {
       this.endTyping(tab, place);
       return false;
     }
@@ -592,7 +593,7 @@ export class Pages {
   }
 
   private async openViewAsync(instance: string, place: PagePlace | null, showing: PageShowing): Promise<PaneTab | null> {
-    if (place === null || this.isClosed)
+    if (Object.isNull(place) || this.isClosed)
       return null;
     const pane: WebViewPane = new WebViewPane(QualifiedName.parse(Resources.pageDocument), instance);
     const opening: OpeningPage = new OpeningPage(place);
@@ -611,9 +612,9 @@ export class Pages {
         this.markElsewhere(instance, true);
       return null;
     }
-    this.shown.set(tab, { place, stop: this.follow(tab, place) });
+    this.shown.set(tab, new ShownPage(tab, place, this.follow(tab, place)));
     this.noteShown();
-    if (place.url !== "" && view !== null)
+    if (!String.isNullOrEmpty(place.url) && !Object.isNull(view))
       this.goFirst(tab, place.url);
     return tab;
   }
@@ -666,7 +667,7 @@ export class Pages {
   }
 
   private static placeOf(record: PageRecord | null): PagePlace | null {
-    return record === null ? null : { profileKey: record.profileKey, url: record.url };
+    return Object.isNull(record) ? null : new PagePlace(record.profileKey, record.url);
   }
 
   private follow(tab: PaneTab, place: PagePlace): () => void {
@@ -687,7 +688,7 @@ export class Pages {
     let was: PaneStatus = tab.controller.status;
     const stopStatus: () => void = tab.controller.onChange(status => {
       const entry: TypedEntry | undefined = this.entries.get(tab);
-      if (status.state === PaneState.Loading && was.state !== PaneState.Loading && entry !== undefined && this.typing.get(tab)?.entry !== entry)
+      if (status.state === PaneState.Loading && was.state !== PaneState.Loading && !Object.isUndefined(entry) && this.typing.get(tab)?.entry !== entry)
         this.leaveEntry(tab);
       if ((status.state === PaneState.Unavailable) !== (was.state === PaneState.Unavailable))
         this.noteShown();
@@ -696,9 +697,9 @@ export class Pages {
         this.endTyping(tab, place);
       if (status.state === PaneState.Loading)
         this.dismissRefusal(tab.id);
-      if (status.state === PaneState.Loading && clearWorking === null)
+      if (status.state === PaneState.Loading && Object.isNull(clearWorking))
         clearWorking = this.context.markWorking(Resources.pageDocument, tab.id);
-      else if (status.state !== PaneState.Loading && clearWorking !== null) {
+      else if (status.state !== PaneState.Loading && !Object.isNull(clearWorking)) {
         clearWorking();
         clearWorking = null;
       }
@@ -708,7 +709,7 @@ export class Pages {
         this.context.updateDocument(Resources.pageDocument, tab.id, { title });
       }
       showStatus(status);
-      if (status.url !== url && status.url !== "") {
+      if (status.url !== url && !String.isNullOrEmpty(status.url)) {
         url = status.url;
         this.request(BrowserMethods.rememberPage, new PageRecord(tab.id, place.profileKey, url).toJson(), Resources.formatNotKept);
       }

@@ -13,6 +13,7 @@ import { PageStateAction } from "./app/enums/page-state-action.ts";
 import { PaneState } from "./app/enums/pane-state.ts";
 import { RefusedRequest } from "./app/enums/refused-request.ts";
 import { ZoomStep } from "./app/enums/zoom-step.ts";
+import { KeyShortcut } from "./app/models/key-shortcut.ts";
 import { PageStateText } from "./app/models/page-state-text.ts";
 import type { PaneStatus } from "./app/models/pane-status.ts";
 import type { RefusedPage } from "./app/models/refused-page.ts";
@@ -111,8 +112,8 @@ export class Resources {
   public static readonly zoomOutGlyph: string = "remove";
   public static readonly resetZoom: string = "Reset to 100%";
   public static readonly resetZoomGlyph: string = "fit_screen";
-  public static readonly zoomKeys: Readonly<Record<ZoomStep, { readonly other: string; readonly mac: string }>> = {
-    [ZoomStep.In]: { other: "Ctrl+=", mac: "⌘=" }, [ZoomStep.Out]: { other: "Ctrl+-", mac: "⌘-" }, [ZoomStep.Reset]: { other: "Ctrl+0", mac: "⌘0" }
+  public static readonly zoomKeys: Readonly<Record<ZoomStep, KeyShortcut>> = {
+    [ZoomStep.In]: new KeyShortcut("Ctrl+=", "⌘="), [ZoomStep.Out]: new KeyShortcut("Ctrl+-", "⌘-"), [ZoomStep.Reset]: new KeyShortcut("Ctrl+0", "⌘0")
   };
   public static readonly leastZoom: number = 0.25;
   public static readonly greatestZoom: number = 5;
@@ -120,7 +121,7 @@ export class Resources {
   public static readonly findOnPage: string = "Find on page";
   public static readonly findGlyph: string = "find_in_page";
   public static readonly findFieldGlyph: string = "search";
-  public static readonly findKeys: { readonly other: string; readonly mac: string } = { other: "Ctrl+F", mac: "⌘F" };
+  public static readonly findKeys: KeyShortcut = new KeyShortcut("Ctrl+F", "⌘F");
   public static readonly findBarLabel: string = "Find on page";
   public static readonly findField: string = "Find";
   public static readonly previousMatch: string = "Previous match";
@@ -259,7 +260,7 @@ export class Resources {
 
   // The pane names the module as the app's browser wherever it speaks of it, or as this browser while the app's name is unknown.
   public static formatBrowser(appName: string | null): string {
-    return appName === null ? Resources.thisBrowser : `${appName}'s browser`;
+    return Object.isNull(appName) ? Resources.thisBrowser : `${appName}'s browser`;
   }
 
   public static formatPagesInactive(appName: string | null): string {
@@ -267,7 +268,7 @@ export class Resources {
   }
 
   public static formatBrowserStart(appName: string | null): string {
-    return appName === null ? Resources.thisBrowserStart : `${appName}'s browser`;
+    return Object.isNull(appName) ? Resources.thisBrowserStart : `${appName}'s browser`;
   }
 
   public static formatForgottenPage(appName: string | null): PageStateText {
@@ -292,7 +293,7 @@ export class Resources {
       case PaneState.Refused:
         return status.refusedAddress === TypedAddressRefusal.Credentials || status.refusedAddress === TypedAddressRefusal.TooLong
           ? new PageStateText("block", `${browser} doesn't open this address`, "Edit the address in the field to open its site.")
-          : status.mayBeUnlisted && status.refusedAddress === null && status.refusedOrigin !== null && Resources.isPublicWebOrigin(status.refusedOrigin)
+          : status.mayBeUnlisted && Object.isNull(status.refusedAddress) && !Object.isNull(status.refusedOrigin) && Resources.isPublicWebOrigin(status.refusedOrigin)
             ? new PageStateText("block", `This workspace doesn't allow ${status.refusedOrigin}`,
               "This address isn't among the sites this workspace allows. Type it in the address field to open it.")
             : new PageStateText("block", status.refusedOrigin === Resources.opaqueOrigin ? `${browser} doesn't open this page` : `${browser} doesn't open ${status.refusedOrigin}`,
@@ -305,11 +306,11 @@ export class Resources {
   }
 
   public static hostOf(url: string): string {
-    return URL.canParse(url) && new URL(url).host !== "" ? new URL(url).host : url;
+    return URL.canParse(url) && !String.isNullOrEmpty(new URL(url).host) ? new URL(url).host : url;
   }
 
   public static formatAgentName(agentName: string): string {
-    return agentName.trim() === "" ? Resources.unnamedAgent : agentName;
+    return String.isNullOrEmpty(agentName.trim()) ? Resources.unnamedAgent : agentName;
   }
 
   public static formatAgentMessage(name: string, phrase: string): string {
@@ -361,7 +362,7 @@ export class Resources {
   }
 
   public static formatTabTitle(url: string): string {
-    return url === "" ? Resources.newTab : url;
+    return String.isNullOrEmpty(url) ? Resources.newTab : url;
   }
 
   public static formatZoom(factor: number): string {
@@ -514,7 +515,7 @@ export class Resources {
   // it to the list; any other origin, or an opaque one's address, is refused by its kind, whatever the list says.
   private static isPublicWebOrigin(origin: string): boolean {
     const parsed: URL | null = URL.parse(origin);
-    return parsed !== null && Resources.webSchemeNames.includes(parsed.protocol.slice(0, -Resources.schemeEnd.length))
+    return !Object.isNull(parsed) && Resources.webSchemeNames.includes(parsed.protocol.slice(0, -Resources.schemeEnd.length))
       && AddressKinds.ofHost(parsed.hostname) === AddressKind.Public;
   }
 

@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { PagePlace } from "../types/page-place.ts";
+import type { PagePlace } from "./page-place.ts";
 
 export class OpeningPage {
   private taken: boolean = false;

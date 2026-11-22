@@ -8,7 +8,7 @@
 
 import { type Signal, computed } from "@angular/core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
-import { BrowserEvents, BrowserMethods } from "@noldova/browser.protocol";
+import { BrowserEvents, BrowserMethods, PageRequest } from "@noldova/browser.protocol";
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
 import { DocumentTone } from "@noldova/desktop.window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +36,7 @@ import { ViewStateEvent } from "../../../src/app/models/view-state-event.ts";
 import { PageAnswers } from "../../../src/app/services/page-answers.ts";
 import { Pages } from "../../../src/app/services/pages.ts";
 import { FakeWebView, type FakeWebViews, WebViewValues } from "../../fixtures/fake-web-views.fixture.ts";
+import { MissingPartError } from "../../fixtures/missing-part.error.ts";
 import { WindowContext } from "../../fixtures/window-context.fixture.ts";
 
 describe("Pages", () => {
@@ -49,29 +50,30 @@ describe("Pages", () => {
   }
 
   function viewOf(tab: PaneTab): FakeWebView {
-    if (!(tab.view instanceof FakeWebView))
-      throw new Error("The tab has no fake view.");
-    return tab.view;
+    const view: FakeWebView | undefined = surface().views.find(t => t === tab.view);
+    if (Object.isUndefined(view))
+      throw new MissingPartError("fake view on the tab");
+    return view;
   }
 
   function lastOpened(): string {
     const opened = context.opened.at(-1);
-    if (opened === undefined)
-      throw new Error("No page document opened.");
+    if (Object.isUndefined(opened))
+      throw new MissingPartError("page document opened");
     return opened.instance;
   }
 
   async function openAsync(url: string | null = null, profileKey: string = "workspace-1"): Promise<PaneTab> {
     pages.open(profileKey, url);
     const tab: PaneTab | null = await pages.showAsync(lastOpened());
-    if (tab === null)
-      throw new Error("The page didn't show.");
+    if (Object.isNull(tab))
+      throw new MissingPartError("shown page");
     place(tab);
     return tab;
   }
 
   function place(tab: PaneTab | null): void {
-    if (tab === null || tab.view === null)
+    if (Object.isNull(tab) || Object.isNull(tab.view))
       return;
     const view: FakeWebView = viewOf(tab);
     view.mount(document.createElement("div"));
@@ -86,8 +88,8 @@ describe("Pages", () => {
     return context.requests.filter(t => t.method === method).map(t => t.parameters);
   }
 
-  function underlines(): [string, string | null | undefined][] {
-    return context.titles.filter(t => t.update.underline !== undefined).map(t => [t.instance, t.update.underline]);
+  function underlines(): string[] {
+    return context.titles.filter(t => !Object.isUndefined(t.update.underline)).map(t => t.instance);
   }
 
   function agentPagesText(): string | undefined {
@@ -290,7 +292,8 @@ describe("Pages", () => {
   });
 
   it("opens no view, and counts and remembers nothing, for a restored tab the person closed while its claim was answered", async () => {
-    const [closing, kept]: readonly [string, string] = ["0f8fad5b-d9cb-469f-a165-70867728950e", "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d"];
+    const closing: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const kept: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const claims: readonly PromiseWithResolvers<JsonValue>[] = [Promise.withResolvers<JsonValue>(), Promise.withResolvers<JsonValue>()];
     let asked: number = 0;
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? claims[asked++]?.promise ?? declared(method, parameters) : declared(method, parameters);
@@ -430,7 +433,7 @@ describe("Pages", () => {
     context.closeByPerson(busy.id);
     context.emit(BrowserEvents.pageActivity, { ...navigating(busy.id, "call-1"), state: "Ended" });
 
-    const calls: readonly (readonly [string, string])[] = [[idle.id, "call-2"], [busy.id, "call-3"]];
+    const calls: Map<string, string> = new Map<string, string>([[idle.id, "call-2"], [busy.id, "call-3"]]);
     for (const [instance, activity] of calls) {
       context.emit(BrowserEvents.pageActivity, navigating(instance, activity));
       context.emit(BrowserEvents.pageActivity, { ...navigating(instance, activity), state: "Ended", refusal });
@@ -475,8 +478,8 @@ describe("Pages", () => {
     expect(pages.open("workspace-1", null, picked)).toBe(picked);
     expect(pages.open("workspace-1", "https://docs.example.com/", picked)).toBe(picked);
     const tab: PaneTab | null = await pages.showAsync(picked);
-    if (tab === null)
-      throw new Error("The picked page didn't show.");
+    if (Object.isNull(tab))
+      throw new MissingPartError("shown picked page");
     loading(viewOf(tab), "https://docs.example.com/guide", false, "Guide");
     expect(pages.open("workspace-1", "https://other.example.com/", picked)).toBe(picked);
 
@@ -544,15 +547,15 @@ describe("Pages", () => {
 
     expect([context.opened.map(t => [t.instance, t.title]), requestsOf(BrowserMethods.claimPage), requestsOf(BrowserMethods.readPage)])
       .toEqual([[[picked, "https://docs.example.com/pricing"]], [{ instance: picked }], []]);
-    expect([tab?.id, tab === null ? null : viewOf(tab).profileKey]).toEqual([picked, "workspace-1"]);
-    await vi.waitFor(() => expect(tab === null ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
+    expect([tab?.id, Object.isNull(tab) ? null : viewOf(tab).profileKey]).toEqual([picked, "workspace-1"]);
+    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
   });
 
   it("opens a kept page no window has at the address or on the workspace the app asks for, not where its record was", async () => {
     const first: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const second: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     context.answerRequest = (method, params) => method === BrowserMethods.claimPage
-      ? Promise.resolve({ agentName: null, isClaimed: true, isHere: false, record: { instance: (params as { readonly instance: string }).instance, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } })
+      ? Promise.resolve({ agentName: null, isClaimed: true, isHere: false, record: { instance: PageRequest.fromJson(params).instance, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } })
       : declared(method, params);
 
     await pages.openAsync("workspace-1", "https://status.example.com/", first);
@@ -561,13 +564,14 @@ describe("Pages", () => {
     tabs.forEach(place);
 
     expect(context.opened.map(t => t.title)).toEqual(["https://status.example.com/", "New tab"]);
-    expect(tabs.map(t => t === null ? null : viewOf(t).profileKey)).toEqual(["workspace-1", "workspace-2"]);
-    await vi.waitFor(() => expect(tabs.map(t => t === null ? null : viewOf(t).calls)).toEqual([["navigate https://status.example.com/"], []]));
+    expect(tabs.map(t => Object.isNull(t) ? null : viewOf(t).profileKey)).toEqual(["workspace-1", "workspace-2"]);
+    await vi.waitFor(() => expect(tabs.map(t => Object.isNull(t) ? null : viewOf(t).calls)).toEqual([["navigate https://status.example.com/"], []]));
   });
 
   it("brings forward a page this window restored but hasn't shown, on its own workspace, and refuses it on another", async () => {
-    const [kept, plain]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
-    context.answerRequest = (method, params) => method !== BrowserMethods.claimPage ? declared(method, params) : Promise.resolve((params as { readonly instance: string }).instance === kept
+    const kept: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const plain: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    context.answerRequest = (method, params) => method !== BrowserMethods.claimPage ? declared(method, params) : Promise.resolve(PageRequest.fromJson(params).instance === kept
       ? { agentName: null, isClaimed: true, isHere: true, record: { instance: kept, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } }
       : { agentName: null, isClaimed: true, isHere: true, record: null });
 
@@ -592,11 +596,12 @@ describe("Pages", () => {
   });
 
   it("opens a kept page that never went anywhere as a new tab, restored here but not shown or restored nowhere", async () => {
-    const [here, nowhere]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
+    const here: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const nowhere: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     context.answerRequest = (method, params) => {
       if (method !== BrowserMethods.claimPage)
         return declared(method, params);
-      const instance: string = (params as { readonly instance: string }).instance;
+      const instance: string = PageRequest.fromJson(params).instance;
       return Promise.resolve({ agentName: null, isClaimed: true, isHere: instance === here, record: { instance, profileKey: "workspace-1", url: "" } });
     };
 
@@ -604,14 +609,15 @@ describe("Pages", () => {
     const tab = await pages.showAsync(nowhere);
 
     expect(context.opened.map(t => [t.instance, t.title])).toEqual([[here, "New tab"], [nowhere, "New tab"]]);
-    expect([tab === null ? null : viewOf(tab).calls, tab?.controller.status, requestsOf(BrowserMethods.letGoPage)]).toEqual([[], PaneStatus.empty, []]);
+    expect([Object.isNull(tab) ? null : viewOf(tab).calls, tab?.controller.status, requestsOf(BrowserMethods.letGoPage)]).toEqual([[], PaneStatus.empty, []]);
   });
 
   it("lets go of a page it claimed when Noldova Desktop refuses to open it, and keeps a page this window restored", async () => {
-    const [nowhere, here]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
+    const nowhere: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const here: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const refusal: Error = new Error("The title is blank.");
     context.answerRequest = (method, params) => method === BrowserMethods.letGoPage ? Promise.reject(new TypeError("The runtime part went away."))
-      : method === BrowserMethods.claimPage ? Promise.resolve({ agentName: null, isClaimed: true, isHere: (params as { readonly instance: string }).instance === here, record: null }) : declared(method, params);
+      : method === BrowserMethods.claimPage ? Promise.resolve({ agentName: null, isClaimed: true, isHere: PageRequest.fromJson(params).instance === here, record: null }) : declared(method, params);
     vi.spyOn(context, "openDocument").mockImplementation(() => {
       throw refusal;
     });
@@ -626,7 +632,8 @@ describe("Pages", () => {
   });
 
   it("lets go of a page it claimed, and opens nothing, when the part deactivates while the runtime part answers the claim", async () => {
-    const [nowhere, here]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
+    const nowhere: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const here: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const claims: PromiseWithResolvers<JsonValue>[] = [Promise.withResolvers<JsonValue>(), Promise.withResolvers<JsonValue>()];
     let asked: number = 0;
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? claims[asked++]?.promise ?? declared(method, parameters) : declared(method, parameters);
@@ -642,10 +649,11 @@ describe("Pages", () => {
   });
 
   it("opens no view for a restored tab whose page another window claimed before this window reported its tabs, and claims it again on an open", async () => {
-    const [claimed, gone]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
+    const claimed: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const gone: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     context.answerRequest = (method, params) => method === BrowserMethods.claimPage
       ? Promise.resolve({ agentName: null, isClaimed: false, isHere: false, record: null })
-      : method === BrowserMethods.readPage && (params as { readonly instance: string }).instance === claimed
+      : method === BrowserMethods.readPage && PageRequest.fromJson(params).instance === claimed
         ? Promise.resolve({ instance: claimed, profileKey: "workspace-1", url: "https://docs.example.com/" }) : declared(method, params);
 
     expect([await pages.showAsync(claimed), await pages.showAsync(gone)]).toEqual([null, null]);
@@ -686,9 +694,9 @@ describe("Pages", () => {
     const tab = await pages.showAsync(instance);
     place(tab);
 
-    expect([[...pages.elsewhere()], context.opened.map(t => [t.instance, t.title]), tab === null ? null : viewOf(tab).profileKey])
+    expect([[...pages.elsewhere()], context.opened.map(t => [t.instance, t.title]), Object.isNull(tab) ? null : viewOf(tab).profileKey])
       .toEqual([[], [[instance, "https://docs.example.com/"]], "workspace-1"]);
-    await vi.waitFor(() => expect(tab === null ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/"]));
+    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/"]));
   });
 
   it("closes the view of a shown tab, and drops a tab yet to show, whose page another window claimed while the runtime started again", async () => {
@@ -849,7 +857,7 @@ describe("Pages", () => {
 
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([heard, unheard, heard, unheard]
       .map((t, i) => ({ instance: t.id, profileKey: "workspace-1", url: i < 2 ? "" : "https://docs.example.com/" })));
-    expect(context.titles.filter(t => t.update.title !== undefined).map(t => [t.instance, t.update.title]))
+    expect(context.titles.filter(t => !Object.isUndefined(t.update.title)).map(t => [t.instance, t.update.title]))
       .toEqual([[heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
   });
 
@@ -865,7 +873,7 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/next", true);
     loading(view, "https://docs.example.com/next", true, "Next steps");
 
-    expect([whileLoading, context.titles.filter(t => t.update.title !== undefined).map(t => t.update.title)]).toEqual([0, ["https://docs.example.com/", "Next steps"]]);
+    expect([whileLoading, context.titles.filter(t => !Object.isUndefined(t.update.title)).map(t => t.update.title)]).toEqual([0, ["https://docs.example.com/", "Next steps"]]);
   });
 
   it("opens a restored page in the workspace its record keeps, at the address it last showed", async () => {
@@ -877,8 +885,8 @@ describe("Pages", () => {
     place(tab);
 
     expect([requestsOf(BrowserMethods.claimPage), requestsOf(BrowserMethods.readPage)]).toEqual([[{ instance }], []]);
-    expect([tab?.id, tab === null ? null : viewOf(tab).profileKey]).toEqual([instance, "workspace-2"]);
-    await vi.waitFor(() => expect(tab === null ? null : viewOf(tab).calls).toEqual(["navigate https://status.example.com/"]));
+    expect([tab?.id, Object.isNull(tab) ? null : viewOf(tab).profileKey]).toEqual([instance, "workspace-2"]);
+    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://status.example.com/"]));
   });
 
   it("gives null, and opens no view, for a restored page the module keeps no record of, or once the part deactivated", async () => {
@@ -1091,7 +1099,7 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", true);
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
-    expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
+    expect(context.titles.filter(t => !Object.isUndefined(t.update.status))).toEqual([
       status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", `${WindowContext.appName}'s browser doesn't open https://refused.example`, DocumentTone.Neutral),
       { instance: tab.id, update: { status: null } }
     ]);
@@ -1111,7 +1119,7 @@ describe("Pages", () => {
     answerName(WindowContext.appName);
     await vi.waitFor(() => expect(pages.appName()).toBe(WindowContext.appName));
 
-    expect(context.titles.filter(t => t.update.status !== undefined)).toEqual([
+    expect(context.titles.filter(t => !Object.isUndefined(t.update.status))).toEqual([
       status("This browser doesn't open https://refused.example"), status(`${WindowContext.appName}'s browser doesn't open https://refused.example`)
     ]);
   });
@@ -1160,7 +1168,7 @@ describe("Pages", () => {
       .toEqual([["https://status.example.com/", tab.id, { glyph: "subdirectory_arrow_right", label: "Opened from Plans and pricing" }]]);
     expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://ads.example.com/", null));
     const opener = await pages.showAsync(lastOpened());
-    expect(opener === null ? null : viewOf(opener).profileKey).toBe("workspace-2");
+    expect(Object.isNull(opener) ? null : viewOf(opener).profileKey).toBe("workspace-2");
   });
 
   it("opens one page for each press however many windows the page asks for, and blocks the rest, the person's recent input or not, keeping the latest in the address bar", async () => {
@@ -1259,8 +1267,8 @@ describe("Pages", () => {
 
     viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com", false, true));
     const opened = await pages.showAsync(lastOpened());
-    if (opened === null)
-      throw new Error("The new page didn't show.");
+    if (Object.isNull(opened))
+      throw new MissingPartError("shown new page");
     place(opened);
     await vi.waitFor(() => expect(opened.controller.status.url).toBe("https://status.example.com/"));
 
@@ -1322,8 +1330,8 @@ describe("Pages", () => {
     pages.openPopup(tab, "https://b.example.com/");
     const inRow = context.row;
     const last = await pages.showAsync(lastOpened());
-    if (last === null)
-      throw new Error("The page didn't show.");
+    if (Object.isNull(last))
+      throw new MissingPartError("shown page");
     pages.release(last);
     pages.openPopup(tab, "https://c.example.com/");
 
@@ -1347,7 +1355,7 @@ describe("Pages", () => {
     pages.openNew(tab);
     const shown: PaneTab | null = await pages.showAsync(lastOpened());
 
-    expect([context.opened.map(t => [t.title, t.after]), context.logs, shown === null ? null : viewOf(shown).profileKey]).toEqual([
+    expect([context.opened.map(t => [t.title, t.after]), context.logs, Object.isNull(shown) ? null : viewOf(shown).profileKey]).toEqual([
       [["https://docs.example.com/", null], ["https://ads.example.com/", tab.id], ["New tab", null]], ["The new page didn't open: RangeError."], "workspace-2"
     ]);
   });
@@ -1869,8 +1877,8 @@ describe("Pages", () => {
 
       await pages.openLinkAsync("https://example.com/docs");
       const tab: PaneTab | null = await pages.showAsync(lastOpened());
-      if (tab === null)
-        throw new Error("The link's page didn't show.");
+      if (Object.isNull(tab))
+        throw new MissingPartError("shown page for the link");
       await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/docs"]));
 
       expect(requestsOf(BrowserMethods.allowTypedAddress)).toEqual([{ profileKey: "links", url: "https://example.com/docs" }]);
