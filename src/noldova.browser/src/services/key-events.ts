@@ -24,7 +24,8 @@ export class KeyEvents {
     const named: KeyDefinition | undefined = KeyEvents.NAMED.get(key);
     if (named !== undefined)
       return named;
-    if ([...key].length !== 1)
+    // A control character, such as a carriage return, would reach the page as the key it stands for under another name; a named key presses it.
+    if ([...key].length !== 1 || Resources.controlKeyPattern.test(key))
       return null;
     const upper: string = key.toUpperCase();
     if (Resources.letterKeyPattern.test(upper))

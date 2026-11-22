@@ -281,6 +281,8 @@ describe("PressKeyTool", () => {
 
   it.each<[string, JsonObject, abstract new (...args: never[]) => Error]>([
     ["a key that is neither named nor one character", { key: "Hello" }, UnknownKeyException],
+    ["a carriage return, which a page takes as Enter", { key: "\r" }, UnknownKeyException],
+    ["a line feed", { key: "\n" }, UnknownKeyException],
     ["modifiers that aren't a list", { key: "a", modifiers: "Shift" }, ArgumentNotOneOfException],
     ["a modifier it doesn't know", { key: "a", modifiers: ["Hyper"] }, ArgumentNotOneOfException],
     ["a modifier given twice", { key: "a", modifiers: ["Shift", "Shift"] }, ArgumentNotOneOfException]

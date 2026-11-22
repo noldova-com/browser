@@ -14,7 +14,7 @@ import { KeyEvents } from "../../src/services/key-events.ts";
 import type { KeyEvent } from "../../src/types/key-event.ts";
 
 describe("KeyEvents", () => {
-  it("finds named keys, letters, digits and any other single character, and no longer text", () => {
+  it("finds named keys, letters, digits and any other single character but a control character, and no longer text", () => {
     expect(KeyEvents.find("Enter")).toStrictEqual(new KeyDefinition("Enter", "Enter", 13, "\r"));
     expect(KeyEvents.find("F1")).toStrictEqual(new KeyDefinition("F1", "F1", 112, ""));
     expect(KeyEvents.find("F13")).toBeNull();
@@ -25,6 +25,7 @@ describe("KeyEvents", () => {
     expect(KeyEvents.find("é")).toStrictEqual(new KeyDefinition("é", "", 0, "é"));
     expect(KeyEvents.find("\u{1f600}")).toStrictEqual(new KeyDefinition("\u{1f600}", "", 0, "\u{1f600}"));
     expect(KeyEvents.find("ab")).toBeNull();
+    expect(["\r", "\n", "\t", "\b", "\u{7f}", "\u{85}"].map(t => KeyEvents.find(t))).toEqual([null, null, null, null, null, null]);
   });
 
   it("adds the modifiers' bits, and none for a name it doesn't know", () => {
