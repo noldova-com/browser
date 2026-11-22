@@ -18,6 +18,7 @@ import { CallCancelledException } from "../../src/exceptions/call-cancelled.exce
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { ElementCoveredException } from "../../src/exceptions/element-covered.exception.ts";
 import { ElementNotVisibleException } from "../../src/exceptions/element-not-visible.exception.ts";
+import { InnerElementRiskierException } from "../../src/exceptions/inner-element-riskier.exception.ts";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
@@ -184,9 +185,10 @@ describe("ClickTool", () => {
     ]);
     expect(mouseEvents().length).toBe(3);
     const subtrees: readonly JsonObject[] = bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["depth"] === -1).map(t => t.params);
-    // The form is read with the button before the card and again before the press; the button's own subtree for each hit check.
+    // The form is read with the button before the card, and with the button and with the label the click lands on before the press; the
+    // button's own subtree for each hit check.
     expect([subtrees.filter(t => "objectId" in t), subtrees.filter(t => "backendNodeId" in t)]).toEqual([
-      [1, 2].map(() => ({ objectId: "form-4", depth: -1, pierce: true })),
+      [1, 2, 3].map(() => ({ objectId: "form-4", depth: -1, pierce: true })),
       [1, 2].map(() => ({ backendNodeId: ShopPage.FORM_BUTTON, depth: -1, pierce: true }))
     ]);
   });
@@ -200,6 +202,14 @@ describe("ClickTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.Deny], labels: {} });
     expect(bench.permissions.requests[0]?.details.at(-1)).toEqual({ label: "Sends", kind: PermissionDetailKind.Text, value: "pin" });
     expect(mouseEvents().length).toBe(3);
+  });
+
+  it("presses nothing and refuses a click on a container whose centre is a submit button of a form with a secret field, asking at medium risk", async () => {
+    ShopPage.serve(bench, ShopPage.SIGN_IN);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SIGN_IN_FORM) })), InnerElementRiskierException,
+      { reason: ToolFailureCode.Refused, moduleCode: "browser.innerElementRiskier" });
+    expect([bench.permissions.requests.map(t => t.risk), mouseEvents().map(t => t["type"])]).toEqual([[ToolRisk.Medium], ["mouseMoved"]]);
   });
 
   it("asks for a high-risk click every time, even after the person allowed the tool's medium-risk clicks on the site for the chat", async () => {
