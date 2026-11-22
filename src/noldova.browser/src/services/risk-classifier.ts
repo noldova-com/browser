@@ -31,7 +31,7 @@ export class RiskClassifier {
 
   public static submitsEnter(path: readonly NodeFacts[] | null): boolean {
     const field: NodeFacts | undefined = path?.at(-1);
-    return path !== null && field !== undefined && RiskClassifier.isTextInput(field) && RiskClassifier.isInForm(field, path.slice(0, -1));
+    return path !== null && field !== undefined && RiskClassifier.isEnterSubmitting(field) && RiskClassifier.isInForm(field, path.slice(0, -1));
   }
 
   public static isSubmittingKey(key: string): boolean {
@@ -83,8 +83,10 @@ export class RiskClassifier {
     return (node.nodeName === Resources.anchorElement || node.nodeName === Resources.areaElement) && node.attributes.has(Resources.hrefAttribute);
   }
 
-  private static isTextInput(node: NodeFacts): boolean {
-    return node.nodeName === Resources.inputElement && !Resources.nonTextInputs.includes(RiskClassifier.readLower(node, Resources.typeAttribute));
+  // The engine submits a form for Enter in any of its inputs, a checkbox or a radio button included, but a button or a reset button, whose Enter
+  // clicks it.
+  private static isEnterSubmitting(node: NodeFacts): boolean {
+    return node.nodeName === Resources.inputElement && !Resources.enterClickedInputs.includes(RiskClassifier.readLower(node, Resources.typeAttribute));
   }
 
   private static isInForm(node: NodeFacts, ancestors: readonly NodeFacts[]): boolean {
