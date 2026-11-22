@@ -14,7 +14,7 @@ import { KeyEvents } from "../../src/services/key-events.ts";
 import type { KeyEvent } from "../../src/types/key-event.ts";
 
 describe("KeyEvents", () => {
-  it("finds named keys, letters, digits and any other single character, and no longer text", () => {
+  it("finds named keys, letters, digits and any other single character but a control character, and no longer text", () => {
     expect(KeyEvents.find("Enter")).toStrictEqual(new KeyDefinition("Enter", "Enter", 13, "\r"));
     expect(KeyEvents.find("F1")).toStrictEqual(new KeyDefinition("F1", "F1", 112, ""));
     expect(KeyEvents.find("F13")).toBeNull();
@@ -25,6 +25,7 @@ describe("KeyEvents", () => {
     expect(KeyEvents.find("é")).toStrictEqual(new KeyDefinition("é", "", 0, "é"));
     expect(KeyEvents.find("\u{1f600}")).toStrictEqual(new KeyDefinition("\u{1f600}", "", 0, "\u{1f600}"));
     expect(KeyEvents.find("ab")).toBeNull();
+    expect(["\r", "\n", "\t", "\b", "\u{7f}", "\u{85}"].map(t => KeyEvents.find(t))).toEqual([null, null, null, null, null, null]);
   });
 
   it("adds the modifiers' bits, and none for a name it doesn't know", () => {
@@ -42,11 +43,14 @@ describe("KeyEvents", () => {
 
   it("gives a letter under Shift its capital, in its key and its text, and leaves a digit, a sign, a named key and a letter whose capital is two as they are", () => {
     const down = (key: string): readonly (string | undefined)[] => {
-      const event: KeyEvent = KeyEvents.press(KeyEvents.find(key) ?? new KeyDefinition(key, "", 0, ""), 8).down;
-      return [event.key, event.code, event.text ?? ""];
+      const found: KeyDefinition | null = KeyEvents.find(key);
+      if (Object.isNull(found))
+        throw new Error(`No key definition for ${key}.`);
+      const event: KeyEvent = KeyEvents.press(found, 8).down;
+      return [event.key, event.code, event.text];
     };
 
     expect(["a", "Z", "1", "-", "Tab", "é", "ñ", "ж", "α", "ß"].map(down)).toEqual([["A", "KeyA", "A"], ["Z", "KeyZ", "Z"], ["1", "Digit1", "1"], ["-", "", "-"],
-      ["Tab", "Tab", ""], ["É", "", "É"], ["Ñ", "", "Ñ"], ["Ж", "", "Ж"], ["Α", "", "Α"], ["ß", "", "ß"]]);
+      ["Tab", "Tab", undefined], ["É", "", "É"], ["Ñ", "", "Ñ"], ["Ж", "", "Ж"], ["Α", "", "Α"], ["ß", "", "ß"]]);
   });
 });

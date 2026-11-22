@@ -408,6 +408,7 @@ export class Resources {
   public static readonly shiftBit: number = 8;
   public static readonly letterKeyPattern: RegExp = /^[A-Z]$/u;
   public static readonly digitKeyPattern: RegExp = /^[0-9]$/u;
+  public static readonly controlKeyPattern: RegExp = /^\p{Cc}$/u;
   public static readonly rawKeyDownType: "rawKeyDown" = "rawKeyDown";
   public static readonly keyDownType: "keyDown" = "keyDown";
   public static readonly keyUpType: "keyUp" = "keyUp";
@@ -699,7 +700,7 @@ export class Resources {
   }
 
   public static formatUnknownKey(key: string): string {
-    return `The key "${key}" is neither a named key nor one character.`;
+    return `The key "${key}" is neither a named key nor one character other than a control character.`;
   }
 
   public static formatWaitNotMet(milliseconds: number): string {

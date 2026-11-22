@@ -20,8 +20,8 @@ describe("UnknownKeyException", () => {
     expect(exception).toBeInstanceOf(InvalidInputException);
     expect(exception).toBeInstanceOf(BrowserRuntimeException);
     expect(exception.name).toBe("UnknownKeyException");
-    expect(exception.message).toBe("The key \"Escape\" is neither a named key nor one character.");
+    expect(exception.message).toBe("The key \"Escape\" is neither a named key nor one character other than a control character.");
     expect(exception.key).toEqual("Escape");
-    expect(exception.toFailure()).toEqual(new ToolFailure(ToolFailureCode.Refused, "The key \"Escape\" is neither a named key nor one character.", null));
+    expect(exception.toFailure()).toEqual(new ToolFailure(ToolFailureCode.Refused, "The key \"Escape\" is neither a named key nor one character other than a control character.", null));
   });
 });
