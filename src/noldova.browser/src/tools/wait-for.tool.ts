@@ -28,6 +28,7 @@ import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
+import { HistoryPageReader } from "../services/history-page.reader.ts";
 import { InputValidator } from "../services/input.validator.ts";
 import { JsonShapes } from "../services/json-shapes.ts";
 import { LoadWaiter } from "../services/load-waiter.ts";
@@ -53,25 +54,39 @@ export class WaitForTool implements IBrowserTool {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, choice === Resources.referenceField);
       const loads: LoadWaiter = new LoadWaiter(this.kit.webViews.relay, page.viewId, null, null);
       try {
-        // The page sends its load only once its events are on, as navigate turns them on.
-        if (choice === Resources.loadField)
+        // The page sends its load only once its events are on, as navigate turns them on; a navigation pending in the page says they are,
+        // and the call would wait for its next document.
+        if (choice === Resources.loadField && !this.kit.navigations.isPending(page.viewId))
           await this.kit.calls.sendAsync(page.viewId, Resources.enableMethod, {}, options);
-        const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
         // The call's deadline can cut the wait short of its time limit, so a wait that isn't met says how long it waited.
         const started: number = Date.now();
         const until: number = Math.min(started + timeout, call.deadline - Resources.answerMarginMilliseconds);
-        const isMet: boolean = choice === Resources.loadField
+        const frame: FrameFacts | null = await this.kit.readSettledAsync(page.viewId, until, activity.signal, () => this.kit.readFrameAsync(page.viewId, options));
+        const isMet: boolean = !Object.isNull(frame) && (choice === Resources.loadField
           ? await loads.waitAsync(until, activity.signal)
-          : await this.whenAsync(page.viewId, options, until, choice === Resources.textField
+          : await this.whenAsync(page.viewId, options, until, this.settled(page.viewId, until, options, choice === Resources.textField
             ? this.checkText(page.viewId, text, options)
-            : await this.checkShownAsync(call.session, reference, page.viewId, frame.documentId, options));
-        const now: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-        return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(Math.max(0, until - started)), new ShownPage(now.url, await this.kit.readTitleOfAsync(page.viewId, now.documentId, options)));
+            : await this.checkShownAsync(call.session, reference, page.viewId, frame.documentId, options))));
+        return ToolResults.text(isMet ? Resources.waitMet : Resources.formatWaitNotMet(Math.max(0, until - started)), await this.readShownAsync(page.viewId, until, options));
       }
       finally {
         loads[Symbol.dispose]();
       }
     });
+  }
+
+  // The page the wait ends on, or the one the view's history still shows while the page waits for its next document at `until`.
+  private async readShownAsync(viewId: string, until: number, options: CallOptions): Promise<ShownPage> {
+    const shown: ShownPage | null = await this.kit.readSettledAsync(viewId, until, options.signal, async () => {
+      const now: FrameFacts = await this.kit.readFrameAsync(viewId, options);
+      return new ShownPage(now.url, await this.kit.readTitleOfAsync(viewId, now.documentId, options));
+    });
+    return shown ?? (await HistoryPageReader.readAsync(this.kit.calls, viewId, options)).page;
+  }
+
+  // A check that runs once the page has its next document, and isn't met when the page still waits for it at `until`.
+  private settled(viewId: string, until: number, options: CallOptions, isMetAsync: () => Promise<boolean>): () => Promise<boolean> {
+    return async () => await this.kit.readSettledAsync(viewId, until, options.signal, isMetAsync) ?? false;
   }
 
   // The check that the referenced element is shown, which finds its node once, before the wait.
@@ -104,7 +119,7 @@ export class WaitForTool implements IBrowserTool {
     const heard: ChangeQueue = new ChangeQueue(ended);
     const stopHearing: (() => void) | null = await this.kit.changes.hearAsync(viewId, () => options.withDeadline(until), () => heard.add())
       .catch((error: unknown) => WaitForTool.ignoreUnheard(error));
-    if (stopHearing === null) {
+    if (Object.isNull(stopHearing)) {
       if (!ended.aborted)
         await new Promise<void>(resolve => ended.addEventListener("abort", () => resolve(), { once: true }));
     }

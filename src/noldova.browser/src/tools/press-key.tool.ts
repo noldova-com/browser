@@ -59,7 +59,7 @@ export class PressKeyTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.PressingKey, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
-      const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      const frame: FrameFacts = await this.kit.readActingFrameAsync(page.viewId, options);
       const keys: KeyPress = KeyEvents.press(definition, KeyEvents.readBits(modifiers));
       const read: FocusRead = await this.readFocusedAsync(page.viewId, options);
       const node: AccessibilityNode | null = read.node;

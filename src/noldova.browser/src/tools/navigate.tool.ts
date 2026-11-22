@@ -23,9 +23,9 @@ import type { ActionProgress } from "../models/action-progress.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import type { FrameFacts } from "../models/frame-facts.ts";
-import type { HistoryPage } from "../models/history-page.ts";
 import type { HistoryTarget } from "../models/history-target.ts";
 import type { NavigationMove } from "../models/navigation-move.ts";
+import type { OriginPage } from "../models/origin-page.ts";
 import type { PageActivity } from "../models/page-activity.ts";
 import type { SessionPage } from "../models/session-page.ts";
 import { ShownPage } from "../models/shown-page.ts";
@@ -60,8 +60,10 @@ export class NavigateTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Navigating, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
-      await this.kit.calls.sendAsync(page.viewId, Resources.enableMethod, {}, options);
-      const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      // A navigation pending in the page says its events are on, and the enable would wait for its next document.
+      if (!this.kit.navigations.isPending(page.viewId))
+        await this.kit.calls.sendAsync(page.viewId, Resources.enableMethod, {}, options);
+      const frame: FrameFacts = await this.kit.readActingFrameAsync(page.viewId, options);
       const target: HistoryTarget = await move.readTargetAsync(this.kit.calls, page.viewId, frame, options);
       await this.askAsync(activity, call, page, frame.address, target.url, progress);
       const granted: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
@@ -90,7 +92,7 @@ export class NavigateTool implements IBrowserTool {
       // While the main frame waits for the next document's answer, every call the page answers waits too, so the view's history says
       // which page it still shows.
       if (!isLoaded) {
-        const shown: HistoryPage = await HistoryPageReader.readAsync(this.kit.calls, page.viewId, options);
+        const shown: OriginPage = await HistoryPageReader.readAsync(this.kit.calls, page.viewId, options);
         return ToolResults.page(shown.origin, [ToolContent.fromText(Resources.formatNavigated(shown.page.url, shown.page.title), shown.origin),
           ToolContent.fromText(Resources.stillLoading, null)], shown.page);
       }

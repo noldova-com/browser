@@ -8,8 +8,8 @@
 
 import type { ShownPage } from "./shown-page.ts";
 
-// The page a view's history holds as its current entry, with the origin of its address.
-export class HistoryPage {
+// A page a view shows, with the origin of its address.
+export class OriginPage {
   public readonly origin: string;
   public readonly page: ShownPage;
 

@@ -9,11 +9,12 @@
 import type { PageAction, PageBox } from "@noldova/browser.protocol";
 import { WebViewFailureKind } from "@noldova/desktop.protocol";
 import { type IModuleLog, type IPermissionDetail, type IPermissionRequest, type IRuntimeWebViews, PermissionOption, ToolAbortReason,
-  type ToolCall, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
+  type ToolCall, ToolContent, type ToolResult, ToolRisk, WebViewFailureException } from "@noldova/desktop.runtime";
 
 import { CallFailureException } from "../exceptions/call-failure.exception.ts";
 import { HandedOverException } from "../exceptions/handed-over.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
+import { PageLoadingException } from "../exceptions/page-loading.exception.ts";
 import { PageNotControlledException } from "../exceptions/page-not-controlled.exception.ts";
 import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
@@ -31,6 +32,7 @@ import { JsonShapes } from "../services/json-shapes.ts";
 import { NavigationWatch } from "../services/navigation-watch.ts";
 import { NodeFactsReader } from "../services/node-facts.reader.ts";
 import { PageChanges } from "../services/page-changes.ts";
+import { PendingNavigations } from "../services/pending-navigations.ts";
 import { PermissionGate } from "../services/permission-gate.ts";
 import { RiskClassifier } from "../services/risk-classifier.ts";
 import { RuntimeDomains } from "../services/runtime-domains.ts";
@@ -48,8 +50,8 @@ import { CallOptions } from "./call-options.ts";
 import { ElementFacts } from "./element-facts.ts";
 import { ElementReference } from "./element-reference.ts";
 import type { FrameFacts } from "./frame-facts.ts";
-import type { HistoryPage } from "./history-page.ts";
 import type { NodeFacts } from "./node-facts.ts";
+import type { OriginPage } from "./origin-page.ts";
 import type { PageActivity } from "./page-activity.ts";
 import { PageStops } from "./page-stops.ts";
 import { PaneQueue } from "./pane-queue.ts";
@@ -58,6 +60,7 @@ import type { SessionPage } from "./session-page.ts";
 import type { SessionStates } from "./session-states.ts";
 import { ShownElement } from "./shown-element.ts";
 import { ShownPage } from "./shown-page.ts";
+import type { SnapshotReference } from "./snapshot-reference.ts";
 
 export class ToolKit {
   public static readonly lowRiskOptions: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny,
@@ -65,6 +68,7 @@ export class ToolKit {
   private static readonly ACTING_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny];
   private static readonly TAKING_OVER_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.TakeOver, PermissionOption.Deny];
   private static readonly HIGH_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.Deny];
+  private static readonly SENT_BACK: unique symbol = Symbol("sent back");
   private readonly recordAgent: (page: SessionPage) => void;
   public readonly webViews: IRuntimeWebViews;
   public readonly sessions: SessionStates;
@@ -74,6 +78,7 @@ export class ToolKit {
   public readonly consoles: ConsoleBuffers;
   public readonly domains: RuntimeDomains;
   public readonly changes: PageChanges;
+  public readonly navigations: PendingNavigations;
   public readonly queue: PaneQueue = new PaneQueue();
   public readonly gate: PermissionGate = new PermissionGate();
   public readonly stops: PageStops;
@@ -97,6 +102,7 @@ export class ToolKit {
     this.consoles = new ConsoleBuffers(webViews.relay);
     this.domains = new RuntimeDomains(webViews.relay, this.consoles);
     this.changes = new PageChanges(webViews.relay, this.calls, this.domains, log);
+    this.navigations = new PendingNavigations(webViews);
   }
 
   public static optionsFor(activity: PageActivity, call: ToolCall, progress: ActionProgress, isReferenced: boolean): CallOptions {
@@ -218,7 +224,46 @@ export class ToolKit {
   }
 
   public async readFrameAsync(viewId: string, options: CallOptions): Promise<FrameFacts> {
-    return FrameTreeReader.read(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    const frame: FrameFacts = FrameTreeReader.read(await this.calls.sendAsync(viewId, Resources.getFrameTreeMethod, {}, options));
+    this.navigations.watch(viewId, frame.frameId);
+    return frame;
+  }
+
+  // Runs `readAsync` once no navigation of the view's main frame waits for its next document, waiting for a pending one until `until`, as
+  // every call the page answers waits for that document; a navigation that starts during the read sends it back to that wait. `null` when
+  // a navigation still waits at `until`. A read sent back ends before the next one starts, so none of its late steps undoes the next's.
+  public async readSettledAsync<T>(viewId: string, until: number, signal: AbortSignal, readAsync: () => Promise<T>): Promise<T | null> {
+    for (;;) {
+      if (!await this.navigations.settleAsync(viewId, until, signal))
+        return null;
+      const reading: Promise<T> = readAsync();
+      const outcome: Awaited<T> | typeof ToolKit.SENT_BACK = await Promise.race([reading, this.navigations.startedAsync(viewId).then((): typeof ToolKit.SENT_BACK => ToolKit.SENT_BACK)]);
+      if (outcome !== ToolKit.SENT_BACK)
+        return outcome;
+      // Its outcome tells nothing once the read was sent back, so its failure is let go with it.
+      const ended: Promise<PromiseSettledResult<Awaited<T>>[]> = Promise.allSettled([reading]);
+      if (!await this.navigations.settleAsync(viewId, until, signal))
+        return null;
+      await ended;
+    }
+  }
+
+  // The frame an input goes to, read once no navigation of the view's main frame waits for its next document. One still waiting by the
+  // call's read margin fails the call before any input, as every call the page answers would wait for that document past the deadline.
+  public async readActingFrameAsync(viewId: string, options: CallOptions): Promise<FrameFacts> {
+    const frame: FrameFacts | null = await this.readSettledAsync(viewId, options.deadline - Resources.readMarginMilliseconds, options.signal,
+      () => this.readFrameAsync(viewId, options));
+    if (Object.isNull(frame))
+      throw new PageLoadingException();
+    return frame;
+  }
+
+  // The answer of a read whose page still waits for its next document: the page the view's history still shows, which the engine answers
+  // itself, and the note that the next one is still loading.
+  public async stillLoadingAsync(viewId: string, options: CallOptions): Promise<ToolResult> {
+    const shown: OriginPage = await HistoryPageReader.readAsync(this.calls, viewId, options);
+    return ToolResults.page(shown.origin, [ToolContent.fromText(Resources.formatNavigated(shown.page.url, shown.page.title), shown.origin),
+      ToolContent.fromText(Resources.stillLoading, null)], shown.page);
   }
 
   public async confirmDocumentAsync(viewId: string, documentId: string, options: CallOptions): Promise<void> {
@@ -239,21 +284,10 @@ export class ToolKit {
   // still there.
   public async findReferencedNodeAsync(session: string, id: string, viewId: string, documentId: string, options: CallOptions): Promise<ElementReference> {
     const reference: SessionReference = this.sessions.resolveReference(session, id, viewId, documentId);
-    if (reference instanceof ElementReference)
-      return reference;
-    const objectId: string | null = await this.changes.findSnapshotElementAsync(viewId, reference.index, options);
-    if (Object.isNull(objectId))
-      throw new StaleReferenceException();
-    try {
-      const node: JsonValue | undefined = (await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId }, options))[Resources.nodeField];
-      const backendNodeId: JsonValue | undefined = JsonShapes.isObject(node) ? node[Resources.backendNodeIdField] : undefined;
-      if (!Object.isNumber(backendNodeId))
-        throw new MalformedReplyException();
-      return new ElementReference(viewId, documentId, backendNodeId);
-    }
-    finally {
-      await this.changes.releaseAsync(viewId, objectId, options);
-    }
+    return await reference.accept<Promise<ElementReference>>({
+      visitSnapshotElement: (kept: SnapshotReference): Promise<ElementReference> => this.findSnapshotNodeAsync(kept, viewId, documentId, options),
+      visitClosedElement: (closed: ElementReference): Promise<ElementReference> => Promise.resolve(closed)
+    });
   }
 
   public async readElementAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<ElementFacts> {
@@ -323,11 +357,28 @@ export class ToolKit {
       watch[Symbol.dispose]();
     }
     if (!isLoaded) {
-      const shown: HistoryPage = await HistoryPageReader.readAsync(this.calls, viewId, options);
+      const shown: OriginPage = await HistoryPageReader.readAsync(this.calls, viewId, options);
       return ToolResults.done(message, shown.origin, shown.page, element, false);
     }
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
     return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element, true);
+  }
+
+  // The node of the element a snapshot kept in the page, while it is still there.
+  private async findSnapshotNodeAsync(reference: SnapshotReference, viewId: string, documentId: string, options: CallOptions): Promise<ElementReference> {
+    const objectId: string | null = await this.changes.findSnapshotElementAsync(viewId, reference.index, options);
+    if (Object.isNull(objectId))
+      throw new StaleReferenceException();
+    try {
+      const node: JsonValue | undefined = (await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId }, options))[Resources.nodeField];
+      const backendNodeId: JsonValue | undefined = JsonShapes.isObject(node) ? node[Resources.backendNodeIdField] : undefined;
+      if (!Object.isNumber(backendNodeId))
+        throw new MalformedReplyException();
+      return new ElementReference(viewId, documentId, backendNodeId);
+    }
+    finally {
+      await this.changes.releaseAsync(viewId, objectId, options);
+    }
   }
 
   // The view keeps drawing while hidden only while it is marked, and a document it loads hidden takes no press until it draws, so a call

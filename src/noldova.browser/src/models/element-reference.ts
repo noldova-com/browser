@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type { ISessionReferenceVisitor } from "../interfaces/i-session-reference-visitor.ts";
+
 export class ElementReference {
   public readonly viewId: string;
   public readonly documentId: string;
@@ -15,5 +17,9 @@ export class ElementReference {
     this.viewId = viewId;
     this.documentId = documentId;
     this.backendNodeId = backendNodeId;
+  }
+
+  public accept<T>(visitor: ISessionReferenceVisitor<T>): T {
+    return visitor.visitClosedElement(this);
   }
 }

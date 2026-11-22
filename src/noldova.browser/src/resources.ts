@@ -139,6 +139,8 @@ export class Resources {
   public static readonly screenshotLaidOut: string = Resources.formatScreenshotLaidOut(BrowserLimits.screenshotDrawMilliseconds, BrowserLimits.hiddenPageWidth, BrowserLimits.hiddenPageHeight);
   public static readonly pageHidden: string = "The page has no size even when laid out for the capture, so nothing was captured; ask the person to show its tab.";
   public static readonly pageHiddenCode: string = "browser.pageHidden";
+  public static readonly pageLoading: string = "The page is still loading its next page, so nothing was done; wait for it with browser_wait_for, then try again.";
+  public static readonly pageLoadingCode: string = "browser.pageLoading";
   public static readonly clicked: string = "Clicked.";
   public static readonly typed: string = "Typed.";
   public static readonly pressed: string = "Pressed.";

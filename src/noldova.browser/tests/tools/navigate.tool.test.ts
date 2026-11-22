@@ -561,11 +561,11 @@ describe("NavigateTool", () => {
     expect(result.content.map(t => t.value).filter(t => t.startsWith("The page is still loading"))).toHaveLength(1);
   });
 
-  it("ends the wait for the load by the call's abort, and listens no more", async () => {
+  it("ends the wait for the load by the call's abort, and listens no more but for the view's navigations, which the module follows until the view closes", async () => {
     const controller: AbortController = new AbortController();
     bench.surface.afterNavigation = () => controller.abort("Cancelled");
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ url: "https://docs.example/next" }, controller)), CallCancelledException, { kind: "Cancelled" });
-    expect([bench.methods, bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree", "Page.getFrameTree"], 0]);
+    expect([bench.methods, bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree", "Page.getFrameTree"], 1]);
   });
 });

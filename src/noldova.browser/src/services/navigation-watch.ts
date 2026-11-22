@@ -6,18 +6,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { type WebViewEvent, WebViewEventKind } from "@noldova/desktop.protocol";
+import type { WebViewEvent } from "@noldova/desktop.protocol";
 import type { IRuntimeWebViews, WebViewProtocolEvent } from "@noldova/desktop.runtime";
 
 import { Resources } from "../resources.ts";
 import { LoadWaiter } from "./load-waiter.ts";
+import { NavigationEvents } from "./navigation-events.ts";
 
 // Watches, from before an input, whether the input made the page ask to navigate its main frame in place, as a link's click or a form's
 // Enter does, and waits for that navigation's load. A navigation that ends without a load ends the wait too: a move within the document,
 // one the frame stops loading without once it started, as for an answer with no content or a download, one the origin check refuses, and
 // the view's crash or close. A stop before the navigation started is the old document's, so it doesn't end the wait.
 export class NavigationWatch implements Disposable {
-  private static readonly ENDING_KINDS: readonly WebViewEventKind[] = [WebViewEventKind.NavigationRefused, WebViewEventKind.Crashed, WebViewEventKind.Closed];
   private readonly loads: LoadWaiter;
   private readonly requests: PromiseWithResolvers<void> = Promise.withResolvers<void>();
   private readonly stopProtocol: () => void;
@@ -37,11 +37,11 @@ export class NavigationWatch implements Disposable {
       else if (event.method === Resources.frameStartedNavigatingEvent && this.isRequested)
         this.isStarted = true;
       else if (event.method === Resources.navigatedWithinDocumentEvent && this.isRequested
-        || event.method === Resources.frameStoppedLoadingEvent && this.isStarted)
+        || NavigationEvents.isStop(event, frameId) && this.isStarted)
         this.loads.end();
     });
     this.stopView = webViews.onViewEvent((event: WebViewEvent) => {
-      if (event.view === viewId && NavigationWatch.ENDING_KINDS.includes(event.kind))
+      if (NavigationEvents.isViewEnd(event, viewId))
         this.loads.end();
     });
   }

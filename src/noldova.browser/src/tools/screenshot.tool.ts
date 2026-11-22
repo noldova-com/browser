@@ -46,42 +46,48 @@ export class ScreenshotTool implements IBrowserTool {
 
   public async callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
     const input: JsonObject = InputValidator.readObject(call.arguments);
-    const reference: string | null = input[Resources.referenceField] === undefined ? null
+    const reference: string | null = Object.isUndefined(input[Resources.referenceField]) ? null
       : InputValidator.readText(input, Resources.referenceField, BrowserLimits.maximumReferenceLength);
     const isFullPage: boolean = InputValidator.readFlag(input, Resources.fullPageField);
-    if (reference !== null && isFullPage)
+    if (!Object.isNull(reference) && isFullPage)
       throw new ScreenshotTargetException();
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Reading, async activity => {
-      const options: CallOptions = ToolKit.optionsFor(activity, call, progress, reference !== null);
-      const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
-      const element: number | null = reference === null ? null : (await this.kit.findReferencedNodeAsync(call.session, reference, page.viewId, frame.documentId, options)).backendNodeId;
-      const { area, data, mimeType, isLaidOut }: ScreenshotCapture = await this.hidden.captureAsync(page.viewId, options, async (metrics: LayoutMetrics, laidOut: boolean) => {
-        const box: PageBox | null = element === null ? null : await this.kit.readBoxAsync(page.viewId, element, options);
-        if (element !== null && box === null)
-          throw new ScreenshotNotVisibleException();
-        const planned: ScreenshotArea = ScreenshotAreas.plan(metrics, box, isFullPage);
-        if (planned.imageWidth < 1 || planned.imageHeight < 1)
-          throw new ScreenshotNotVisibleException();
-        return this.captureAsync(page.viewId, planned, laidOut, reference !== null || isFullPage, options);
-      });
-      const content: ToolContent[] = [ToolContent.fromImage(data, mimeType, frame.origin)];
-      if (area.isCut)
-        content.push(ToolContent.fromText(Resources.formatScreenshotCut(Resources.maximumClipLength), null));
-      if (isLaidOut)
-        content.push(ToolContent.fromText(Resources.screenshotLaidOut, null));
-      const title: string = await this.kit.readTitleOfAsync(page.viewId, frame.documentId, options);
-      return new ToolResult([ToolContent.fromText(Resources.formatScreenshot(area.imageWidth, area.imageHeight), null), ...ToolResults.untrusted(frame.origin, content)],
-        ToolResults.shown(new ShownPage(frame.url, title), null));
+      const options: CallOptions = ToolKit.optionsFor(activity, call, progress, !Object.isNull(reference));
+      const result: ToolResult | null = await this.kit.readSettledAsync(page.viewId, options.deadline - Resources.readMarginMilliseconds, options.signal,
+        () => this.readAsync(call.session, page.viewId, reference, isFullPage, options));
+      return result ?? await this.kit.stillLoadingAsync(page.viewId, options);
     });
   }
 
+  private async readAsync(session: string, viewId: string, reference: string | null, isFullPage: boolean, options: CallOptions): Promise<ToolResult> {
+    const frame: FrameFacts = await this.kit.readFrameAsync(viewId, options);
+    const element: number | null = Object.isNull(reference) ? null : (await this.kit.findReferencedNodeAsync(session, reference, viewId, frame.documentId, options)).backendNodeId;
+    const capture: ScreenshotCapture = await this.hidden.captureAsync(viewId, options, async (metrics: LayoutMetrics, laidOut: boolean) => {
+      const box: PageBox | null = Object.isNull(element) ? null : await this.kit.readBoxAsync(viewId, element, options);
+      if (!Object.isNull(element) && Object.isNull(box))
+        throw new ScreenshotNotVisibleException();
+      const planned: ScreenshotArea = ScreenshotAreas.plan(metrics, box, isFullPage);
+      if (planned.imageWidth < 1 || planned.imageHeight < 1)
+        throw new ScreenshotNotVisibleException();
+      return this.captureAsync(viewId, planned, laidOut, !Object.isNull(reference) || isFullPage, options);
+    });
+    const content: ToolContent[] = [ToolContent.fromImage(capture.data, capture.mimeType, frame.origin)];
+    if (capture.area.isCut)
+      content.push(ToolContent.fromText(Resources.formatScreenshotCut(Resources.maximumClipLength), null));
+    if (capture.isLaidOut)
+      content.push(ToolContent.fromText(Resources.screenshotLaidOut, null));
+    const title: string = await this.kit.readTitleOfAsync(viewId, frame.documentId, options);
+    return new ToolResult([ToolContent.fromText(Resources.formatScreenshot(capture.area.imageWidth, capture.area.imageHeight), null),
+      ...ToolResults.untrusted(frame.origin, content)], ToolResults.shown(new ShownPage(frame.url, title), null));
+  }
+
   private async captureAsync(viewId: string, area: ScreenshotArea, isLaidOut: boolean, isBeyondViewport: boolean, options: CallOptions): Promise<ScreenshotCapture> {
-    const clip: { x: number; y: number; width: number; height: number; scale: number } = { x: area.x, y: area.y, width: area.width, height: area.height, scale: area.scale };
     for (const { format, quality } of Resources.screenshotEncodings) {
       let reply: JsonObject;
       try {
-        reply = await this.kit.calls.sendAsync(viewId, Resources.captureScreenshotMethod, { format, ...(quality === null ? {} : { quality }), clip, captureBeyondViewport: isBeyondViewport },
+        reply = await this.kit.calls.sendAsync(viewId, Resources.captureScreenshotMethod, { format, ...(Object.isNull(quality) ? {} : { quality }),
+          clip: { x: area.x, y: area.y, width: area.width, height: area.height, scale: area.scale }, captureBeyondViewport: isBeyondViewport },
           options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
       }
       catch (error) {
@@ -90,7 +96,7 @@ export class ScreenshotTool implements IBrowserTool {
         throw error;
       }
       const data: JsonValue | undefined = reply[Resources.dataField];
-      if (typeof data !== "string")
+      if (!Object.isString(data))
         throw new MalformedReplyException();
       if (OutputLimits.decodedLength(data) <= BrowserLimits.maximumScreenshotBytes)
         return new ScreenshotCapture(area, data, Resources.formatImageMimeType(format), isLaidOut);

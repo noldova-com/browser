@@ -57,7 +57,7 @@ export class ClickTool implements IBrowserTool {
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Clicking, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, true);
-      const frame: FrameFacts = await this.kit.readFrameAsync(page.viewId, options);
+      const frame: FrameFacts = await this.kit.readActingFrameAsync(page.viewId, options);
       const element: ElementReference = await this.kit.findReferencedNodeAsync(call.session, reference, page.viewId, frame.documentId, options);
       const facts: ElementFacts = await this.kit.readElementAsync(page.viewId, element.backendNodeId, options);
       const shown: ShownElement = await this.kit.readShownElementAsync(page.viewId, element.backendNodeId, facts, options);

@@ -26,6 +26,7 @@ import { PageSnapshot } from "../models/page-snapshot.ts";
 import type { SessionPage } from "../models/session-page.ts";
 import { ShownPage } from "../models/shown-page.ts";
 import type { SnapshotLine } from "../models/snapshot-line.ts";
+import { SnapshotRead } from "../models/snapshot-read.ts";
 import { SnapshotReference } from "../models/snapshot-reference.ts";
 import { ToolDescriptors } from "../models/tool-descriptors.ts";
 import { ToolKit } from "../models/tool-kit.ts";
@@ -36,7 +37,6 @@ import { InputValidator } from "../services/input.validator.ts";
 import { PageSnapshotReader } from "../services/page-snapshot.reader.ts";
 import { ToolResults } from "../services/tool-results.ts";
 import type { JsonObject } from "../types/json-value.ts";
-import type { SessionReference } from "../types/session-reference.ts";
 
 export class SnapshotTool implements IBrowserTool {
   private readonly kit: ToolKit;
@@ -53,14 +53,19 @@ export class SnapshotTool implements IBrowserTool {
   public async callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
     const input: JsonObject = InputValidator.readObject(call.arguments);
     const isInteractive: boolean = InputValidator.readFlag(input, Resources.interactiveField);
-    const depth: number | null = input[Resources.depthField] === undefined ? null
+    const depth: number | null = Object.isUndefined(input[Resources.depthField]) ? null
       : InputValidator.readCount(input, Resources.depthField, Resources.mostSnapshotDepth, 1);
-    const part: string | null = input[Resources.partField] === undefined ? null
+    const part: string | null = Object.isUndefined(input[Resources.partField]) ? null
       : InputValidator.readText(input, Resources.partField, BrowserLimits.maximumReferenceLength);
     const page: SessionPage = this.kit.pages.find(call);
     return this.kit.actAsync(call, page, PageAction.Reading, async activity => {
       const options: CallOptions = ToolKit.optionsFor(activity, call, progress, false);
-      const [frame, snapshot]: [FrameFacts, PageSnapshot] = await this.readAsync(call.session, page.viewId, isInteractive, depth, part, options);
+      const read: SnapshotRead | null = await this.kit.readSettledAsync(page.viewId, options.deadline - Resources.readMarginMilliseconds, options.signal,
+        () => this.readAsync(call.session, page.viewId, isInteractive, depth, part, options));
+      if (Object.isNull(read))
+        return this.kit.stillLoadingAsync(page.viewId, options);
+      const frame: FrameFacts = read.frame;
+      const snapshot: PageSnapshot = read.snapshot;
       this.kit.sessions.dropReferences(page.viewId);
       const text: CutText = PageSnapshotReader.write(snapshot.lines,
         t => this.kit.sessions.issueReference(call.session, new SnapshotReference(page.viewId, frame.documentId, t)),
@@ -68,7 +73,7 @@ export class SnapshotTool implements IBrowserTool {
       const content: ToolContent[] = [ToolContent.fromText(Resources.formatSnapshot(frame.url, snapshot.title, text.text), frame.origin)];
       if (snapshot.isFromView)
         content.push(ToolContent.fromText(Resources.snapshotFromView, null));
-      if (depth !== null && snapshot.isDeeper)
+      if (!Object.isNull(depth) && snapshot.isDeeper)
         content.push(ToolContent.fromText(Resources.formatSnapshotDeeper(depth), null));
       if (text.isCut || snapshot.isCut)
         content.push(ToolContent.fromText(Resources.snapshotCut, null));
@@ -83,7 +88,7 @@ export class SnapshotTool implements IBrowserTool {
   // The function replaces the elements the view's references index before the snapshot can still fail, so a failure drops them, unless it
   // refused a part, which the function never reached or left before it replaced them.
   private async readAsync(session: string, viewId: string, isInteractive: boolean, depth: number | null, part: string | null, options: CallOptions)
-    : Promise<[FrameFacts, PageSnapshot]> {
+    : Promise<SnapshotRead> {
     try {
       return await this.readDocumentAsync(session, viewId, isInteractive, depth, part, options);
     }
@@ -97,17 +102,26 @@ export class SnapshotTool implements IBrowserTool {
   // The page's lines, from a document the frame names both before and after them, so their content never carries another document's
   // origin; a part names its element by the reference, which must come from that document.
   private async readDocumentAsync(session: string, viewId: string, isInteractive: boolean, depth: number | null, part: string | null,
-    options: CallOptions): Promise<[FrameFacts, PageSnapshot]> {
+    options: CallOptions): Promise<SnapshotRead> {
     for (let attempt: number = 1; attempt <= Resources.readAttempts; attempt++) {
       const frame: FrameFacts = await this.kit.readFrameAsync(viewId, options);
-      const reference: SessionReference | null = part === null ? null : this.kit.sessions.resolveReference(session, part, viewId, frame.documentId);
-      const snapshot: PageSnapshot = reference instanceof ElementReference
-        ? await this.readClosedPartAsync(viewId, frame.documentId, reference.backendNodeId, isInteractive, depth, options)
-        : await this.readPageAsync(viewId, isInteractive, depth, reference === null ? null : reference.index, options);
+      const snapshot: PageSnapshot = await this.readPartAsync(session, viewId, frame.documentId, isInteractive, depth, part, options);
       if ((await this.kit.readFrameAsync(viewId, options)).documentId === frame.documentId)
-        return [frame, snapshot];
+        return new SnapshotRead(frame, snapshot);
     }
     throw new ChangedDuringReadException();
+  }
+
+  // The whole page, or the part a session's reference names: an element the pinned function kept, or one inside a closed shadow root.
+  private readPartAsync(session: string, viewId: string, documentId: string, isInteractive: boolean, depth: number | null, part: string | null,
+    options: CallOptions): Promise<PageSnapshot> {
+    if (Object.isNull(part))
+      return this.readPageAsync(viewId, isInteractive, depth, null, options);
+    return this.kit.sessions.resolveReference(session, part, viewId, documentId).accept<Promise<PageSnapshot>>({
+      visitSnapshotElement: (kept: SnapshotReference): Promise<PageSnapshot> => this.readPageAsync(viewId, isInteractive, depth, kept.index, options),
+      visitClosedElement: (closed: ElementReference): Promise<PageSnapshot> =>
+        this.readClosedPartAsync(viewId, documentId, closed.backendNodeId, isInteractive, depth, options)
+    });
   }
 
   // The page's lines from the pinned function in one call, with what each closed shadow root holds read from the accessibility tree after
@@ -125,9 +139,9 @@ export class SnapshotTool implements IBrowserTool {
     for (const line of page.lines) {
       lines.push(line);
       bytes += PageSnapshotReader.lineBytes(line);
-      const host: number | undefined = line.host === null ? undefined : marked.hosts[line.host];
+      const host: number | undefined = Object.isNull(line.host) ? undefined : marked.hosts[line.host];
       // A host past the most bytes is cut with its line, which the cut note tells.
-      if (host === undefined || bytes > BrowserLimits.maximumSnapshotBytes)
+      if (Object.isUndefined(host) || bytes > BrowserLimits.maximumSnapshotBytes)
         continue;
       if (Date.now() > options.deadline - Resources.closedRootMarginMilliseconds) {
         unread++;
@@ -135,7 +149,7 @@ export class SnapshotTool implements IBrowserTool {
       }
       const read: ClosedRead | null = await this.reader.readAsync(viewId, host, true, line.depth, isInteractive, depth,
         BrowserLimits.maximumSnapshotBytes - bytes, options);
-      if (read === null)
+      if (Object.isNull(read))
         continue;
       lines.push(...read.lines);
       bytes += read.lines.reduce((sum, t) => sum + PageSnapshotReader.lineBytes(t), 0);
@@ -153,7 +167,7 @@ export class SnapshotTool implements IBrowserTool {
   private async readClosedPartAsync(viewId: string, documentId: string, backendNodeId: number, isInteractive: boolean, depth: number | null,
     options: CallOptions): Promise<PageSnapshot> {
     const read: ClosedRead | null = await this.reader.readAsync(viewId, backendNodeId, false, 0, isInteractive, depth, BrowserLimits.maximumSnapshotBytes, options);
-    if (read === null)
+    if (Object.isNull(read))
       throw new StaleReferenceException();
     return new PageSnapshot(await this.kit.readTitleOfAsync(viewId, documentId, options), read.lines, read.isCut, read.isDeeper, false);
   }

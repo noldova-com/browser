@@ -24,8 +24,6 @@ import { CallFailures } from "../fixtures/call-failures.fixture.ts";
 import { ShopPage } from "../fixtures/shop-page.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
-const FAKED: { toFake: ("setTimeout" | "clearTimeout" | "Date")[] } = { toFake: ["setTimeout", "clearTimeout", "Date"] };
-
 function nodes(names: readonly string[], ignored: boolean = false): JsonObject[] {
   return [
     { nodeId: "1", role: { value: "RootWebArea" }, childIds: names.map((_name: string, index: number) => `${index + 2}`) },
@@ -59,7 +57,7 @@ describe("WaitForTool", () => {
   }
 
   it("is met once a shown node's name holds the text, read again when the page reports a change, raising no request", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const trees: JsonObject[] = [tree(["Loading"]), tree(["Order placed"])];
     bench.surface.answerWith("Accessibility.getFullAXTree", () => trees.shift() ?? tree([]));
 
@@ -81,10 +79,10 @@ describe("WaitForTool", () => {
   });
 
   it("checks the page's shown text with the pinned function once the page's whole tree is too large for one reply, and only so when the page reports a change", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const shown: boolean[] = [false, true];
     bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
-      if (params["depth"] === undefined)
+      if (Object.isUndefined(params["depth"]))
         throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.TooLarge));
       return tree([]);
     });
@@ -99,7 +97,7 @@ describe("WaitForTool", () => {
     expect(result.content[0]?.value).toBe("The wait was met.");
     expect(bench.surface.calls.filter(t => t.params["functionDeclaration"] === PageTextScript.functionDeclaration).map(t => t.params["arguments"]))
       .toEqual(Array(2).fill([{ value: "placed" }]));
-    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getFullAXTree" && t.params["depth"] === undefined).length).toBe(1);
+    expect(bench.surface.calls.filter(t => t.method === "Accessibility.getFullAXTree" && Object.isUndefined(t.params["depth"])).length).toBe(1);
   });
 
   it("fails on any other failure reading the whole tree, and checks the page's text no other way", async () => {
@@ -115,7 +113,7 @@ describe("WaitForTool", () => {
     const replies: (JsonObject | null)[] = [null, { quads: [] }, { quads: [[0, 0, 1, 0, 1, 1, 0, 1]] }];
     bench.surface.answerWith("DOM.getContentQuads", () => {
       const reply: JsonObject | null | undefined = replies.shift();
-      if (reply === null)
+      if (Object.isNull(reply))
         throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Could not compute content quads."));
       return reply ?? {};
     });
@@ -135,7 +133,7 @@ describe("WaitForTool", () => {
 
   it("reads a page that can't report its changes at once and once more at its limit, never on a timer between", async () => {
     bench.failHearing();
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
     const result: ToolResult = await waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), 300);
@@ -144,7 +142,7 @@ describe("WaitForTool", () => {
   });
 
   it("reads a heard page that reports no change only as it starts hearing and once more at its limit, then says the wait wasn't met and stops hearing", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
     const result: ToolResult = await waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), 300);
@@ -154,9 +152,9 @@ describe("WaitForTool", () => {
   });
 
   it("is met at its limit by a text the page shows after its last reported change", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const trees: JsonObject[] = [tree(["Loading"]), tree(["Loading"])];
-    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => params["depth"] === undefined ? trees.shift() ?? tree(["Order placed"]) : tree([]));
+    bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => Object.isUndefined(params["depth"]) ? trees.shift() ?? tree(["Order placed"]) : tree([]));
 
     const result: ToolResult = await waitOutAsync(bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 300 })), 300);
 
@@ -164,10 +162,10 @@ describe("WaitForTool", () => {
   });
 
   it("hears the page again in the new document after its main frame navigates, and is met by a text the new document reports", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     let reads: number = 0;
     bench.surface.answerWith("Accessibility.getFullAXTree", (params: JsonObject) => {
-      if (params["depth"] !== undefined)
+      if (!Object.isUndefined(params["depth"]))
         return tree([]);
       reads += 1;
       if (reads === 2)
@@ -190,7 +188,7 @@ describe("WaitForTool", () => {
   });
 
   it("ends a wait whose hearing the page never answers at the wait's limit, not the call's deadline", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.hang("Page.createIsolatedWorld");
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
@@ -200,7 +198,7 @@ describe("WaitForTool", () => {
   });
 
   it("reads a page whose world never switches its changes on once more at its limit", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.answer("Runtime.callFunctionOn", { result: { type: "boolean", value: false } });
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
@@ -210,7 +208,7 @@ describe("WaitForTool", () => {
   });
 
   it("reads a page whose world the engine refuses as the wait starts hearing once more at its limit, rather than failing", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.fail("Runtime.callFunctionOn", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Cannot find context with specified id"));
     const trees: JsonObject[] = [tree(["Loading"])];
     bench.surface.answerWith("Accessibility.getFullAXTree", () => trees.shift() ?? tree(["Order placed"]));
@@ -221,7 +219,7 @@ describe("WaitForTool", () => {
   });
 
   it("fails at once, rather than waiting out its limit, when the view closes as the wait starts hearing", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.fail("Page.createIsolatedWorld", new WebViewFailure(WebViewFailureKind.ViewClosed));
     bench.surface.answerWith("Accessibility.getFullAXTree", () => tree(["Loading"]));
 
@@ -230,17 +228,17 @@ describe("WaitForTool", () => {
     expect(bench.methods.filter(t => t === "Accessibility.getFullAXTree").length).toBe(1);
   });
 
-  it("is met by the page's next load, once it turned the page's events on", async () => {
+  it("is met by the page's next load, once it turned the page's events on, and listens no more but for the view's navigations, which the module follows until the view closes", async () => {
     const running: Promise<unknown> = bench.runAsync(tool, bench.call({ load: true, timeoutMilliseconds: 5_000 }));
     await vi.waitFor(() => expect(bench.methods).toContain("Page.getFrameTree"));
     bench.surface.emitProtocolEvent(ToolBench.VIEW, "Page.loadEventFired", {});
 
     expect(await running).toMatchObject({ content: [{ value: "The wait was met." }] });
-    expect([bench.methods.filter(t => t === "Page.enable" || t === "Page.getFrameTree").slice(0, 2), bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree"], 0]);
+    expect([bench.methods.filter(t => t === "Page.enable" || t === "Page.getFrameTree").slice(0, 2), bench.surface.protocolListenerCount]).toEqual([["Page.enable", "Page.getFrameTree"], 1]);
   });
 
   it("says how long it waited when the call's deadline cuts the wait short of its limit, and turns the page's events on only for a load", async () => {
-    vi.useFakeTimers(FAKED);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     bench.surface.answer("Accessibility.getFullAXTree", tree(["Loading"]));
 
     const loads: Promise<ToolResult> = waitOutAsync(bench.runAsync(tool, bench.call({ load: true, timeoutMilliseconds: 5_000 }, new AbortController(), ToolBench.SESSION, 3_000)), 2_000);

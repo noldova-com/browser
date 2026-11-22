@@ -223,6 +223,29 @@ test.describe("the agent tools on a real page", () => {
     expect(typed.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/next?q=lamp")}`]);
   });
 
+  test("calls while the next page is held answer in their time: a click to it reports the page it left as still loading, and reads report that page", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": LINKS, "/next": NEXT });
+    const bindings = await openAsync(app, docs);
+    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const link = referenceOf(snapshot, /- link "Go next"[^[]*\[(e\d+)\]/u);
+    await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
+    const release = docs.hold("/next");
+
+    const clicked = textsOf(await callAsync(app, bindings, "browser_click", { reference: link }));
+    const read = textsOf(await callAsync(app, bindings, "browser_snapshot"));
+    const logged = JSON.stringify(await callAsync(app, bindings, "browser_console"));
+    const asked = docs.requests.some(t => t.path === "/next");
+    release();
+
+    expect(asked, "The click never asked for the next page.").toBe(true);
+    expect(clicked.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/")}`,
+      "The page is still loading; wait for it with browser_wait_for before you act on it."]);
+    expect(read.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`,
+      "The page is still loading; wait for it with browser_wait_for before you act on it."]);
+    expect(logged, "The console read named another page.").toContain(`"url":"${docs.url("/")}"`);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The next page never loaded once its answer came." }).toEqual([new ViewPage(docs.url("/next"), NEXT_TITLE)]);
+  });
+
   test("typing into a field that replaces itself on focus types nothing and fails as a changed page, and typing again after a new snapshot works", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": SWAPPING });
     const bindings = await openAsync(app, docs);
@@ -251,8 +274,9 @@ test.describe("the agent tools on a real page", () => {
     };
     const values = "JSON.stringify([document.getElementById('email').value, document.getElementById('notes').value, document.getElementById('bio').textContent])";
 
-    for (const [reference, text] of [[fields[0], "b@y.com"], [fields[1], "new notes"], [fields[2], "new bio"]] as const)
-      await typeAsync(reference ?? "", text);
+    await typeAsync(fields[0] ?? "", "b@y.com");
+    await typeAsync(fields[1] ?? "", "new notes");
+    await typeAsync(fields[2] ?? "", "new bio");
     const typed = await app.viewPages.runAtAsync(docs.url("/"), values);
     await typeAsync(fields[0] ?? "", "");
 
