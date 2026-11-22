@@ -8,9 +8,9 @@
 
 import { type Signal, computed } from "@angular/core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
-import { BrowserEvents, BrowserMethods, PageRequest } from "@noldova/browser.protocol";
+import { BrowserEvents, BrowserMethods, PageRecord, PageRequest, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
-import { DocumentTone } from "@noldova/desktop.window";
+import { DocumentTone, type IDocumentUpdate, type StatusBarItemState } from "@noldova/desktop.window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AddressRefusal } from "../../../src/app/enums/address-refusal.ts";
@@ -29,6 +29,7 @@ import type { PaneTab } from "../../../src/app/models/pane-tab.ts";
 import { PopupOffer } from "../../../src/app/models/popup-offer.ts";
 import { RefusedPage } from "../../../src/app/models/refused-page.ts";
 import { ViewCrashEvent } from "../../../src/app/models/view-crash-event.ts";
+import { ViewFaviconEvent } from "../../../src/app/models/view-favicon-event.ts";
 import { ViewLoadFailureEvent } from "../../../src/app/models/view-load-failure-event.ts";
 import { ViewNewWindowEvent } from "../../../src/app/models/view-new-window-event.ts";
 import { ViewRefusalEvent } from "../../../src/app/models/view-refusal-event.ts";
@@ -38,6 +39,16 @@ import { Pages } from "../../../src/app/services/pages.ts";
 import { FakeWebView, type FakeWebViews, WebViewValues } from "../../fixtures/fake-web-views.fixture.ts";
 import { MissingPartError } from "../../fixtures/missing-part.error.ts";
 import { WindowContext } from "../../fixtures/window-context.fixture.ts";
+
+class TitleUpdate {
+  public readonly instance: string;
+  public readonly update: IDocumentUpdate;
+
+  public constructor(instance: string, update: IDocumentUpdate) {
+    this.instance = instance;
+    this.update = update;
+  }
+}
 
 describe("Pages", () => {
   const UUID: RegExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -65,23 +76,37 @@ describe("Pages", () => {
 
   async function openAsync(url: string | null = null, profileKey: string = "workspace-1"): Promise<PaneTab> {
     pages.open(profileKey, url);
-    const tab: PaneTab | null = await pages.showAsync(lastOpened());
-    if (Object.isNull(tab))
-      throw new MissingPartError("shown page");
+    const tab: PaneTab = shownOf(await pages.showAsync(lastOpened()));
     place(tab);
     return tab;
   }
 
-  function place(tab: PaneTab | null): void {
-    if (Object.isNull(tab) || Object.isNull(tab.view))
+  function shownOf(tab: PaneTab | null): PaneTab {
+    if (Object.isNull(tab))
+      throw new MissingPartError("shown page");
+    return tab;
+  }
+
+  function place(tab: PaneTab): void {
+    if (Object.isNull(tab.view))
       return;
     const view: FakeWebView = viewOf(tab);
     view.mount(document.createElement("div"));
     view.calls.splice(view.calls.indexOf("mount"), 1);
   }
 
-  function urlOf(parameters: JsonValue): string {
-    return PageAnswers.isObject(parameters) ? String(parameters["url"]) : "";
+  function present<T>(value: T | undefined, part: string): T {
+    if (Object.isUndefined(value))
+      throw new MissingPartError(part);
+    return value;
+  }
+
+  function typedUrlOf(parameters: JsonValue): string {
+    return TypedAddressRequest.fromJson(parameters).url;
+  }
+
+  function redirectUrlOf(parameters: JsonValue): string {
+    return TypedRedirectRequest.fromJson(parameters).url;
   }
 
   function requestsOf(method: string): JsonValue[] {
@@ -92,8 +117,12 @@ describe("Pages", () => {
     return context.titles.filter(t => !Object.isUndefined(t.update.underline)).map(t => t.instance);
   }
 
-  function agentPagesText(): string | undefined {
-    return context.statusBarItems[0]?.state().text;
+  function agentPagesState(): StatusBarItemState {
+    return present(context.statusBarItems[0], "agent pages item in the status bar").state();
+  }
+
+  function agentPagesText(): string {
+    return agentPagesState().text;
   }
 
   function loading(view: FakeWebView, address: string, isLoading: boolean, title: string = ""): void {
@@ -177,7 +206,7 @@ describe("Pages", () => {
     await pages.showAsync(picked);
     pages.open("workspace-1", null, picked);
 
-    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", {}], ["browser.page", picked, "New tab"]], []]);
+    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", { imageGlyph: "public" }], ["browser.page", picked, "New tab", { imageGlyph: "public" }]], []]);
   });
 
   it("logs an activity event that isn't one, without its payload, and changes no page", () => {
@@ -213,7 +242,7 @@ describe("Pages", () => {
     context.emit(BrowserEvents.pageActivity, { ...typing, activity: "call-0", state: "Ended", isHandedOver: false });
     context.emit(BrowserEvents.pageActivity, { ...typing, state: "Ended" });
 
-    expect(context.opened.slice(before).map(t => [t.name, t.instance, t.title])).toEqual([["browser.page", tab.id, "Sign in"]]);
+    expect(context.opened.slice(before).map(t => [t.name, t.instance, t.title, t.imageGlyph])).toEqual([["browser.page", tab.id, "Sign in", "public"]]);
   });
 
   it("reads the calls running on the pages again when the runtime starts again, with the events that arrive meanwhile over them", async () => {
@@ -267,13 +296,13 @@ describe("Pages", () => {
         : method === BrowserMethods.readActivities ? Promise.resolve([{ ...acting, agentName: "Helper", instance: picked }]) : declared(method, parameters);
 
     await pages.reportOpenAsync();
-    const reported: string | undefined = agentPagesText();
+    const reported: string = agentPagesText();
     await pages.openAsync("workspace-1", null, picked);
-    const claimed: string | undefined = agentPagesText();
+    const claimed: string = agentPagesText();
     const tab: PaneTab = await openAsync();
     context.emit(BrowserEvents.pageActivity, acting);
     context.emit(BrowserEvents.pageActivity, { ...acting, instance: tab.id });
-    const acted: string | undefined = agentPagesText();
+    const acted: string = agentPagesText();
     context.closeByPerson(restored);
     await pages.readActivitiesAsync();
 
@@ -286,25 +315,29 @@ describe("Pages", () => {
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
       ? Promise.resolve({ agentName: "Scout", isClaimed: true, isHere: false, record: { instance: restored, profileKey: "workspace-1", url: "" } }) : declared(method, parameters);
 
-    const tab: PaneTab | null = await pages.showAsync(restored);
+    const tab: PaneTab = shownOf(await pages.showAsync(restored));
 
-    expect([tab?.id, agentPagesText()]).toEqual([restored, "Scout · 1 page open"]);
+    expect([tab.id, agentPagesText()]).toEqual([restored, "Scout · 1 page open"]);
   });
 
   it("opens no view, and counts and remembers nothing, for a restored tab the person closed while its claim was answered", async () => {
     const closing: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const kept: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
-    const claims: readonly PromiseWithResolvers<JsonValue>[] = [Promise.withResolvers<JsonValue>(), Promise.withResolvers<JsonValue>()];
-    let asked: number = 0;
-    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? claims[asked++]?.promise ?? declared(method, parameters) : declared(method, parameters);
-    const showing: readonly Promise<PaneTab | null>[] = [pages.showAsync(closing), pages.showAsync(kept)];
+    const closingClaim: PromiseWithResolvers<JsonValue> = Promise.withResolvers<JsonValue>();
+    const keptClaim: PromiseWithResolvers<JsonValue> = Promise.withResolvers<JsonValue>();
+    const claims: Map<string, PromiseWithResolvers<JsonValue>> = new Map<string, PromiseWithResolvers<JsonValue>>([[closing, closingClaim], [kept, keptClaim]]);
+    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
+      ? present(claims.get(PageRequest.fromJson(parameters).instance), "claim of the page").promise : declared(method, parameters);
+    const closingShow: Promise<PaneTab | null> = pages.showAsync(closing);
+    const keptShow: Promise<PaneTab | null> = pages.showAsync(kept);
 
     context.closeByPerson(closing);
-    claims[0]?.resolve({ agentName: "Scout", isClaimed: true, isHere: false, record: { instance: closing, profileKey: "workspace-1", url: "" } });
-    claims[1]?.resolve({ agentName: "Helper", isClaimed: true, isHere: false, record: { instance: kept, profileKey: "workspace-1", url: "" } });
-    const [closed, shown]: (PaneTab | null)[] = await Promise.all(showing);
+    closingClaim.resolve({ agentName: "Scout", isClaimed: true, isHere: false, record: { instance: closing, profileKey: "workspace-1", url: "" } });
+    keptClaim.resolve({ agentName: "Helper", isClaimed: true, isHere: false, record: { instance: kept, profileKey: "workspace-1", url: "" } });
+    const closed: PaneTab | null = await closingShow;
+    const shown: PaneTab = shownOf(await keptShow);
 
-    expect([closed, shown?.id, agentPagesText(), surface().views.length, requestsOf(BrowserMethods.rememberPage).map(t => PageAnswers.isObject(t) ? t["instance"] : null), requestsOf(BrowserMethods.forgetPage)])
+    expect([closed, shown.id, agentPagesText(), surface().views.length, requestsOf(BrowserMethods.rememberPage).map(t => PageRecord.fromJson(t).instance), requestsOf(BrowserMethods.forgetPage)])
       .toEqual([null, kept, "Helper · 1 page open", 1, [kept], [{ instance: closing }]]);
   });
 
@@ -313,7 +346,7 @@ describe("Pages", () => {
     const release = surface().holdNextOpen();
     const showing: Promise<PaneTab | null> = pages.showAsync(instance);
     context.emit(BrowserEvents.pageActivity, { instance, activity: "call-1", agentName: "Scout", action: "Clicking", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false });
-    const counted: string | undefined = agentPagesText();
+    const counted: string = agentPagesText();
 
     context.closeByPerson(instance);
     release();
@@ -466,8 +499,8 @@ describe("Pages", () => {
     const second: string = pages.open("workspace-2", null);
 
     expect(context.opened).toEqual([
-      { name: "browser.page", instance: first, title: "https://docs.example.com/pricing", after: null, marker: null },
-      { name: "browser.page", instance: second, title: "New tab", after: null, marker: null }
+      { name: "browser.page", instance: first, title: "https://docs.example.com/pricing", after: null, marker: null, imageGlyph: "public" },
+      { name: "browser.page", instance: second, title: "New tab", after: null, marker: null, imageGlyph: "public" }
     ]);
     expect([UUID.test(first), UUID.test(second), first === second]).toEqual([true, true, false]);
   });
@@ -477,9 +510,7 @@ describe("Pages", () => {
 
     expect(pages.open("workspace-1", null, picked)).toBe(picked);
     expect(pages.open("workspace-1", "https://docs.example.com/", picked)).toBe(picked);
-    const tab: PaneTab | null = await pages.showAsync(picked);
-    if (Object.isNull(tab))
-      throw new MissingPartError("shown picked page");
+    const tab: PaneTab = shownOf(await pages.showAsync(picked));
     loading(viewOf(tab), "https://docs.example.com/guide", false, "Guide");
     expect(pages.open("workspace-1", "https://other.example.com/", picked)).toBe(picked);
 
@@ -506,9 +537,9 @@ describe("Pages", () => {
     await expect(pages.openAsync("workspace-2", null, instance)).rejects.toThrow(PageOnOtherWorkspaceException);
     const forward: string = await pages.openAsync("workspace-1", null, instance);
     release();
-    const tab: PaneTab | null = await showing;
+    const tab: PaneTab = shownOf(await showing);
 
-    expect([forward, tab?.id, requestsOf(BrowserMethods.claimPage), context.opened.map(t => [t.instance, t.title])])
+    expect([forward, tab.id, requestsOf(BrowserMethods.claimPage), context.opened.map(t => [t.instance, t.title])])
       .toEqual([instance, instance, [], [[instance, "https://docs.example.com/"], [instance, "https://docs.example.com/"]]]);
     expect(() => pages.open("workspace-2", null, instance)).toThrow(PageOnOtherWorkspaceException);
   });
@@ -542,13 +573,13 @@ describe("Pages", () => {
       ? Promise.resolve({ agentName: null, isClaimed: true, isHere: false, record: { instance: picked, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } }) : declared(method, parameters);
 
     expect(await pages.openAsync("workspace-1", null, picked)).toBe(picked);
-    const tab = await pages.showAsync(picked);
+    const tab: PaneTab = shownOf(await pages.showAsync(picked));
     place(tab);
 
     expect([context.opened.map(t => [t.instance, t.title]), requestsOf(BrowserMethods.claimPage), requestsOf(BrowserMethods.readPage)])
       .toEqual([[[picked, "https://docs.example.com/pricing"]], [{ instance: picked }], []]);
-    expect([tab?.id, Object.isNull(tab) ? null : viewOf(tab).profileKey]).toEqual([picked, "workspace-1"]);
-    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
+    expect([tab.id, viewOf(tab).profileKey]).toEqual([picked, "workspace-1"]);
+    await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
   });
 
   it("opens a kept page no window has at the address or on the workspace the app asks for, not where its record was", async () => {
@@ -560,12 +591,12 @@ describe("Pages", () => {
 
     await pages.openAsync("workspace-1", "https://status.example.com/", first);
     await pages.openAsync("workspace-2", null, second);
-    const tabs = [await pages.showAsync(first), await pages.showAsync(second)];
+    const tabs: PaneTab[] = [shownOf(await pages.showAsync(first)), shownOf(await pages.showAsync(second))];
     tabs.forEach(place);
 
     expect(context.opened.map(t => t.title)).toEqual(["https://status.example.com/", "New tab"]);
-    expect(tabs.map(t => Object.isNull(t) ? null : viewOf(t).profileKey)).toEqual(["workspace-1", "workspace-2"]);
-    await vi.waitFor(() => expect(tabs.map(t => Object.isNull(t) ? null : viewOf(t).calls)).toEqual([["navigate https://status.example.com/"], []]));
+    expect(tabs.map(t => viewOf(t).profileKey)).toEqual(["workspace-1", "workspace-2"]);
+    await vi.waitFor(() => expect(tabs.map(t => viewOf(t).calls)).toEqual([["navigate https://status.example.com/"], []]));
   });
 
   it("brings forward a page this window restored but hasn't shown, on its own workspace, and refuses it on another", async () => {
@@ -588,11 +619,11 @@ describe("Pages", () => {
       : Promise.resolve({ agentName: null, isClaimed: true, isHere: true, record: { instance: kept, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } });
 
     await pages.openAsync("workspace-1", "https://run.example/start", kept);
-    const tab = await pages.showAsync(kept);
+    const tab: PaneTab = shownOf(await pages.showAsync(kept));
     place(tab);
 
     expect(context.opened.map(t => [t.instance, t.title])).toEqual([[kept, "https://docs.example.com/pricing"]]);
-    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
+    await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
   });
 
   it("opens a kept page that never went anywhere as a new tab, restored here but not shown or restored nowhere", async () => {
@@ -606,10 +637,10 @@ describe("Pages", () => {
     };
 
     expect([await pages.openAsync("workspace-1", null, here), await pages.openAsync("workspace-1", null, nowhere)]).toEqual([here, nowhere]);
-    const tab = await pages.showAsync(nowhere);
+    const tab: PaneTab = shownOf(await pages.showAsync(nowhere));
 
     expect(context.opened.map(t => [t.instance, t.title])).toEqual([[here, "New tab"], [nowhere, "New tab"]]);
-    expect([Object.isNull(tab) ? null : viewOf(tab).calls, tab?.controller.status, requestsOf(BrowserMethods.letGoPage)]).toEqual([[], PaneStatus.empty, []]);
+    expect([viewOf(tab).calls, tab.controller.status, requestsOf(BrowserMethods.letGoPage)]).toEqual([[], PaneStatus.empty, []]);
   });
 
   it("lets go of a page it claimed when Noldova Desktop refuses to open it, and keeps a page this window restored", async () => {
@@ -634,17 +665,20 @@ describe("Pages", () => {
   it("lets go of a page it claimed, and opens nothing, when the part deactivates while the runtime part answers the claim", async () => {
     const nowhere: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const here: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
-    const claims: PromiseWithResolvers<JsonValue>[] = [Promise.withResolvers<JsonValue>(), Promise.withResolvers<JsonValue>()];
-    let asked: number = 0;
-    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage ? claims[asked++]?.promise ?? declared(method, parameters) : declared(method, parameters);
-    const opening: readonly Promise<string>[] = [pages.openAsync("workspace-1", null, nowhere), pages.openAsync("workspace-1", null, here)];
+    const nowhereClaim: PromiseWithResolvers<JsonValue> = Promise.withResolvers<JsonValue>();
+    const hereClaim: PromiseWithResolvers<JsonValue> = Promise.withResolvers<JsonValue>();
+    const claims: Map<string, PromiseWithResolvers<JsonValue>> = new Map<string, PromiseWithResolvers<JsonValue>>([[nowhere, nowhereClaim], [here, hereClaim]]);
+    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
+      ? present(claims.get(PageRequest.fromJson(parameters).instance), "claim of the page").promise : declared(method, parameters);
+    const nowhereOpening: Promise<string> = pages.openAsync("workspace-1", null, nowhere);
+    const hereOpening: Promise<string> = pages.openAsync("workspace-1", null, here);
 
     pages.close();
-    claims[0]?.resolve({ agentName: null, isClaimed: true, isHere: false, record: null });
-    claims[1]?.resolve({ agentName: null, isClaimed: true, isHere: true, record: null });
+    nowhereClaim.resolve({ agentName: null, isClaimed: true, isHere: false, record: null });
+    hereClaim.resolve({ agentName: null, isClaimed: true, isHere: true, record: null });
 
-    await expect(opening[0]).rejects.toThrow(PagesInactiveException);
-    await expect(opening[1]).rejects.toThrow(PagesInactiveException);
+    await expect(nowhereOpening).rejects.toThrow(PagesInactiveException);
+    await expect(hereOpening).rejects.toThrow(PagesInactiveException);
     expect([context.opened, requestsOf(BrowserMethods.letGoPage)]).toEqual([[], [{ instance: nowhere }]]);
   });
 
@@ -664,7 +698,7 @@ describe("Pages", () => {
 
   it("doesn't hold apart as elsewhere a page a run here claims while the tab's record is read", async () => {
     const instance: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
-    const record = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
+    const record: JsonObject = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
     const read = Promise.withResolvers<JsonValue>();
     let isFree: boolean = false;
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
@@ -682,7 +716,7 @@ describe("Pages", () => {
 
   it("gives a tab whose page another window had a view once this window claims the page on an open", async () => {
     const instance: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
-    const record = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
+    const record: JsonObject = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
     let isFree: boolean = false;
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
       ? Promise.resolve({ agentName: null, isClaimed: isFree, isHere: false, record: isFree ? record : null })
@@ -691,12 +725,12 @@ describe("Pages", () => {
 
     isFree = true;
     expect(await pages.openAsync("workspace-1", null, instance)).toBe(instance);
-    const tab = await pages.showAsync(instance);
+    const tab: PaneTab = shownOf(await pages.showAsync(instance));
     place(tab);
 
-    expect([[...pages.elsewhere()], context.opened.map(t => [t.instance, t.title]), Object.isNull(tab) ? null : viewOf(tab).profileKey])
+    expect([[...pages.elsewhere()], context.opened.map(t => [t.instance, t.title]), viewOf(tab).profileKey])
       .toEqual([[], [[instance, "https://docs.example.com/"]], "workspace-1"]);
-    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/"]));
+    await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://docs.example.com/"]));
   });
 
   it("closes the view of a shown tab, and drops a tab yet to show, whose page another window claimed while the runtime started again", async () => {
@@ -740,7 +774,7 @@ describe("Pages", () => {
     context.answerRequest = (method, parameters) => method === BrowserMethods.holdPages ? Promise.resolve({ agents: [], refused: [1] }) : declared(method, parameters);
     await pages.reportOpenAsync();
 
-    expect([context.logs, viewOf(tab).isClosed, [...pages.elsewhere()], context.statusBarItems[0]?.state().isHidden])
+    expect([context.logs, viewOf(tab).isClosed, [...pages.elsewhere()], agentPagesState().isHidden])
       .toEqual([[
         "The window's open pages weren't held, so another window may open one of them too: Error.",
         "The window's open pages weren't held, so another window may open one of them too: HeldPagesAnswerMalformedException."
@@ -806,13 +840,14 @@ describe("Pages", () => {
 
   it("waits for no page Noldova Desktop refused to open, so its instance shows only through its record", async () => {
     const refusal: Error = new Error("The title is blank.");
-    let refused: string = "";
+    const asked: string[] = [];
     vi.spyOn(context, "openDocument").mockImplementation((_name: string, instance: string) => {
-      refused = instance;
+      asked.push(instance);
       throw refusal;
     });
 
     expect(() => pages.open("workspace-1", "https://docs.example.com/")).toThrow(refusal);
+    const refused: string = present(asked.at(0), "instance Noldova Desktop refused to open");
     expect(await pages.showAsync(refused)).toBeNull();
     expect(requestsOf(BrowserMethods.claimPage)).toEqual([{ instance: refused }]);
   });
@@ -868,7 +903,7 @@ describe("Pages", () => {
     loading(view, "about:blank", false, "about:blank");
     loading(view, "https://docs.example.com/", true);
     loading(view, "https://docs.example.com/", true, "docs.example.com");
-    const whileLoading: number = context.titles.length;
+    const whileLoading: number = context.titles.filter(t => !Object.isUndefined(t.update.title)).length;
     loading(view, "https://docs.example.com/", false);
     loading(view, "https://docs.example.com/next", true);
     loading(view, "https://docs.example.com/next", true, "Next steps");
@@ -881,12 +916,12 @@ describe("Pages", () => {
     context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
       ? Promise.resolve({ agentName: null, isClaimed: true, isHere: false, record: { instance, profileKey: "workspace-2", url: "https://status.example.com/" } }) : declared(method, parameters);
 
-    const tab = await pages.showAsync(instance);
+    const tab: PaneTab = shownOf(await pages.showAsync(instance));
     place(tab);
 
     expect([requestsOf(BrowserMethods.claimPage), requestsOf(BrowserMethods.readPage)]).toEqual([[{ instance }], []]);
-    expect([tab?.id, Object.isNull(tab) ? null : viewOf(tab).profileKey]).toEqual([instance, "workspace-2"]);
-    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://status.example.com/"]));
+    expect([tab.id, viewOf(tab).profileKey]).toEqual([instance, "workspace-2"]);
+    await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://status.example.com/"]));
   });
 
   it("gives null, and opens no view, for a restored page the module keeps no record of, or once the part deactivated", async () => {
@@ -924,7 +959,7 @@ describe("Pages", () => {
     release();
 
     expect(await showing).toBeNull();
-    expect(surface().views[0]?.calls).toEqual(["close"]);
+    expect(present(surface().views[0], "view").calls).toEqual(["close"]);
   });
 
   it("asks the runtime part to stop a page's calls, or to take it over, and logs a stop that fails by its kind alone", async () => {
@@ -1057,10 +1092,41 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
     expect(context.working).toEqual([]);
-    expect(context.titles).toEqual([{ instance: tab.id, update: { title: "Plans and pricing" } }]);
+    expect(context.titles).toEqual([new TitleUpdate(tab.id, { image: null }), new TitleUpdate(tab.id, { title: "Plans and pricing" })]);
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([
       { instance: tab.id, profileKey: "workspace-1", url: "" }, { instance: tab.id, profileKey: "workspace-1", url: "https://docs.example.com/" }
     ]);
+  });
+
+  it("shows the page's favicon as its tab's image, once each change, and none for a new view until the page names one", async () => {
+    const icon: string = "data:image/png;base64,iVBORw0KGgo=";
+    const tab = await openAsync();
+    const view = viewOf(tab);
+    const images = (): (string | null | undefined)[] => context.titles.filter(t => t.instance === tab.id && !Object.isUndefined(t.update.image)).map(t => t.update.image);
+
+    view.emit(new ViewFaviconEvent(icon));
+    view.emit(new ViewFaviconEvent(icon));
+    view.emit(new ViewFaviconEvent(null));
+    view.emit(new ViewFaviconEvent(icon));
+    pages.release(tab);
+    view.emit(new ViewFaviconEvent(null));
+
+    expect(images()).toEqual([null, icon, null, icon]);
+  });
+
+  it("opens each page tab, and gives each tab the window restored, the web's glyph in its image's place", async () => {
+    const opener = await openAsync();
+    const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    pages.open("workspace-1", null, picked);
+    pages.open("workspace-1", null, picked);
+    pages.open("workspace-1", "https://docs.example.com/", null, opener);
+    pages.open("workspace-1", "https://docs.example.com/", null, opener, true);
+    const restored: readonly string[] = ["0f8fad5b-d9cb-469f-a165-70867728950e", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"];
+    context.openDocuments = restored;
+    await pages.reportOpenAsync();
+
+    expect(context.opened.map(t => t.imageGlyph)).toEqual(["public", "public", "public", "public", "public"]);
+    expect(context.titles.filter(t => !Object.isUndefined(t.update.imageGlyph))).toEqual(restored.map(t => new TitleUpdate(t, { imageGlyph: "public" })));
   });
 
   it("takes the working mark away when a load fails, is refused or is stopped, so a failed or refused page shows its glyph alone", async () => {
@@ -1088,7 +1154,7 @@ describe("Pages", () => {
   it("says on its tab that a page can't be reached, in the failure colour, or isn't opened, in the tab's own, once each, and nothing once it stops working or loads again", async () => {
     const tab = await openAsync();
     const view = viewOf(tab);
-    const status = (glyph: string, heading: string, tone: DocumentTone) => ({ instance: tab.id, update: { status: { glyph, description: heading, tone } } });
+    const status = (glyph: string, heading: string, tone: DocumentTone): TitleUpdate => new TitleUpdate(tab.id, { status: { glyph, description: heading, tone } });
 
     loading(view, "https://docs.exmaple.com/", true);
     view.emit(new ViewLoadFailureEvent("https://docs.exmaple.com/", -105, "ERR_NAME_NOT_RESOLVED"));
@@ -1101,7 +1167,7 @@ describe("Pages", () => {
 
     expect(context.titles.filter(t => !Object.isUndefined(t.update.status))).toEqual([
       status("error", "Can't reach docs.exmaple.com", DocumentTone.Failed), status("block", `${WindowContext.appName}'s browser doesn't open https://refused.example`, DocumentTone.Neutral),
-      { instance: tab.id, update: { status: null } }
+      new TitleUpdate(tab.id, { status: null })
     ]);
   });
 
@@ -1113,7 +1179,7 @@ describe("Pages", () => {
     }) : declared(method, parameters);
     pages = new Pages(context);
     const tab = await openAsync();
-    const status = (heading: string) => ({ instance: tab.id, update: { status: { glyph: "block", description: heading, tone: DocumentTone.Neutral } } });
+    const status = (heading: string): TitleUpdate => new TitleUpdate(tab.id, { status: { glyph: "block", description: heading, tone: DocumentTone.Neutral } });
 
     tab.controller.refuseNavigation("https://refused.example");
     answerName(WindowContext.appName);
@@ -1167,8 +1233,8 @@ describe("Pages", () => {
     expect(context.opened.slice(1).map(t => [t.title, t.after, t.marker]))
       .toEqual([["https://status.example.com/", tab.id, { glyph: "subdirectory_arrow_right", label: "Opened from Plans and pricing" }]]);
     expect(tab.controller.status.popup).toStrictEqual(new PopupOffer("https://ads.example.com/", null));
-    const opener = await pages.showAsync(lastOpened());
-    expect(Object.isNull(opener) ? null : viewOf(opener).profileKey).toBe("workspace-2");
+    const opener: PaneTab = shownOf(await pages.showAsync(lastOpened()));
+    expect(viewOf(opener).profileKey).toBe("workspace-2");
   });
 
   it("opens one page for each press however many windows the page asks for, and blocks the rest, the person's recent input or not, keeping the latest in the address bar", async () => {
@@ -1199,6 +1265,7 @@ describe("Pages", () => {
 
     expect(context.opened.map(t => [t.title, t.activate])).toEqual([["New tab", undefined], ["https://docs.example.com/a", false], ["https://docs.example.com/b", false]]);
     expect([second, tab.controller.status.popup]).toStrictEqual([new PopupOffer("https://ads.example.com/second", null), new PopupOffer("https://ads.example.com/", null)]);
+    expect(requestsOf(BrowserMethods.allowTypedAddress), "A press's background tab asked to allow its site.").toEqual([]);
   });
 
   it("opens every new window a page on a site allowed pop-ups asks for, its subdomains' too, with no press, and blocks a page's on another site", async () => {
@@ -1266,9 +1333,7 @@ describe("Pages", () => {
     const asked: string[] = [...viewOf(tab).calls];
 
     viewOf(tab).emit(new ViewNewWindowEvent("https://status.example.com/", true, "https://docs.example.com", false, true));
-    const opened = await pages.showAsync(lastOpened());
-    if (Object.isNull(opened))
-      throw new MissingPartError("shown new page");
+    const opened: PaneTab = shownOf(await pages.showAsync(lastOpened()));
     place(opened);
     await vi.waitFor(() => expect(opened.controller.status.url).toBe("https://status.example.com/"));
 
@@ -1319,7 +1384,7 @@ describe("Pages", () => {
     pages.openPopup(tab, "https://ads.example.com/");
 
     expect(context.opened.map(t => [t.title, t.after])).toEqual([
-      ["https://docs.example.com/", null], ["https://status.example.com/", tab.id], ["https://ads.example.com/", context.opened[1]?.instance]
+      ["https://docs.example.com/", null], ["https://status.example.com/", tab.id], ["https://ads.example.com/", present(context.opened[1], "second page document").instance]
     ]);
   });
 
@@ -1329,9 +1394,7 @@ describe("Pages", () => {
     pages.openPopup(tab, "https://a.example.com/");
     pages.openPopup(tab, "https://b.example.com/");
     const inRow = context.row;
-    const last = await pages.showAsync(lastOpened());
-    if (Object.isNull(last))
-      throw new MissingPartError("shown page");
+    const last: PaneTab = shownOf(await pages.showAsync(lastOpened()));
     pages.release(last);
     pages.openPopup(tab, "https://c.example.com/");
 
@@ -1353,9 +1416,9 @@ describe("Pages", () => {
     pages.openNew(tab);
     pages.release(tab);
     pages.openNew(tab);
-    const shown: PaneTab | null = await pages.showAsync(lastOpened());
+    const shown: PaneTab = shownOf(await pages.showAsync(lastOpened()));
 
-    expect([context.opened.map(t => [t.title, t.after]), context.logs, Object.isNull(shown) ? null : viewOf(shown).profileKey]).toEqual([
+    expect([context.opened.map(t => [t.title, t.after]), context.logs, viewOf(shown).profileKey]).toEqual([
       [["https://docs.example.com/", null], ["https://ads.example.com/", tab.id], ["New tab", null]], ["The new page didn't open: RangeError."], "workspace-2"
     ]);
   });
@@ -1381,7 +1444,7 @@ describe("Pages", () => {
     context.closeByPerson(tab.id);
     await pages.clearBrowsingDataAsync(other);
 
-    expect([viewOf(tab).calls, context.working, context.titles.length]).toEqual([["close"], [], 1]);
+    expect([viewOf(tab).calls, context.working, context.titles.filter(t => Object.isUndefined(t.update.image)).length]).toEqual([["close"], [], 1]);
     expect(requestsOf(BrowserMethods.forgetPage)).toEqual([{ instance: tab.id }]);
   });
 
@@ -1409,12 +1472,12 @@ describe("Pages", () => {
     }
 
     function passed(): string[] {
-      return requestsOf(BrowserMethods.passTypedRedirect).map(urlOf);
+      return requestsOf(BrowserMethods.passTypedRedirect).map(redirectUrlOf);
     }
 
     function joinsAndEnds(): string[] {
       return context.requests.filter(t => t.method === BrowserMethods.allowTypedAddress || t.method === BrowserMethods.endTypedRedirects)
-        .map(t => t.method === BrowserMethods.endTypedRedirects ? "end" : urlOf(t.parameters));
+        .map(t => t.method === BrowserMethods.endTypedRedirects ? "end" : typedUrlOf(t.parameters));
     }
 
     it("allows the typed address in the page's workspace, then goes there in that tab", async () => {
@@ -1461,7 +1524,7 @@ describe("Pages", () => {
 
     it("shows the not-allowed page for a redirect the runtime part refuses, never the cancelled request's failure, and the hop it followed joins nothing", async () => {
       context.answerRequest = (method, parameters) => method !== BrowserMethods.allowTypedAddress && method !== BrowserMethods.passTypedRedirect ? declared(method, parameters)
-        : Promise.resolve(urlOf(parameters) === "http://192.168.1.1/" ? { kind: "Refused", reason: "Local" } : answer);
+        : Promise.resolve((method === BrowserMethods.allowTypedAddress ? typedUrlOf(parameters) : redirectUrlOf(parameters)) === "http://192.168.1.1/" ? { kind: "Refused", reason: "Local" } : answer);
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       surface().script("https://www.example.com/", { kind: "redirect", to: "http://192.168.1.1/", title: "", isRefused: true });
       const tab = await openAsync();
@@ -1486,7 +1549,7 @@ describe("Pages", () => {
     });
 
     it("logs the failure's kind when the landed page can't join or the view's redirects can't end", async () => {
-      context.answerRequest = (method, parameters) => method === BrowserMethods.endTypedRedirects || (method === BrowserMethods.allowTypedAddress && urlOf(parameters) === "https://www.example.com/")
+      context.answerRequest = (method, parameters) => method === BrowserMethods.endTypedRedirects || (method === BrowserMethods.allowTypedAddress && typedUrlOf(parameters) === "https://www.example.com/")
         ? Promise.reject(new RangeError("The runtime part is gone."))
         : method === BrowserMethods.allowTypedAddress || method === BrowserMethods.passTypedRedirect ? Promise.resolve(answer) : declared(method, parameters);
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
@@ -1515,12 +1578,12 @@ describe("Pages", () => {
       await pages.goToAsync(tab, "example.com");
 
       await viewOf(tab).navigateAsync("https://old.example/");
-      expect([typedAddresses().map(urlOf), tab.controller.status.refusedOrigin]).toEqual([["https://example.com/"], "https://new.example"]);
+      expect([typedAddresses().map(typedUrlOf), tab.controller.status.refusedOrigin]).toEqual([["https://example.com/"], "https://new.example"]);
       context.emit(BrowserEvents.pageActivity, { instance: tab.id, activity: "call-1", agentName: "Builder", action: "Navigating", state: "Acting", box: null, point: null, refusal: null, isHandedOver: false });
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       await pages.goToAsync(tab, "example.com");
 
-      expect([typedAddresses().map(urlOf), passed(), viewOf(tab).calls.at(-1), tab.controller.status.refusedOrigin])
+      expect([typedAddresses().map(typedUrlOf), passed(), viewOf(tab).calls.at(-1), tab.controller.status.refusedOrigin])
         .toEqual([["https://example.com/", "https://example.com/"], [], "navigate https://example.com/", "https://www.example.com"]);
     });
 
@@ -1549,7 +1612,7 @@ describe("Pages", () => {
       await viewOf(tab).stopAsync();
       await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
 
-      expect([pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual(["Idle", "https://www.example.com/"]);
+      expect([present(pages.activities().get(tab.id), "activity of the page").state, tab.controller.status.url]).toEqual(["Idle", "https://www.example.com/"]);
     });
 
     it("follows the redirects of a load typed on a page a teammate keeps control of between its calls, and joins the page once the load lands", async () => {
@@ -1563,7 +1626,8 @@ describe("Pages", () => {
       await viewOf(tab).stopAsync();
       await vi.waitFor(() => expect(joinsAndEnds()).toEqual(["https://example.com/", "https://www.example.com/", "end"]));
 
-      expect([passed(), pages.activities().get(tab.id)?.state, tab.controller.status.url]).toEqual([["https://www.example.com/"], "Idle", "https://www.example.com/"]);
+      expect([passed(), present(pages.activities().get(tab.id), "activity of the page").state, tab.controller.status.url])
+        .toEqual([["https://www.example.com/"], "Idle", "https://www.example.com/"]);
     });
 
     it("follows no redirect and joins nothing once a teammate's call starts on the page during its typed load, even after the call ended", async () => {
@@ -1571,7 +1635,7 @@ describe("Pages", () => {
       surface().script("https://www.example.com/", { kind: "pending" });
       surface().script("https://login.example.org/", { kind: "load", title: "Signed in" });
       const tab = await openAsync();
-      const activity = { instance: tab.id, activity: "call-1", agentName: "Builder", action: "Clicking", box: null, point: null, refusal: null, isHandedOver: false };
+      const activity: JsonObject = { instance: tab.id, activity: "call-1", agentName: "Builder", action: "Clicking", box: null, point: null, refusal: null, isHandedOver: false };
 
       await pages.goToAsync(tab, "example.com");
       await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/", "navigate https://www.example.com/"]));
@@ -1588,7 +1652,7 @@ describe("Pages", () => {
 
     it("follows no redirect whose address the runtime part judges after the person entered another one, and ends it once that load ended", async () => {
       const judged = Promise.withResolvers<JsonValue>();
-      context.answerRequest = (method, parameters) => method === BrowserMethods.passTypedRedirect && urlOf(parameters) === "https://www.example.com/" ? judged.promise
+      context.answerRequest = (method, parameters) => method === BrowserMethods.passTypedRedirect && redirectUrlOf(parameters) === "https://www.example.com/" ? judged.promise
         : method === BrowserMethods.allowTypedAddress ? Promise.resolve(answer) : declared(method, parameters);
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       const tab = await openAsync();
@@ -1603,7 +1667,7 @@ describe("Pages", () => {
 
     it("logs a redirect whose judging fails after the person entered another address, and leaves that address's page as it is", async () => {
       const judged = Promise.withResolvers<JsonValue>();
-      context.answerRequest = (method, parameters) => method === BrowserMethods.passTypedRedirect && urlOf(parameters) === "https://www.example.com/" ? judged.promise
+      context.answerRequest = (method, parameters) => method === BrowserMethods.passTypedRedirect && redirectUrlOf(parameters) === "https://www.example.com/" ? judged.promise
         : method === BrowserMethods.allowTypedAddress ? Promise.resolve(answer) : declared(method, parameters);
       surface().script("https://example.com/", { kind: "redirect", to: "https://www.example.com/", title: "", isRefused: true });
       const tab = await openAsync();
@@ -1627,7 +1691,7 @@ describe("Pages", () => {
       await viewOf(tab).stopAsync();
       await viewOf(tab).navigateAsync("https://old.example/");
 
-      expect([typedAddresses().map(urlOf), passed(), tab.controller.status.state, tab.controller.status.refusedOrigin]).toEqual([["https://example.com/"], [], PaneState.Refused, "https://new.example"]);
+      expect([typedAddresses().map(typedUrlOf), passed(), tab.controller.status.state, tab.controller.status.refusedOrigin]).toEqual([["https://example.com/"], [], PaneState.Refused, "https://new.example"]);
     });
 
     it("loads nothing and asks nothing for text that isn't a web address, and the tab says why", async () => {
@@ -1699,15 +1763,15 @@ describe("Pages", () => {
     it("acts only on a tab's latest entry, so an earlier answer that comes later changes nothing", async () => {
       const answers: Map<string, (answer: JsonValue) => void> = new Map();
       context.answerRequest = (method, parameters) => method === BrowserMethods.allowTypedAddress
-        ? new Promise<JsonValue>(resolve => answers.set(urlOf(parameters), resolve))
+        ? new Promise<JsonValue>(resolve => answers.set(typedUrlOf(parameters), resolve))
         : declared(method, parameters);
       const tab = await openAsync();
 
       const first = pages.goToAsync(tab, "new.example");
       const second = pages.goToAsync(tab, "kept.example");
-      answers.get("https://kept.example/")?.({ kind: "Allowed", origin: "https://kept.example" });
+      present(answers.get("https://kept.example/"), "answer for https://kept.example/")({ kind: "Allowed", origin: "https://kept.example" });
       expect(await second).toBe(EntryAnswer.Gone);
-      answers.get("https://new.example/")?.({ kind: "Refused", reason: "Local" });
+      present(answers.get("https://new.example/"), "answer for https://new.example/")({ kind: "Refused", reason: "Local" });
 
       expect([await first, viewOf(tab).calls, tab.controller.status.refusedAddress]).toEqual([EntryAnswer.Stayed, ["navigate https://kept.example/"], null]);
     });
@@ -1803,14 +1867,14 @@ describe("Pages", () => {
 
         const failed = pages.goToAsync(tab, "first.example");
         await vi.waitFor(() => expect(failures).toHaveLength(1));
-        failures[0]?.(new Error("The runtime part stopped."));
+        present(failures[0], "first request's failure")(new Error("The runtime part stopped."));
         const caught: unknown = await failed.catch((error: unknown) => error);
         pages.leaveEntry(tab);
         const left = pages.goToAsync(tab, "second.example");
         await vi.waitFor(() => expect(failures).toHaveLength(2));
         pages.leaveEntry(tab);
         const answer: EntryAnswer = await left;
-        failures[1]?.(new TypeError("The runtime part stopped."));
+        present(failures[1], "second request's failure")(new TypeError("The runtime part stopped."));
 
         await vi.waitFor(() => expect(context.logs).toHaveLength(1));
         expect([caught, answer, context.logs]).toEqual([new Error("The runtime part stopped."), EntryAnswer.Left, ["A typed address the person left failed after it: TypeError."]]);
@@ -1849,7 +1913,7 @@ describe("Pages", () => {
       context.answerRequest = (method, parameters) => {
         if (method !== BrowserMethods.allowTypedAddress)
           return declared(method, parameters);
-        return urlOf(parameters) === "https://new.example/"
+        return typedUrlOf(parameters) === "https://new.example/"
           ? new Promise<JsonValue>((_, reject) => fail = () => reject(new Error("The store is closed.")))
           : Promise.resolve({ kind: "Allowed", origin: "https://kept.example" });
       };
@@ -1876,14 +1940,12 @@ describe("Pages", () => {
       await pages.openAsync("workspace-1", null, null);
 
       await pages.openLinkAsync("https://example.com/docs");
-      const tab: PaneTab | null = await pages.showAsync(lastOpened());
-      if (Object.isNull(tab))
-        throw new MissingPartError("shown page for the link");
+      const tab: PaneTab = shownOf(await pages.showAsync(lastOpened()));
       await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://example.com/docs"]));
 
       expect(requestsOf(BrowserMethods.allowTypedAddress)).toEqual([{ profileKey: "links", url: "https://example.com/docs" }]);
       expect(context.opened.map(t => [t.title, t.after])).toEqual([["New tab", null], ["https://example.com/docs", null]]);
-      expect(surface().views.at(-1)?.profileKey).toBe("links");
+      expect(present(surface().views.at(-1), "view").profileKey).toBe("links");
     });
 
     it("rejects, opening nothing, when the runtime part refuses the address, so Noldova Desktop opens it in the system's browser", async () => {

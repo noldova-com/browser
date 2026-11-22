@@ -30,7 +30,9 @@ import type { RuntimeDomains } from "../src/services/runtime-domains.ts";
 import { ToolResults } from "../src/services/tool-results.ts";
 import { BrowserTools } from "../src/tools/browser-tools.ts";
 import type { JsonObject, JsonValue } from "../src/types/json-value.ts";
+import { CodedError } from "./fixtures/coded-error.fixture.ts";
 import { BrowserContext, linesAsync, SqliteModuleDatabase, writtenTo } from "./fixtures/desktop-fakes.fixture.ts";
+import { MissingPartError } from "./fixtures/missing-part.error.ts";
 import { ProductFile } from "./fixtures/product-file.fixture.ts";
 import { ScriptedViews } from "./fixtures/scripted-views.fixture.ts";
 import { UnhandledRejections } from "./fixtures/unhandled-rejections.fixture.ts";
@@ -57,16 +59,74 @@ function pageViews(...instances: readonly string[]): ScriptedViews {
   return surface;
 }
 
+// A part and a reader of the session states its tools keep once it's active.
+class ActivePart {
+  public readonly part: RuntimePart;
+  public readonly states: () => SessionStates;
+
+  public constructor(part: RuntimePart, states: () => SessionStates) {
+    this.part = part;
+    this.states = states;
+  }
+}
+
+// A request the window sends the part: its method and its payload.
+class MethodRequest {
+  public readonly method: string;
+  public readonly payload: JsonValue;
+
+  public constructor(method: string, payload: JsonValue) {
+    this.method = method;
+    this.payload = payload;
+  }
+}
+
+// Where a request comes from: the shell's client and the window it names, if any.
+class RequestOrigin {
+  public readonly client: string;
+  public readonly window: number | null;
+
+  public constructor(client: string, window: number | null) {
+    this.client = client;
+    this.window = window;
+  }
+}
+
+// A method and the failure it gives a request that isn't one.
+class MalformedRequestCase {
+  public readonly method: string;
+  public readonly failure: new (...args: never[]) => WindowRequestMalformedException;
+
+  public constructor(method: string, failure: new (...args: never[]) => WindowRequestMalformedException) {
+    this.method = method;
+    this.failure = failure;
+  }
+}
+
+// A view's controlled mark as the part set it.
+class ControlMark {
+  public readonly viewId: string;
+  public readonly isControlled: boolean;
+
+  public constructor(viewId: string, isControlled: boolean) {
+    this.viewId = viewId;
+    this.isControlled = isControlled;
+  }
+}
+
+// The command line, a module's own entry, and the main process with no window: none may send the window's requests.
+const REFUSED_ORIGINS: readonly RequestOrigin[] = [new RequestOrigin("cli", null), new RequestOrigin("app", 1), new RequestOrigin(ShellClients.mainProcess, null)];
+
 function kitOf(create: MockInstance<typeof BrowserTools.create>): ToolKit {
   const kit: ToolKit | undefined = create.mock.calls.at(-1)?.[0];
-  if (kit === undefined)
-    throw new Error("The part isn't active.");
+  if (Object.isUndefined(kit))
+    throw new MissingPartError("active part");
   return kit;
 }
 
-function partOf(): { readonly part: RuntimePart; readonly states: () => SessionStates } {
+function partOf(): ActivePart {
   const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
-  return { part: new RuntimePart(), states: (): SessionStates => kitOf(create).sessions };
+  return new ActivePart(new RuntimePart(), (): SessionStates => kitOf(create).sessions);
 }
 
 async function databaseWithAsync(profileKey: string, origins: readonly string[]): Promise<SqliteModuleDatabase> {
@@ -82,8 +142,8 @@ function typeAsync(context: BrowserContext, payload: JsonValue, client: string =
 function requestAsync(context: BrowserContext, method: string, payload: JsonValue, client: string = ShellClients.mainProcess, window: number | null = 1,
   connection: number = 1): Promise<JsonValue> {
   const handler: IMethodHandler | undefined = context.methods.get(method);
-  if (handler === undefined)
-    throw new Error(`The part registered no method ${method}.`);
+  if (Object.isUndefined(handler))
+    throw new MissingPartError(`method ${method} the part registered`);
   return handler.handleAsync(new RequestContext(client, payload, new AbortController().signal, connection, window));
 }
 
@@ -309,7 +369,7 @@ describe("RuntimePart", () => {
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const context: BrowserContext = new BrowserContext(pageViews(instance));
     await new RuntimePart().activateAsync(context);
-    context.database.failNext("run", Object.assign(new Error("The disk is full."), { code: "ERR_SQLITE_ERROR" }));
+    context.database.failNext("run", new CodedError("The disk is full.", "ERR_SQLITE_ERROR"));
 
     const result: unknown = await context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" }).callAsync("browser_snapshot", {});
 
@@ -356,16 +416,23 @@ describe("RuntimePart", () => {
     const context: BrowserContext = new BrowserContext(surface);
     await new RuntimePart().activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
-    const requests: readonly (readonly [string, JsonValue])[] = [
-      [BrowserMethods.rememberPage, { instance, profileKey: "workspace-1", url: "" }], [BrowserMethods.readPage, { instance }], [BrowserMethods.forgetPage, { instance }],
-      [BrowserMethods.clearBrowsingData, { profileKey: "workspace-1" }], [BrowserMethods.stopPage, { instance, isTakingOver: true }], [BrowserMethods.readActivities, null],
-      [BrowserMethods.claimPage, { instance }], [BrowserMethods.holdPages, { instances: [instance] }], [BrowserMethods.letGoPage, { instance }],
-      [BrowserMethods.passTypedRedirect, { instance, profileKey: "workspace-1", url: "https://example.com/" }], [BrowserMethods.endTypedRedirects, { instance }],
-      [BrowserMethods.readyPage, { instance }]
+    const requests: readonly MethodRequest[] = [
+      new MethodRequest(BrowserMethods.rememberPage, { instance, profileKey: "workspace-1", url: "" }),
+      new MethodRequest(BrowserMethods.readPage, { instance }),
+      new MethodRequest(BrowserMethods.forgetPage, { instance }),
+      new MethodRequest(BrowserMethods.clearBrowsingData, { profileKey: "workspace-1" }),
+      new MethodRequest(BrowserMethods.stopPage, { instance, isTakingOver: true }),
+      new MethodRequest(BrowserMethods.readActivities, null),
+      new MethodRequest(BrowserMethods.claimPage, { instance }),
+      new MethodRequest(BrowserMethods.holdPages, { instances: [instance] }),
+      new MethodRequest(BrowserMethods.letGoPage, { instance }),
+      new MethodRequest(BrowserMethods.passTypedRedirect, { instance, profileKey: "workspace-1", url: "https://example.com/" }),
+      new MethodRequest(BrowserMethods.endTypedRedirects, { instance }),
+      new MethodRequest(BrowserMethods.readyPage, { instance })
     ];
 
-    for (const [method, payload] of requests) {
-      for (const [client, window] of [["cli", null], ["app", 1], [ShellClients.mainProcess, null]] as const) {
+    for (const { method, payload } of requests) {
+      for (const { client, window } of REFUSED_ORIGINS) {
         const refusal: unknown = await requestAsync(context, method, payload, client, window).catch((error: unknown) => error);
         expect(refusal, `${method} ${client}`).toBeInstanceOf(MethodFailureException);
         expect(refusal, `${method} ${client}`).toMatchObject({ failure: { code: FailureCode.Unauthorized } });
@@ -378,13 +445,13 @@ describe("RuntimePart", () => {
     const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
 
-    const failures: readonly (readonly [string, new (...args: never[]) => WindowRequestMalformedException])[] = [
+    const failures: readonly MalformedRequestCase[] = [
       ...[BrowserMethods.readPage, BrowserMethods.forgetPage, BrowserMethods.claimPage, BrowserMethods.letGoPage, BrowserMethods.endTypedRedirects, BrowserMethods.readyPage]
-        .map(t => [t, PageInstanceInvalidException] as const),
+        .map(t => new MalformedRequestCase(t, PageInstanceInvalidException)),
       ...[BrowserMethods.rememberPage, BrowserMethods.stopPage, BrowserMethods.passTypedRedirect, BrowserMethods.clearBrowsingData, BrowserMethods.holdPages]
-        .map(t => [t, WindowRequestUnreadException] as const)
+        .map(t => new MalformedRequestCase(t, WindowRequestUnreadException))
     ];
-    for (const [method, failure] of failures)
+    for (const { method, failure } of failures)
       await expect(requestAsync(context, method, { instance: "page" }), method).rejects.toThrow(failure);
   });
 
@@ -409,9 +476,9 @@ describe("RuntimePart", () => {
 
   it("marks as no longer controlled each view it lists as it activates or hears open, but one an agent's control holds, which it marks until the control ends", async () => {
     const surface: ScriptedViews = pageViews("page-1", "page-2");
-    const marks: unknown[][] = [];
+    const marks: ControlMark[] = [];
     surface.webViews.answer("setControlledAsync", (viewId, isControlled) => {
-      marks.push([viewId, isControlled]);
+      marks.push(new ControlMark(viewId, isControlled));
       return Promise.resolve();
     });
     const context: BrowserContext = new BrowserContext(surface);
@@ -423,7 +490,8 @@ describe("RuntimePart", () => {
     surface.open("view-3", "workspace-1");
     session.end();
 
-    expect(marks).toEqual([["view-1", false], ["view-2", false], ["view-1", true], ["view-3", false], ["view-1", false]]);
+    expect(marks).toEqual([new ControlMark("view-1", false), new ControlMark("view-2", false), new ControlMark("view-1", true), new ControlMark("view-3", false),
+      new ControlMark("view-1", false)]);
   });
 
   it("gives a view that opens its workspace's origins, as the module's database keeps them", async () => {
@@ -648,7 +716,7 @@ describe("RuntimePart", () => {
     await new RuntimePart().activateAsync(context);
     const request: JsonValue = { profileKey: "workspace-1", url: "https://docs.example.com/pricing" };
 
-    for (const [client, window] of [["cli", null], ["app", 1], [ShellClients.mainProcess, null]] as const) {
+    for (const { client, window } of REFUSED_ORIGINS) {
       const refusal: unknown = await typeAsync(context, request, client, window).catch((error: unknown) => error);
       expect(refusal, client).toBeInstanceOf(MethodFailureException);
       expect(refusal, client).toMatchObject({ failure: { code: FailureCode.Unauthorized } });

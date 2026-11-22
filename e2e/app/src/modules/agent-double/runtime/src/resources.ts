@@ -24,8 +24,9 @@ export class Resources {
   public static readonly allowAlwaysAnswer: string = "allowAlways";
   public static readonly allowOnceAnswer: string = "allowOnce";
   public static readonly denyAnswer: string = "deny";
+  public static readonly denyAlwaysAnswer: string = "denyAlways";
 
   public static formatUnknownAnswer(answer: string): string {
-    return `The agent double plans no answer called ${JSON.stringify(answer)}; it takes allowAlways, allowOnce or deny.`;
+    return `The agent double plans no answer called ${JSON.stringify(answer)}; it takes allowAlways, allowOnce, deny or denyAlways.`;
   }
 }

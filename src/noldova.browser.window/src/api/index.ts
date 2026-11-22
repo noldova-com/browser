@@ -23,6 +23,7 @@ export { PopupOffer } from "../app/models/popup-offer.ts";
 export { ViewCloseEvent } from "../app/models/view-close-event.ts";
 export { ViewCrashEvent } from "../app/models/view-crash-event.ts";
 export { ViewEvent } from "../app/models/view-event.ts";
+export { ViewFaviconEvent } from "../app/models/view-favicon-event.ts";
 export { ViewKeyEvent } from "../app/models/view-key-event.ts";
 export { ViewLoadFailureEvent } from "../app/models/view-load-failure-event.ts";
 export { ViewNewWindowEvent } from "../app/models/view-new-window-event.ts";

@@ -13,7 +13,10 @@ import { AskedQuestion } from "./asked-question.js";
 import { Resources } from "./resources.js";
 
 export class PlannedAnswers implements IPermissionAnswerer {
-  private static readonly ANSWERS: readonly string[] = [Resources.allowAlwaysAnswer, Resources.allowOnceAnswer, Resources.denyAnswer];
+  private static readonly ANSWERS: readonly string[] = [Resources.allowAlwaysAnswer, Resources.allowOnceAnswer, Resources.denyAnswer,
+    Resources.denyAlwaysAnswer];
+  // A question no test planned an answer for is denied, the double's safe default, so an unplanned request never goes ahead.
+  private static readonly UNPLANNED_ANSWER: string = Resources.denyAnswer;
 
   private readonly plans: Map<string, string[]> = new Map();
   private asked: AskedQuestion[] = [];
@@ -32,7 +35,7 @@ export class PlannedAnswers implements IPermissionAnswerer {
 
   public async answerAsync(question: PermissionQuestion, _signal: AbortSignal): Promise<PermissionDecision> {
     const planned = this.plans.get(question.request.action) ?? [];
-    const answer = planned.shift() ?? Resources.denyAnswer;
+    const answer = planned.shift() ?? PlannedAnswers.UNPLANNED_ANSWER;
     const decision = PlannedAnswers.decide(answer, question.request.options);
     this.asked.push(new AskedQuestion(question, decision));
     return decision;
@@ -41,7 +44,9 @@ export class PlannedAnswers implements IPermissionAnswerer {
   private static decide(answer: string, options: readonly PermissionOption[]): PermissionDecision {
     if (answer === Resources.allowAlwaysAnswer && options.includes(PermissionOption.AllowAlways))
       return PermissionDecision.AllowedAlways;
-    if (answer !== Resources.denyAnswer && options.includes(PermissionOption.AllowOnce))
+    if (answer === Resources.denyAlwaysAnswer && options.includes(PermissionOption.DenyAlways))
+      return PermissionDecision.DeniedAlways;
+    if ((answer === Resources.allowAlwaysAnswer || answer === Resources.allowOnceAnswer) && options.includes(PermissionOption.AllowOnce))
       return PermissionDecision.AllowedOnce;
     return PermissionDecision.Denied;
   }

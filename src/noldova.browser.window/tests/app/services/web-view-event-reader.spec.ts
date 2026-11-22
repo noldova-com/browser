@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { RefusedRequest } from "../../../src/app/enums/refused-request.ts";
 import { ViewCloseEvent } from "../../../src/app/models/view-close-event.ts";
 import { ViewCrashEvent } from "../../../src/app/models/view-crash-event.ts";
+import { ViewFaviconEvent } from "../../../src/app/models/view-favicon-event.ts";
 import type { ViewEvent } from "../../../src/app/models/view-event.ts";
 import { ViewKeyEvent } from "../../../src/app/models/view-key-event.ts";
 import { ViewLoadFailureEvent } from "../../../src/app/models/view-load-failure-event.ts";
@@ -97,6 +98,18 @@ describe("WebViewEventReader", () => {
 
   it("reads the view's new zoom factor", () => {
     expect(WebViewEventReader.read(event(WebViewEventKind.Zoom, { factor: 1.25 }))).toStrictEqual(new ViewZoomEvent(1.25));
+  });
+
+  it("reads the page's new icon as an image URL, or none", () => {
+    expect([
+      WebViewEventReader.read(event(WebViewEventKind.Favicon, { image: "data:image/png;base64,iVBORw0KGgo=" })),
+      WebViewEventReader.read(event(WebViewEventKind.Favicon, { image: null }))
+    ]).toStrictEqual([new ViewFaviconEvent("data:image/png;base64,iVBORw0KGgo="), new ViewFaviconEvent(null)]);
+  });
+
+  it("reads nothing for an icon that isn't an image URL, which the tab couldn't draw", () => {
+    expect(["https://docs.example.com/favicon.ico", "data:text/html,<p>Hi</p>", "", 1].map(t => WebViewEventReader.read(malformed(WebViewEventKind.Favicon, { image: t }))))
+      .toEqual([null, null, null, null]);
   });
 
   it("reads nothing for a zoom factor that isn't a finite number above zero, so the pane never shows one as a size", () => {

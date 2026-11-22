@@ -195,6 +195,9 @@ export class Resources {
   public static readonly openerGlyph: string = "subdirectory_arrow_right";
   public static readonly pageErrorGlyph: string = "error";
   public static readonly pageBlockedGlyph: string = "block";
+  // A page's tab shows its favicon, which Noldova Desktop draws only from a data:image URL, with the web's glyph in its place while it has none.
+  public static readonly pageImageGlyph: string = "public";
+  public static readonly pageImagePattern: RegExp = /^data:image\/[a-z0-9.+-]+(;[^,]*)?,/i;
   public static readonly thisBrowser: string = "this browser";
   public static readonly thisBrowserStart: string = "This browser";
   public static readonly noticeId: string = "-notice";
