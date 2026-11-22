@@ -129,6 +129,18 @@ describe("ElementFactsScript", () => {
     ]);
   });
 
+  it("gives a label inside interactive content, such as a form's submit button, its own facts, since the engine may activate that content instead", () => {
+    root.innerHTML = "<form aria-label=\"Sign in\"><input type=\"password\"><input id=\"remember\" type=\"checkbox\">"
+      + "<button type=\"submit\"><label for=\"remember\"><span>Sign in</span></label></button></form>";
+    const inButton: readonly unknown[] = [["#document", []], ["HTML", HARNESS_ATTRIBUTES], ["BODY", []], ["DIV", []], ["FORM", ["aria-label", "Sign in"]],
+      ["BUTTON", ["type", "submit"]], ["LABEL", ["for", "remember"]]];
+
+    expect([read(PagePartsFixture.find(root, "label")), read(PagePartsFixture.find(root, "label span"))]).toMatchObject([
+      { path: inButton, formName: "Sign in" },
+      { path: [...inButton, ["SPAN", []]], formName: "Sign in" }
+    ]);
+  });
+
   it("lists the elements that name the element's form by its id, never a field's typed value", () => {
     root.innerHTML = "<form id=\"checkout\"><button>Pay</button></form><input form=\"checkout\" type=\"password\" name=\"pin\" value=\"preset\"><input form=\"elsewhere\">";
     const button: Element = PagePartsFixture.find(root, "button");

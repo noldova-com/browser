@@ -37,7 +37,7 @@ export class ElementFactsScript {
   const isInteractive = node => ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].some(name => isNamed(node, name)) || isNamed(node, "A") && node.hasAttribute("href");
   const above = pathOf(this).reverse();
   const label = above.findIndex(t => isNamed(t, "LABEL"));
-  const control = label === -1 || above.slice(0, label).some(isInteractive) ? null : above[label].control;
+  const control = label === -1 || above.some(isInteractive) ? null : above[label].control;
   const element = control ?? this;
   const path = pathOf(element);
   const isInDocument = path[0] === document;
