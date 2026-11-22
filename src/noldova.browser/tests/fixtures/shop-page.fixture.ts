@@ -73,6 +73,7 @@ export class ShopPage {
   private static readonly NOT_FIELDS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
   private static readonly FAILING_SELECTIONS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
   private static readonly FOCUSED: WeakMap<ToolBench, number | null> = new WeakMap<ToolBench, number | null>();
+  private static readonly FOCUSED_ON_SELECT: WeakMap<ToolBench, number> = new WeakMap<ToolBench, number>();
 
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
@@ -108,8 +109,12 @@ export class ShopPage {
       }
       if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration && ShopPage.FAILING_SELECTIONS.has(bench))
         throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Gone"));
-      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration)
+      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration) {
+        const moved: number | undefined = ShopPage.FOCUSED_ON_SELECT.get(bench);
+        if (!Object.isUndefined(moved))
+          ShopPage.FOCUSED.set(bench, moved);
         return { result: { type: "boolean", value: !ShopPage.NOT_FIELDS.has(bench) } };
+      }
       if (params["returnByValue"] === true)
         return { result: { type: "object", value: ShopPage.facts(shown, backendNodeId) } };
       const form: JsonObject | undefined = ShopPage.formOf(shown, backendNodeId);
@@ -135,6 +140,11 @@ export class ShopPage {
   // The element that holds the focus from then on, as when a focus handler moves it, or none; by default the element the call focused.
   public static focus(bench: ToolBench, backendNodeId: number | null): void {
     ShopPage.FOCUSED.set(bench, backendNodeId);
+  }
+
+  // The element that holds the focus once the field is selected, as when the field's select handler moves it.
+  public static focusOnSelect(bench: ToolBench, backendNodeId: number): void {
+    ShopPage.FOCUSED_ON_SELECT.set(bench, backendNodeId);
   }
 
   // The field selection then fails, as when the engine no longer knows the field's object.

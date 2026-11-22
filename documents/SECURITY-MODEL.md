@@ -314,10 +314,12 @@ Selecting fires the page's `select` and `selectionchange` events, as a person's 
 ### Focused element
 
 `browser_type`'s text goes to the element that holds the focus, which a page's focus handler can move elsewhere when the field takes it, or a closed shadow root that takes the focus for its host can hold out of sight, so a text rated for the field could land in a secret field.
-Once it focused the field and read the field's facts again, and before the field selection, it runs one more pinned function, the module's `FocusedElementScript`, on the field's object, resolved in the page changes' world of the main frame as the element facts are, with `Runtime.callFunctionOn`, silent and not by value.
-The function takes no argument and returns only the element that holds the focus, as an object, the document's active element and then each open shadow root's, so an element in a closed shadow root shows as its host.
+Once it focused the field, read the field's facts again and selected its text, right before the text goes in, it runs one more pinned function, the module's `FocusedElementScript`, on the field's object, resolved in the page changes' world of the main frame as the element facts are, with `Runtime.callFunctionOn`, silent and not by value.
+The function takes no argument and returns only the element that holds the focus, as an object: the active element of the field's own root, the document or the shadow root that holds the field, open or closed, once that root's host and each host above it hold the focus in their own roots, and then each open shadow root's, so a field in a closed shadow root is found and an element in another closed shadow root shows as its host.
 The runtime part reads that element's whole subtree with `DOM.describeNode` by the object's id, through shadow roots, closed ones too, releases the object, and reads the main frame's document again, refusing the call as a stale reference when it changed.
 An element outside the field, or none, fails the call as `Stale` with `browser.focusMoved`, and nothing is typed.
+The check comes after the field selection, whose `select` event a page's handler can use to move the focus, too.
+A window remains: between the check and `Input.insertText` the page's script can still run, such as a timer, and move the focus, which no check made before the text goes in can close; the engine's text goes to the element that holds the focus then.
 An element inside the field, such as an open shadow root's field, is rated as the field is, and a secret field anywhere in the focused element's closed shadow roots, which the function can't enter, rates as high; when either is high and the person allowed less, nothing is typed and the call fails with `browser.riskRose`.
 `webViews.json` pins the function word for word, with the others.
 

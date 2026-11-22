@@ -78,8 +78,9 @@ describe("TypeTool", () => {
     }]);
     // After the focus: the field's risk, the element that holds the focus, then the selection and the text.
     expect(bench.methods.slice(17, 41)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
+      "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Runtime.releaseObject",
       "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "DOM.describeNode", "Runtime.releaseObject", "Page.getFrameTree", "Runtime.releaseObject",
-      "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Runtime.releaseObject", "Input.insertText"]);
+      "Input.insertText"]);
     expect(sent("Runtime.callFunctionOn").filter(t => t["functionDeclaration"] === FocusedElementScript.functionDeclaration))
       .toEqual([{ functionDeclaration: FocusedElementScript.functionDeclaration, objectId: `node-${String(ShopPage.SEARCH)}`, returnByValue: false, silent: true }]);
     expect(sent("Runtime.callFunctionOn").filter(t => t["functionDeclaration"] === FieldSelectScript.functionDeclaration))
@@ -233,7 +234,7 @@ describe("TypeTool", () => {
 
     const pressed: number = bench.methods.indexOf("Input.dispatchKeyEvent");
     expect([bench.methods.slice(pressed - 2, pressed + 2), sent("Input.insertText"), sent("Input.dispatchKeyEvent").map(t => [t["type"], t["key"], t["windowsVirtualKeyCode"]])]).toEqual([
-      ["Runtime.callFunctionOn", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["rawKeyDown", "Delete", 46], ["keyUp", "Delete", 46]]
+      ["Page.getFrameTree", "Runtime.releaseObject", "Input.dispatchKeyEvent", "Input.dispatchKeyEvent"], [], [["rawKeyDown", "Delete", 46], ["keyUp", "Delete", 46]]
     ]);
   });
 
@@ -391,6 +392,14 @@ describe("TypeTool", () => {
     ["no element", null]
   ])("types nothing and fails as moved when the field's focus handler gives the focus to %s", async (_case: string, focused: number | null) => {
     ShopPage.focus(bench, focused);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), FocusMovedException,
+      { reason: ToolFailureCode.Stale, moduleCode: "browser.focusMoved" });
+    expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], []]);
+  });
+
+  it("types nothing and fails as moved when the field's select handler gives the focus to a password field after the field selection", async () => {
+    ShopPage.focusOnSelect(bench, ShopPage.CART_PIN);
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), FocusMovedException,
       { reason: ToolFailureCode.Stale, moduleCode: "browser.focusMoved" });

@@ -75,8 +75,9 @@ export class TypeTool implements IBrowserTool {
       const classify = (now: ElementFacts): ToolRisk => RiskClassifier.classifyTyping(now.path, isSubmitting, now.form);
       await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: element.backendNodeId }, options);
       await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
-      await this.kit.confirmFocusAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
       const isSelected: boolean = await this.kit.selectFieldAsync(page.viewId, element.backendNodeId, options);
+      // The selection fires the field's select event, whose handler can move the focus too, so the focus is checked after it, right before the text.
+      await this.kit.confirmFocusAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
       const deleting: KeyPress = KeyEvents.press(Resources.deleteKey, 0);
       if (text !== "")
         await this.kit.calls.sendAsync(page.viewId, Resources.insertTextMethod, { text }, options);
