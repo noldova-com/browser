@@ -118,6 +118,24 @@ describe("NodeFactsReader", () => {
     expectMalformed(() => NodeFactsReader.readSubtree({ node: { backendNodeId: 4, nodeName: "FORM", children: {} } }));
   });
 
+  it("reads the described node's backend id, and fails a node without one as malformed", () => {
+    expect(NodeFactsReader.readBackendNodeId({ node: { backendNodeId: 4, nodeName: "INPUT" } })).toBe(4);
+    expectMalformed(() => NodeFactsReader.readBackendNodeId({ node: { backendNodeId: "4", nodeName: "INPUT" } }));
+    expectMalformed(() => NodeFactsReader.readBackendNodeId({}));
+  });
+
+  it("reads every node inside the described node's own closed shadow roots, through the roots below them, and none of its open roots or children", () => {
+    const host: JsonObject = { node: { backendNodeId: 4, nodeName: "DIV", children: [{ backendNodeId: 5, nodeName: "INPUT", attributes: ["type", "password"] }], shadowRoots: [
+      { backendNodeId: 6, nodeName: "#document-fragment", shadowRootType: "open", children: [{ backendNodeId: 7, nodeName: "SPAN" }] },
+      { backendNodeId: 8, nodeName: "#document-fragment", shadowRootType: "closed", children: [{ backendNodeId: 9, nodeName: "P", shadowRoots: [
+        { backendNodeId: 10, nodeName: "#document-fragment", shadowRootType: "open", children: [{ backendNodeId: 11, nodeName: "INPUT", attributes: ["autocomplete", "one-time-code"] }] }] }] }
+    ] } };
+
+    expect(NodeFactsReader.readClosedRoots(host).map(t => t.nodeName)).toEqual(["#DOCUMENT-FRAGMENT", "P", "#DOCUMENT-FRAGMENT", "INPUT"]);
+    expect(NodeFactsReader.readClosedRoots({ node: { backendNodeId: 4, nodeName: "DIV" } })).toEqual([]);
+    expectMalformed(() => NodeFactsReader.readClosedRoots({}));
+  });
+
   it("says whether a node is the described node or inside its subtree, through shadow roots, and not when it is outside or missing", () => {
     const form: JsonObject = { node: { backendNodeId: 4, nodeName: "FORM", children: [{ backendNodeId: 5, nodeName: "BUTTON" }] } };
     const host: JsonObject = { node: { backendNodeId: 6, nodeName: "DIV", shadowRoots: [{ backendNodeId: 7, nodeName: "#document-fragment", children: [{ backendNodeId: 8, nodeName: "A" }] }] } };

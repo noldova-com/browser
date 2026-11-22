@@ -12,6 +12,7 @@ import { ElementFactsScript, PageChangeScript } from "@noldova/browser.protocol"
 import { describe, expect, it } from "vitest";
 
 import { FieldSelectScript } from "../src/models/field-select-script.ts";
+import { FocusedElementScript } from "../src/models/focused-element-script.ts";
 import { PageSnapshotScript } from "../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../src/models/page-text-script.ts";
 
@@ -128,7 +129,7 @@ describe("webViews.json", () => {
     ]) });
   });
 
-  it("lets the module make only its one world, without universal access, bind only the change script's binding in its world, and run only the change script's function, the page text check, the element facts, the snapshot and the field selection, by value and silent", async () => {
+  it("lets the module make only its one world, without universal access, bind only the change script's binding in its world, and run only the change script's function, the page text check, the element facts, the snapshot, the field selection and the focused element, by value and silent", async () => {
     expect(await readDeclarationAsync("../webViews.json")).toMatchObject({ methods: expect.arrayContaining([
       { name: "Page.createIsolatedWorld", parameters: { frameId: { required: true, maxLength: 64 },
         worldName: { required: true, values: ["noldova-browser-changes"] }, grantUniveralAccess: { required: true, values: [false] } } },
@@ -136,7 +137,8 @@ describe("webViews.json", () => {
         executionContextName: { required: true, values: ["noldova-browser-changes"] } } },
       { name: "Runtime.callFunctionOn", parameters: {
         functionDeclaration: { required: true, values: [PageChangeScript.functionDeclaration, PageTextScript.functionDeclaration, ElementFactsScript.functionDeclaration,
-          PageSnapshotScript.functionDeclaration, FieldSelectScript.functionDeclaration] },
+          PageSnapshotScript.functionDeclaration, FieldSelectScript.functionDeclaration,
+          FocusedElementScript.functionDeclaration] },
         uniqueContextId: { maxLength: 64 }, objectId: { maxLength: 128 },
         arguments: {}, returnByValue: { required: true, values: [true, false] }, silent: { required: true, values: [true] }
       } },

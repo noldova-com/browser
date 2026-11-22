@@ -14,6 +14,7 @@ import { ArgumentNotFlagException } from "../../src/exceptions/argument-not-flag
 import { ArgumentTooLongException } from "../../src/exceptions/argument-too-long.exception.ts";
 import { CallStoppedException } from "../../src/exceptions/call-stopped.exception.ts";
 import { FieldNotVisibleException } from "../../src/exceptions/field-not-visible.exception.ts";
+import { FocusMovedException } from "../../src/exceptions/focus-moved.exception.ts";
 import { HandedOverException } from "../../src/exceptions/handed-over.exception.ts";
 import { NotSubmittedException } from "../../src/exceptions/not-submitted.exception.ts";
 import { OutcomeUncertainException } from "../../src/exceptions/outcome-uncertain.exception.ts";
@@ -22,8 +23,10 @@ import { PageChangedAfterGrantException } from "../../src/exceptions/page-change
 import { PermissionDeniedException } from "../../src/exceptions/permission-denied.exception.ts";
 import { ProtocolFailedException } from "../../src/exceptions/protocol-failed.exception.ts";
 import { RiskRoseException } from "../../src/exceptions/risk-rose.exception.ts";
+import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
+import { FocusedElementScript } from "../../src/models/focused-element-script.ts";
 import { SnapshotReference } from "../../src/models/snapshot-reference.ts";
 import { ToolFailures } from "../../src/services/tool-failures.ts";
 import { TypeTool } from "../../src/tools/type.tool.ts";
@@ -73,8 +76,12 @@ describe("TypeTool", () => {
       options: [PermissionOption.AllowOnce, PermissionOption.AllowAlways, PermissionOption.Deny],
       labels: { [PermissionOption.AllowAlways]: "Allow for this chat" }
     }]);
-    expect(bench.methods.slice(17, 33)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
+    // After the focus: the field's risk, the element that holds the focus, then the selection and the text.
+    expect(bench.methods.slice(17, 41)).toEqual(["Accessibility.getPartialAXTree", "DOM.getContentQuads", "Page.getFrameTree", "DOM.focus", "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Page.getFrameTree", "Runtime.releaseObject",
+      "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "DOM.describeNode", "Runtime.releaseObject", "Page.getFrameTree", "Runtime.releaseObject",
       "Page.getFrameTree", "Page.createIsolatedWorld", "DOM.resolveNode", "Runtime.callFunctionOn", "Runtime.releaseObject", "Input.insertText"]);
+    expect(sent("Runtime.callFunctionOn").filter(t => t["functionDeclaration"] === FocusedElementScript.functionDeclaration))
+      .toEqual([{ functionDeclaration: FocusedElementScript.functionDeclaration, objectId: `node-${String(ShopPage.SEARCH)}`, returnByValue: false, silent: true }]);
     expect(sent("Runtime.callFunctionOn").filter(t => t["functionDeclaration"] === FieldSelectScript.functionDeclaration))
       .toEqual([{ functionDeclaration: FieldSelectScript.functionDeclaration, objectId: `node-${String(ShopPage.SEARCH)}`, returnByValue: true, silent: true }]);
     expect(sent("Runtime.releaseObject").at(-1)).toEqual({ objectId: `node-${String(ShopPage.SEARCH)}` });
@@ -377,6 +384,50 @@ describe("TypeTool", () => {
     await running;
 
     expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.High], [{ text: "1234" }]]);
+  });
+
+  it.each<[string, number | null]>([
+    ["another field", ShopPage.COUPON],
+    ["no element", null]
+  ])("types nothing and fails as moved when the field's focus handler gives the focus to %s", async (_case: string, focused: number | null) => {
+    ShopPage.focus(bench, focused);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), FocusMovedException,
+      { reason: ToolFailureCode.Stale, moduleCode: "browser.focusMoved" });
+    expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], []]);
+  });
+
+  it("types nothing and fails as risen when the focus lands on a secret field inside the element, as the element inside rates high", async () => {
+    ShopPage.showDocument(bench, ShopPage.document(true));
+    ShopPage.focus(bench, ShopPage.CART_PIN);
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.CART_FORM), text: "1234" })), RiskRoseException,
+      { reason: ToolFailureCode.Stale, moduleCode: "browser.riskRose" });
+    expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], []]);
+  });
+
+  it("types into an element the focus lands inside when that element rates no higher, at the risk the person allowed", async () => {
+    ShopPage.focus(bench, ShopPage.COUPON);
+
+    await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.CART_FORM), text: "SAVE10" }));
+
+    expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], [{ text: "SAVE10" }]]);
+  });
+
+  it("types nothing and fails as risen when the focused element's closed shadow root holds a secret field, which may hold the focus unseen", async () => {
+    ShopPage.showDocument(bench, ShopPage.document(false, true));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.PIN_HOST), text: "1234" })), RiskRoseException,
+      { reason: ToolFailureCode.Stale, moduleCode: "browser.riskRose" });
+    expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], []]);
+  });
+
+  it("types nothing and refuses its stale reference when the page went to another document while the focus was read", async () => {
+    bench.surface.answerWith("Page.getFrameTree", () => ShopPage.frame(bench.surface.calls.some(t => t.params["functionDeclaration"] === FocusedElementScript.functionDeclaration) ? "L2" : "L1"));
+
+    await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), StaleReferenceException,
+      { moduleCode: "browser.staleReference" });
+    expect([sent("Input.insertText"), sent("Runtime.releaseObject").at(-1)]).toEqual([[], { objectId: `node-${String(ShopPage.SEARCH)}` }]);
   });
 
   it("types nothing and fails as stale when the page removed the field while the card waited", async () => {

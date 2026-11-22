@@ -50,6 +50,8 @@ export class Resources {
   public static readonly unknownReference: string = "No snapshot gave this element reference; take a snapshot and use a reference from it.";
   public static readonly riskRose: string = "The page made this element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; call it again to ask at high risk.";
   public static readonly riskRoseCode: string = "browser.riskRose";
+  public static readonly focusMoved: string = "The page moved the focus out of this element when it was focused, so nothing was typed; take a new snapshot and type into the element that has the focus.";
+  public static readonly focusMovedCode: string = "browser.focusMoved";
   public static readonly landedElsewhere: string = "The page moved between the allow and the navigation, so it may have left or reached a page the request didn't name; check where it is before you act on it.";
   public static readonly landedElsewhereCode: string = "browser.landedElsewhere";
   public static readonly notSubmitted: string = "The text was typed, but the page gave its form a secret field, so it wasn't submitted; call it again with submit to ask at high risk.";

@@ -21,6 +21,7 @@ import { ViewClosedException } from "../exceptions/view-closed.exception.ts";
 import { BrowserLimits } from "../models/browser-limits.ts";
 import type { CallOptions } from "../models/call-options.ts";
 import { FieldSelectScript } from "../models/field-select-script.ts";
+import { FocusedElementScript } from "../models/focused-element-script.ts";
 import { MarkedSnapshot } from "../models/marked-snapshot.ts";
 import { PageFrames } from "../models/page-frames.ts";
 import { PageSnapshotScript } from "../models/page-snapshot-script.ts";
@@ -217,20 +218,30 @@ export class PageChanges {
   // The whole subtree of the form the resolved element belongs to, through every shadow root, closed ones too, which the function in the
   // isolated world can't enter; none when the element belongs to no form.
   public async readFormAsync(viewId: string, objectId: string, options: CallOptions): Promise<JsonObject | null> {
-    const reply: JsonObject = await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
-      { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, arguments: [{ value: true }], returnByValue: false, silent: true }, options);
+    return this.describeResultAsync(viewId, await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
+      { functionDeclaration: ElementFactsScript.functionDeclaration, objectId, arguments: [{ value: true }], returnByValue: false, silent: true }, options), options);
+  }
+
+  // The whole subtree of the element that holds the focus, through every shadow root, closed ones too; none when nothing holds it.
+  public async readFocusedAsync(viewId: string, objectId: string, options: CallOptions): Promise<JsonObject | null> {
+    return this.describeResultAsync(viewId, await this.calls.sendAsync(viewId, Resources.callFunctionOnMethod,
+      { functionDeclaration: FocusedElementScript.functionDeclaration, objectId, returnByValue: false, silent: true }, options), options);
+  }
+
+  // The whole subtree of the node a pinned function returned as an object, which is then released; none for null.
+  private async describeResultAsync(viewId: string, reply: JsonObject, options: CallOptions): Promise<JsonObject | null> {
     const result: JsonValue | undefined = reply[Resources.resultField];
     if (JsonShapes.isObject(result) && result[Resources.subtypeField] === Resources.nullSubtype)
       return null;
-    const form: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.objectIdField] : undefined;
-    if (typeof form !== "string")
+    const node: JsonValue | undefined = JsonShapes.isObject(result) ? result[Resources.objectIdField] : undefined;
+    if (typeof node !== "string")
       throw new MalformedReplyException();
     try {
-      return await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId: form, depth: Resources.wholeSubtreeDepth, pierce: true },
+      return await this.calls.sendAsync(viewId, Resources.describeNodeMethod, { objectId: node, depth: Resources.wholeSubtreeDepth, pierce: true },
         options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes));
     }
     finally {
-      await this.releaseAsync(viewId, form, options);
+      await this.releaseAsync(viewId, node, options);
     }
   }
 
