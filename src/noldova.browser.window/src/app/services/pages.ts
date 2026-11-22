@@ -24,6 +24,7 @@ import { PageActivityEventMalformedException } from "../exceptions/page-activity
 import { PageInAnotherWindowException } from "../exceptions/page-in-another-window.exception.ts";
 import { PageOnOtherWorkspaceException } from "../exceptions/page-on-other-workspace.exception.ts";
 import { PagesInactiveException } from "../exceptions/pages-inactive.exception.ts";
+import type { AddressReading } from "../models/address-reading.ts";
 import { OpenedPage } from "../models/opened-page.ts";
 import { OpeningPage } from "../models/opening-page.ts";
 import { PagePlace } from "../models/page-place.ts";
@@ -36,7 +37,6 @@ import { TypedEntry } from "../models/typed-entry.ts";
 import { TypedLoad } from "../models/typed-load.ts";
 import type { ViewNewWindowEvent } from "../models/view-new-window-event.ts";
 import type { ViewRefusalEvent } from "../models/view-refusal-event.ts";
-import type { AddressReading } from "../types/address-reading.ts";
 import { AddressReader } from "./address-reader.ts";
 import { AgentPages } from "./agent-pages.ts";
 import { NavigationStarts } from "./navigation-starts.ts";
@@ -259,13 +259,13 @@ export class Pages {
   private async goAsync(tab: PaneTab, place: PagePlace, entry: TypedEntry, text: string): Promise<EntryAnswer> {
     const isLatest = (): boolean => this.shown.has(tab) && tab.controller.status.state !== PaneState.Unavailable && this.entries.get(tab) === entry;
     const reading: AddressReading = AddressReader.read(text, LocalSites.read(String(this.context.readSetting(Resources.localSitesSetting))).origins);
-    if (reading.kind === TypedAddressAnswerKind.Refused) {
-      tab.controller.refuseAddress(reading.reason);
+    if (!Object.isNull(reading.refusal)) {
+      tab.controller.refuseAddress(reading.refusal);
       return EntryAnswer.Stayed;
     }
     let answer: TypedAddressAnswer;
     try {
-      answer = PageAnswers.readTypedAddress(await this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, reading.url, tab.id).toJson()));
+      answer = PageAnswers.readTypedAddress(await this.context.requestAsync(BrowserMethods.allowTypedAddress, new TypedAddressRequest(place.profileKey, reading.address, tab.id).toJson()));
     } catch (error: unknown) {
       if (isLatest())
         tab.controller.refuseAddress(AddressRefusal.Failed);
@@ -278,14 +278,14 @@ export class Pages {
       return EntryAnswer.Left;
     }
     if (answer.kind === TypedAddressAnswerKind.Refused) {
-      tab.controller.refuseAddress(answer.reason, new URL(reading.url).origin);
+      tab.controller.refuseAddress(answer.reason, new URL(reading.address).origin);
       return EntryAnswer.Stayed;
     }
     const typing: TypedLoad = new TypedLoad(entry);
     this.typing.set(tab, typing);
     let navigation: WebViewNavigation;
     try {
-      navigation = await this.navigateOwnAsync(tab, reading.url);
+      navigation = await this.navigateOwnAsync(tab, reading.address);
     }
     finally {
       this.endGoing(tab, place, typing);
