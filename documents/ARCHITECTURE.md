@@ -584,7 +584,9 @@ A non-resumable tool's point of no return is its first call that can run the pag
 The emulation calls of a click aren't among them: they can fire only the window focus and blur, visibility and resize events a page also gets whenever the person changes tabs or windows, none of which acts for the person, so a retry after them repeats nothing, and `browser.pageNotShowing` before any scroll is a clean `Refused`.
 The tool reports it to the registry just before that call.
 Any failure after it ends the tool with `OutcomeUncertain`, since the action may have happened; the agent then reads the page again with `browser_snapshot`.
-One case keeps its own failure: when the only call sent was `DOM.focus` and the element is then gone, or the page changed, as when a page replaces a search field as it takes the focus, none of the tool's own input reached the page, so the call fails as `Stale` after a grant, or `Refused` with `browser.staleReference` before one, and the tool tells the registry with `markNothingSent()` ([desktop#291](https://github.com/noldova-com/desktop/issues/291)).
+Two cases keep their own failure, and the tool tells the registry with `markNothingSent()` ([desktop#291](https://github.com/noldova-com/desktop/issues/291)), since none of the tool's own input reached the page.
+A key that Noldova Desktop refuses as one of the app's shortcuts never reaches the page, so the call fails as `Refused` with `browser.shortcutRefused`.
+When the only call sent was `DOM.focus` and the element is then gone, or the page changed, as when a page replaces a search field as it takes the focus, the call fails as `Stale` after a grant, or `Refused` with `browser.staleReference` before one.
 Before it, while the tool classifies, waits for permission or reads nodes, the call ends as any call would, with `TimedOut`, `Withdrawn`, `Cancelled`, `Stopped` or `Unavailable`, since nothing changed yet.
 A read-only tool never reports `OutcomeUncertain`; at its time limit, `browser_console` and `browser_wait_for` return what they have so far.
 
