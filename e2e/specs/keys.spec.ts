@@ -64,9 +64,10 @@ test.describe("the person's and an agent's keys in the page", () => {
 
     await app.viewPages.pressAtAsync(docs.url("/"), "A", []);
     await app.viewPages.pressAtAsync(docs.url("/"), "Y", [MODIFIER, "shift"]);
+    await app.viewPages.pressAtAsync(docs.url("/"), "B", []);
 
     await expect(tabs, "The app's shortcut pressed in the page didn't run its command.").toHaveCount(count + 1);
-    await expect.poll(() => keysAsync(app, docs), { message: "The page didn't get the other key, or got the app's shortcut." }).toEqual(["a"]);
+    await expect.poll(() => keysAsync(app, docs), { message: "The page didn't get the other keys, or got the app's shortcut between them." }).toEqual(["a", "b"]);
   });
 
   test("an agent's key that is the app's shortcut is refused, and the person's own press of it still runs its command", async ({ app, servers }) => {
