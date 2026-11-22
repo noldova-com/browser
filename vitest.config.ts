@@ -25,8 +25,8 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "protocol and e2e fixtures",
-          include: ["src/noldova.browser.protocol/tests/**/*.test.ts", "e2e/tests/**/*.test.ts"]
+          name: "protocol, e2e fixtures and scripts",
+          include: ["src/noldova.browser.protocol/tests/**/*.test.ts", "e2e/tests/**/*.test.ts", "scripts/tests/**/*.test.ts"]
         }
       }
     ],

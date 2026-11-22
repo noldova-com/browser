@@ -26,7 +26,8 @@ export class PackageInstall {
   public async installPackedAsync(): Promise<void> {
     const folder = path.join(this.root, Resources.archivesFolder);
     const archives = (await readdir(folder)).filter(t => t.endsWith(Resources.archiveExtension)).sort().map(t => path.join(folder, t));
-    const result = await this.npm.runAsync([...Resources.archiveInstallArguments, ...archives, ...(await this.readInstalledPinsAsync())], this.root);
+    const pins = [...await this.readInstalledPinsAsync(), ...await this.readHeldPeersAsync()];
+    const result = await this.npm.runAsync([...Resources.archiveInstallArguments, ...archives, ...pins], this.root);
     if (!result.isSuccessful)
       throw new ArchiveInstallFailedException(archives.map(t => path.basename(t)), result.exitCode, result.text);
   }
@@ -50,9 +51,26 @@ export class PackageInstall {
     return names.sort();
   }
 
+  // npm resolves a package the lockfile holds only as another's peer afresh for an install that names packages, so the
+  // newest release the registry holds would replace it; naming each at the version node_modules holds keeps the one
+  // npm ci installed, or the one a peer move put there, and leaves out an optional peer npm ci never installed.
+  public async readHeldPeersAsync(): Promise<readonly string[]> {
+    const lock: unknown = await this.readJsonAsync(path.join(this.root, Resources.lockfileFile));
+    const packages: unknown = PackageInstall.readField(lock, Resources.lockedPackagesField);
+    const prefix = `${Resources.modulesFolder}${Resources.posixSeparator}`;
+    const names = Object.entries(typeof packages === "object" && packages !== null ? packages : {})
+      .filter(([key, entry]) => key.startsWith(prefix) && !key.slice(prefix.length).includes(prefix) && PackageInstall.readField(entry, Resources.lockedPeerField) === true)
+      .map(([key]) => key.slice(prefix.length));
+    return this.readHeldAsync(names.sort());
+  }
+
   public async readInstalledPinsAsync(moved: ReadonlySet<string> = new Set<string>()): Promise<readonly string[]> {
+    return this.readHeldAsync((await this.readRootPinsAsync()).filter(t => !moved.has(t)));
+  }
+
+  private async readHeldAsync(names: readonly string[]): Promise<readonly string[]> {
     const kept: string[] = [];
-    for (const name of (await this.readRootPinsAsync()).filter(t => !moved.has(t))) {
+    for (const name of names) {
       const file = path.join(this.root, Resources.modulesFolder, ...name.split(Resources.posixSeparator), Resources.manifestFile);
       const version: unknown = existsSync(file) ? PackageInstall.readField(await this.readJsonAsync(file), Resources.versionField) : undefined;
       if (typeof version === "string")

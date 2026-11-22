@@ -7,12 +7,13 @@
  */
 
 import { spawn } from "node:child_process";
-import { copyFile, cp, readFile, writeFile } from "node:fs/promises";
+import { copyFile, cp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { JsonReader, type JsonObject } from "@noldova/context.json";
 
 import { PlainIcons } from "./fixtures/icons/plain-icons.ts";
+import { LockfileParts } from "./fixtures/lockfile-parts.ts";
 import { PackedPart } from "./fixtures/packed-part.ts";
 import { TestAppLayout } from "./fixtures/test-app-layout.ts";
 
@@ -27,24 +28,32 @@ class FixtureAppPreparation {
   private static readonly LOCKFILE: string = "package-lock.json";
   private static readonly NPM_PATH_VARIABLE: string = "npm_execpath";
   private static readonly NO_NPM: string = "Run the preparation through npm run, which names npm's own script in npm_execpath.";
-  private static readonly INSTALL_FROM_ARCHIVES: readonly string[] = ["install", "--ignore-scripts", "--no-audit", "--no-fund"];
+  private static readonly REFRESH_OPTION: string = "--refresh-lockfile";
+  private static readonly INSTALL_FROM_LOCKFILE: readonly string[] = ["ci", "--ignore-scripts", "--no-audit", "--no-fund"];
+  private static readonly INSTALL_AFRESH: readonly string[] = ["install", "--ignore-scripts", "--no-audit", "--no-fund"];
   private static readonly APP_STEPS: readonly (readonly string[])[] = [["run", "install:app"], ["run", "build:app"], ["run", "desktop-tools", "--", "help"]];
 
   private readonly npm: string;
+  private readonly isRefresh: boolean;
 
-  private constructor(npm: string) {
+  private constructor(npm: string, isRefresh: boolean) {
     this.npm = npm;
+    this.isRefresh = isRefresh;
   }
 
   public static async runAsync(): Promise<void> {
     const npm = process.env[FixtureAppPreparation.NPM_PATH_VARIABLE];
     if (npm === undefined || npm === "")
       throw new Error(FixtureAppPreparation.NO_NPM);
-    await new FixtureAppPreparation(npm).prepareAsync();
+    await new FixtureAppPreparation(npm, process.argv.includes(FixtureAppPreparation.REFRESH_OPTION)).prepareAsync();
   }
 
   private static formatFailure(command: readonly string[], code: number | null): string {
     return `npm ${command.join(" ")} in ${TestAppLayout.APP_FOLDER} ended with ${code === null ? "no exit code" : `exit code ${code}`}.`;
+  }
+
+  private static formatUnlisted(names: readonly string[]): string {
+    return `The module's parts need ${names.join(", ")}, which the fixture app's ${FixtureAppPreparation.MANIFEST} doesn't list; add each to e2e/app/${FixtureAppPreparation.MANIFEST}, since the lockfile holds no part and a relock would prune a package only the parts reach.`;
   }
 
   private async prepareAsync(): Promise<void> {
@@ -57,8 +66,20 @@ class FixtureAppPreparation {
     const template = JsonReader.parse(await readFile(path.join(TestAppLayout.TEMPLATE_FOLDER, FixtureAppPreparation.MANIFEST), "utf8"));
     const dependencies = template.readObject("dependencies").toJson();
     const archives = Object.fromEntries(parts.map(t => [t.name, t.fileSpecifier(TestAppLayout.APP_FOLDER)]));
-    await this.writeManifestAsync(template.toJson(), { ...dependencies, ...archives });
-    await this.runAsync(FixtureAppPreparation.INSTALL_FROM_ARCHIVES);
+    const unlisted = LockfileParts.findUnlisted(new Map(parts.map(t => [t.name, t.published])), dependencies);
+    if (unlisted.length > 0)
+      throw new Error(FixtureAppPreparation.formatUnlisted(unlisted));
+    const installed = { ...dependencies, ...archives };
+    await this.writeManifestAsync(template.toJson(), installed);
+    if (this.isRefresh) {
+      await rm(path.join(TestAppLayout.APP_FOLDER, FixtureAppPreparation.LOCKFILE), { force: true });
+      await this.runAsync(FixtureAppPreparation.INSTALL_AFRESH);
+      await FixtureAppPreparation.saveLockfileAsync(parts, dependencies);
+    }
+    else {
+      await FixtureAppPreparation.swapPartsAsync(parts, installed);
+      await this.runAsync(FixtureAppPreparation.INSTALL_FROM_LOCKFILE);
+    }
     const module = parts.find(t => t.name === FixtureAppPreparation.MODULE_PACKAGE);
     if (module === undefined)
       throw new Error(`No part folder holds ${FixtureAppPreparation.MODULE_PACKAGE}.`);
@@ -74,6 +95,19 @@ class FixtureAppPreparation {
     const file = path.join(TestAppLayout.APP_FOLDER, ...FixtureAppPreparation.DOUBLE_DECLARATION);
     const declaration = JsonReader.parse(await readFile(file, "utf8")).toJson();
     await writeFile(file, `${JSON.stringify({ ...declaration, dependencies: { [FixtureAppPreparation.MODULE_ID]: version } }, null, 2)}\n`);
+  }
+
+  private static async swapPartsAsync(parts: readonly PackedPart[], dependencies: JsonObject): Promise<void> {
+    const file = path.join(TestAppLayout.APP_FOLDER, FixtureAppPreparation.LOCKFILE);
+    const entries = new Map(parts.map(t => [t.name, LockfileParts.entry(t.published, t.fileSpecifier(TestAppLayout.APP_FOLDER))]));
+    const lock = LockfileParts.withParts(JsonReader.parse(await readFile(file, "utf8")), entries, dependencies);
+    await writeFile(file, `${JSON.stringify(lock, null, 2)}\n`);
+  }
+
+  private static async saveLockfileAsync(parts: readonly PackedPart[], dependencies: JsonObject): Promise<void> {
+    const lock = JsonReader.parse(await readFile(path.join(TestAppLayout.APP_FOLDER, FixtureAppPreparation.LOCKFILE), "utf8"));
+    const saved = LockfileParts.withoutParts(lock, parts.map(t => t.name), dependencies);
+    await writeFile(path.join(TestAppLayout.TEMPLATE_FOLDER, FixtureAppPreparation.LOCKFILE), `${JSON.stringify(saved, null, 2)}\n`);
   }
 
   private async writeManifestAsync(template: JsonObject, dependencies: JsonObject): Promise<void> {

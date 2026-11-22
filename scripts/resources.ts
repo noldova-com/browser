@@ -47,6 +47,9 @@ export class Resources {
   public static readonly compiledSegments: readonly string[] = ["_build", "browser"];
   public static readonly gitFolder: string = ".git";
   public static readonly manifestFile: string = "package.json";
+  public static readonly lockfileFile: string = "package-lock.json";
+  public static readonly lockedPackagesField: string = "packages";
+  public static readonly lockedPeerField: string = "peer";
   public static readonly moduleFile: string = "module.json";
   public static readonly settingsFile: string = "settings.json";
   public static readonly versionFile: string = "version.json";
