@@ -24,7 +24,9 @@ export class WorkspaceOrigins {
   private readonly kept: Map<string, Promise<ReadonlySet<string>>> = new Map<string, Promise<ReadonlySet<string>>>();
   private readonly turns: Map<string, Promise<void>> = new Map<string, Promise<void>>();
   private readonly passing: Map<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>();
-  private readonly stopped: Set<string> = new Set<string>();
+  // Each page whose redirects an agent's call stopped, with the number of that stop, counted across the pages.
+  private readonly stopped: Map<string, number> = new Map<string, number>();
+  private stops: number = 0;
 
   public constructor(views: IRuntimeWebViews, store: DatabaseOriginStore, settingsOrigins: readonly string[]) {
     this.views = views;
@@ -36,6 +38,7 @@ export class WorkspaceOrigins {
     const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
+    const stopsBefore: number = this.stops;
     return this.inTurnAsync(request.profileKey, async () => {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
       if (isLeft())
@@ -46,10 +49,13 @@ export class WorkspaceOrigins {
         this.kept.set(request.profileKey, Promise.resolve(next));
       }
       // A kept address the person typed in a page starts a typed load there, whose redirects pass again until an agent's call starts on it;
-      // one left or refused starts none, so the mark stays.
+      // one left or refused starts none, so the mark stays, and so does a mark of a call that started after the person typed.
       if (!Object.isNull(request.instance))
-        for (const view of this.viewsOf(request.instance))
-          this.stopped.delete(view.id);
+        for (const view of this.viewsOf(request.instance)) {
+          const stop: number | undefined = this.stopped.get(view.id);
+          if (!Object.isUndefined(stop) && stop <= stopsBefore)
+            this.stopped.delete(view.id);
+        }
       await this.applyToWorkspaceAsync(request.profileKey);
       return answer;
     });
@@ -83,7 +89,8 @@ export class WorkspaceOrigins {
   }
 
   public stopRedirects(viewId: string): void {
-    this.stopped.add(viewId);
+    this.stops += 1;
+    this.stopped.set(viewId, this.stops);
   }
 
   public stopPassingAsync(viewId: string, profileKey: string): Promise<void> {
