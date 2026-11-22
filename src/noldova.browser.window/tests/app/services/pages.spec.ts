@@ -578,6 +578,19 @@ describe("Pages", () => {
     expect(context.opened.map(t => [t.instance, t.title])).toEqual([[kept, "https://docs.example.com/pricing"], [plain, "New tab"]]);
   });
 
+  it("brings forward a page this window restored but hasn't shown at its kept address, not the one a run names", async () => {
+    const kept: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    context.answerRequest = (method, params) => method !== BrowserMethods.claimPage ? declared(method, params)
+      : Promise.resolve({ agentName: null, isClaimed: true, isHere: true, record: { instance: kept, profileKey: "workspace-1", url: "https://docs.example.com/pricing" } });
+
+    await pages.openAsync("workspace-1", "https://run.example/start", kept);
+    const tab = await pages.showAsync(kept);
+    place(tab);
+
+    expect(context.opened.map(t => [t.instance, t.title])).toEqual([[kept, "https://docs.example.com/pricing"]]);
+    await vi.waitFor(() => expect(Object.isNull(tab) ? null : viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
+  });
+
   it("opens a kept page that never went anywhere as a new tab, restored here but not shown or restored nowhere", async () => {
     const [here, nowhere]: readonly [string, string] = ["3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d", "0f8fad5b-d9cb-469f-a165-70867728950e"];
     context.answerRequest = (method, params) => {

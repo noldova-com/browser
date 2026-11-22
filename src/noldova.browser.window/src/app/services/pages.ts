@@ -109,7 +109,7 @@ export class Pages {
   }
 
   public async openAsync(profileKey: string, url: string | null, picked: string | null): Promise<string> {
-    if (picked === null || this.holds(picked))
+    if (Object.isNull(picked) || this.holds(picked))
       return this.open(profileKey, url, picked);
     const claim: PageClaim = PageAnswers.readClaim(await this.context.requestAsync(BrowserMethods.claimPage, new PageRequest(picked).toJson()));
     if (!claim.isClaimed)
@@ -120,19 +120,20 @@ export class Pages {
       throw new PagesInactiveException(this.appName());
     }
     const kept: PageRecord | null = claim.record;
-    if (claim.isHere && kept !== null && kept.profileKey !== profileKey)
+    if (claim.isHere && !Object.isNull(kept) && kept.profileKey !== profileKey)
       throw new PageOnOtherWorkspaceException(picked, profileKey);
-    const keptUrl: string | null = kept === null || kept.url === "" ? null : kept.url;
+    const keptUrl: string | null = Object.isNull(kept) || String.isNullOrEmpty(kept.url) ? null : kept.url;
     let opened: string;
     try {
-      opened = this.open(profileKey, url === null && kept?.profileKey === profileKey ? keptUrl : url, picked);
+      // A page this window restored comes forward as it is, at its kept address, whatever address the run names.
+      opened = this.open(profileKey, (Object.isNull(url) || claim.isHere) && kept?.profileKey === profileKey ? keptUrl : url, picked);
     }
     catch (error) {
       if (!claim.isHere)
         this.request(BrowserMethods.letGoPage, new PageRequest(picked).toJson(), Resources.formatNotLetGo);
       throw error;
     }
-    if (claim.agentName !== null)
+    if (!Object.isNull(claim.agentName))
       this.agentPages.noteAgent(picked, claim.agentName);
     this.markElsewhere(picked, false);
     return opened;
