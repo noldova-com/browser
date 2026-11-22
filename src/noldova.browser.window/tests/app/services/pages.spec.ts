@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { type Signal, computed } from "@angular/core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 import { BrowserEvents, BrowserMethods } from "@noldova/browser.protocol";
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
@@ -783,6 +784,21 @@ describe("Pages", () => {
     expect([viewOf(tab).pane, viewOf(tab).profileKey, tab.id]).toEqual([WebViewValues.pane("browser.page", lastOpened()), "workspace-1", lastOpened()]);
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([{ instance: tab.id, profileKey: "workspace-1", url: "https://docs.example.com/pricing" }]);
     await vi.waitFor(() => expect(viewOf(tab).calls).toEqual(["navigate https://docs.example.com/pricing"]));
+  });
+
+  it("opens no page beside a page with no view, from New page or its key, and none beside a page once its view is gone, which a computed follows", async () => {
+    surface().refuseNextOpen(new Error("No views here."));
+    const viewless: PaneTab = await openAsync();
+    const shown: PaneTab = await openAsync();
+    const canOpen: Signal<boolean[]> = computed(() => [viewless, shown].map(t => pages.canOpenBeside({ tabGroup: "1", document: "browser.page", instance: t.id })));
+    const before: number = context.opened.length;
+
+    const whileShown: boolean[] = canOpen();
+    pages.openNew(viewless);
+    viewOf(shown).closeFromHost();
+    pages.openNew(shown);
+
+    expect([viewless.view, whileShown, canOpen(), context.opened.length - before]).toEqual([null, [false, true], [false, false], 0]);
   });
 
   it("opens an empty page without going anywhere", async () => {

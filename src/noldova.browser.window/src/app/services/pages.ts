@@ -311,7 +311,7 @@ export class Pages {
   public openNew(tab: PaneTab): void {
     const place: PagePlace | undefined = this.shown.get(tab)?.place;
     try {
-      if (place !== undefined)
+      if (place !== undefined && Pages.showsView(tab))
         this.open(place.profileKey, null);
     }
     catch (error) {
@@ -438,7 +438,12 @@ export class Pages {
   }
 
   private noteShown(): void {
-    this.shownInstances.set(new Set<string>([...this.shown.keys()].map(t => t.id)));
+    this.shownInstances.set(new Set<string>([...this.shown.keys()].filter(t => Pages.showsView(t)).map(t => t.id)));
+  }
+
+  // A page with no view, whose controller starts Unavailable, or whose view is gone, opens no page beside it, as ARCHITECTURE.md's New page says.
+  private static showsView(tab: PaneTab): boolean {
+    return tab.controller.status.state !== PaneState.Unavailable;
   }
 
   private static besideOf(commandArguments: JsonValue): string | null {
@@ -682,6 +687,8 @@ export class Pages {
       const entry: TypedEntry | undefined = this.entries.get(tab);
       if (status.state === PaneState.Loading && was.state !== PaneState.Loading && entry !== undefined && this.typing.get(tab)?.entry !== entry)
         this.leaveEntry(tab);
+      if ((status.state === PaneState.Unavailable) !== (was.state === PaneState.Unavailable))
+        this.noteShown();
       was = status;
       if (status.state !== PaneState.Loading && this.typing.get(tab)?.isAnswered === true)
         this.endTyping(tab, place);
