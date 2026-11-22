@@ -17,10 +17,10 @@ export class RiskClassifier {
   }
 
   public static submitsClick(path: readonly NodeFacts[] | null): boolean {
-    if (path === null)
+    if (Object.isNull(path))
       return false;
-    const found: [number, NodeFacts] | undefined = [...path.entries()].findLast(t => RiskClassifier.isActivating(t[1]));
-    return found !== undefined && RiskClassifier.isSubmitControl(found[1], path.slice(0, found[0]));
+    const control: NodeFacts | undefined = path.findLast(t => RiskClassifier.isActivating(t));
+    return !Object.isUndefined(control) && RiskClassifier.isSubmitControl(control, path.slice(0, path.lastIndexOf(control)));
   }
 
   public static classifyTyping(path: readonly NodeFacts[] | null, isSubmitting: boolean, form: readonly NodeFacts[]): ToolRisk {
@@ -30,8 +30,10 @@ export class RiskClassifier {
   }
 
   public static submitsEnter(path: readonly NodeFacts[] | null): boolean {
-    const field: NodeFacts | undefined = path?.at(-1);
-    return path !== null && field !== undefined && RiskClassifier.isEnterSubmitting(field) && RiskClassifier.isInForm(field, path.slice(0, -1));
+    if (Object.isNull(path))
+      return false;
+    const field: NodeFacts | undefined = path.at(-1);
+    return !Object.isUndefined(field) && RiskClassifier.isEnterSubmitting(field) && RiskClassifier.isInForm(field, path.slice(0, -1));
   }
 
   public static isSubmittingKey(key: string): boolean {
@@ -52,7 +54,7 @@ export class RiskClassifier {
 
   public static isSecretField(path: readonly NodeFacts[] | null): boolean {
     const field: NodeFacts | undefined = path?.at(-1);
-    return field !== undefined && RiskClassifier.isSecret(field);
+    return !Object.isUndefined(field) && RiskClassifier.isSecret(field);
   }
 
   public static isSecret(field: NodeFacts): boolean {
@@ -83,10 +85,12 @@ export class RiskClassifier {
     return (node.nodeName === Resources.anchorElement || node.nodeName === Resources.areaElement) && node.attributes.has(Resources.hrefAttribute);
   }
 
-  // The engine submits a form for Enter in any of its inputs, a checkbox or a radio button included, but a button or a reset button, whose Enter
-  // clicks it.
+  // The engine submits a form for Enter in any of its controls, a checkbox, a radio button and a select included, on some platforms or with
+  // some sizes, but a textarea, where Enter types a line, and a button or a reset button, whose Enter clicks it.
   private static isEnterSubmitting(node: NodeFacts): boolean {
-    return node.nodeName === Resources.inputElement && !Resources.enterClickedInputs.includes(RiskClassifier.readLower(node, Resources.typeAttribute));
+    if (node.nodeName === Resources.inputElement)
+      return !Resources.enterClickedInputs.includes(RiskClassifier.readLower(node, Resources.typeAttribute));
+    return Resources.enterSubmittingControls.includes(node.nodeName);
   }
 
   private static isInForm(node: NodeFacts, ancestors: readonly NodeFacts[]): boolean {

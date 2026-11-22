@@ -191,8 +191,8 @@ describe("the risk table", () => {
       }
     },
     {
-      action: "Submit a form that holds a secret field: click its submit control, press Enter or Space on it, or press Enter in any of its inputs but a button or a "
-        + "reset button, a checkbox or a radio button included, the type tool's submit option included",
+      action: "Submit a form that holds a secret field: click its submit control, press Enter or Space on it, or press Enter in any of its controls but a textarea, a button or a reset "
+        + "button, a checkbox, a radio button or a select included, the type tool's submit option included",
       checkAsync: async () => {
         ShopPage.serve(bench, ShopPage.SIGN_IN);
         const outcomes: string[] = [];
