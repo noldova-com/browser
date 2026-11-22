@@ -12,6 +12,7 @@ import { ConsoleLevel } from "./enums/console-level.ts";
 import { MouseButton } from "./enums/mouse-button.ts";
 import { BrowserLimits } from "./models/browser-limits.ts";
 import { KeyDefinition } from "./models/key-definition.ts";
+import { ScreenshotEncoding } from "./models/screenshot-encoding.ts";
 import type { AllowedMethod } from "./types/allowed-method.ts";
 import type { CommandParams } from "./types/command-params.ts";
 import type { JsonObject } from "./types/json-value.ts";
@@ -271,8 +272,8 @@ export class Resources {
   public static readonly answerMarginMilliseconds: number = 1_000;
   public static readonly readAttempts: number = 2;
   public static readonly hrefAttribute: string = "href";
-  public static readonly screenshotEncodings: readonly { readonly format: "png" | "jpeg"; readonly quality: number | null }[] = [
-    { format: "png", quality: null }, { format: "jpeg", quality: 80 }, { format: "jpeg", quality: 50 }, { format: "jpeg", quality: 20 }
+  public static readonly screenshotEncodings: readonly ScreenshotEncoding[] = [
+    new ScreenshotEncoding("png", null), new ScreenshotEncoding("jpeg", 80), new ScreenshotEncoding("jpeg", 50), new ScreenshotEncoding("jpeg", 20)
   ];
   public static readonly wholeSubtreeDepth: number = -1;
   public static readonly enableMethod: "Page.enable" = "Page.enable";
@@ -560,7 +561,7 @@ export class Resources {
   }
 
   public static formatRefused(origin: string | null): string {
-    return origin === null ? Resources.refusedWithoutOrigin : `Navigation to ${origin} was refused.`;
+    return Object.isNull(origin) ? Resources.refusedWithoutOrigin : `Navigation to ${origin} was refused.`;
   }
 
   public static formatIgnoredLocalSites(places: readonly number[]): string {

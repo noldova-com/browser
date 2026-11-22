@@ -38,6 +38,60 @@ import { writtenTo } from "../fixtures/desktop-fakes.fixture.ts";
 import { ShopPage } from "../fixtures/shop-page.fixture.ts";
 import { ToolBench } from "../fixtures/tool-bench.fixture.ts";
 
+class MalformedReplyCase {
+  public readonly flaw: string;
+  public readonly reply: JsonObject;
+  public readonly method: string;
+
+  public constructor(flaw: string, reply: JsonObject, method: string) {
+    this.flaw = flaw;
+    this.reply = reply;
+    this.method = method;
+  }
+}
+
+class MalformedMetricsCase {
+  public readonly flaw: string;
+  public readonly reply: JsonObject;
+
+  public constructor(flaw: string, reply: JsonObject) {
+    this.flaw = flaw;
+    this.reply = reply;
+  }
+}
+
+class RefusedInputCase {
+  public readonly input: JsonObject;
+  public readonly type: abstract new (...args: never[]) => Error;
+
+  public constructor(input: JsonObject, type: abstract new (...args: never[]) => Error) {
+    this.input = input;
+    this.type = type;
+  }
+}
+
+class RiskChangeCase {
+  public readonly step: string;
+  public readonly method: string;
+  public readonly isChanging: (params: JsonObject) => boolean;
+
+  public constructor(step: string, method: string, isChanging: (params: JsonObject) => boolean) {
+    this.step = step;
+    this.method = method;
+    this.isChanging = isChanging;
+  }
+}
+
+class EmulationCall {
+  public readonly method: string;
+  public readonly params: JsonObject;
+
+  public constructor(method: string, params: JsonObject) {
+    this.method = method;
+    this.params = params;
+  }
+}
+
 describe("ClickTool", () => {
   let bench: ToolBench;
   let tool: ClickTool;
@@ -435,7 +489,7 @@ describe("ClickTool", () => {
     for (const moved of [[10, 50, 30, 50, 30, 60, 10, 60], null]) {
       bench.surface.calls.length = 0;
       let reads: number = 0;
-      bench.surface.answerWith("DOM.getContentQuads", () => ++reads < 3 ? { quads: [[10, 10, 30, 10, 30, 20, 10, 20]] } : { quads: moved === null ? [] : [moved] });
+      bench.surface.answerWith("DOM.getContentQuads", () => ++reads < 3 ? { quads: [[10, 10, 30, 10, 30, 20, 10, 20]] } : { quads: Object.isNull(moved) ? [] : [moved] });
 
       await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), PageChangedAfterGrantException, { reason: ToolFailureCode.Stale, message: "The page changed after the action was allowed, so nothing ran; take a new snapshot." });
       expect(mouseEvents().map(t => t["type"])).toEqual(["mouseMoved"]);
@@ -535,16 +589,16 @@ describe("ClickTool", () => {
     expect([isScrolled, mouseEvents()]).toEqual([true, []]);
   });
 
-  it.each<[string, JsonObject, string]>([
-    ["boxes that aren't a list", { quads: {} }, "DOM.getContentQuads"],
-    ["a box without four points", { quads: [[1, 2, 3, 4]] }, "DOM.getContentQuads"],
-    ["a box with a point that isn't a number", { quads: [[1, 2, 3, 4, 5, 6, 7, "8"]] }, "DOM.getContentQuads"],
-    ["a hit with no node", { frameId: "F1" }, "DOM.getNodeForLocation"],
-    ["metrics without a visual viewport", { cssLayoutViewport: { pageX: 0, pageY: 0 } }, "Page.getLayoutMetrics"],
-    ["metrics with a viewport that isn't an object", { cssVisualViewport: [0, 0] }, "Page.getLayoutMetrics"],
-    ["metrics with a scroll that isn't a number", { cssVisualViewport: { pageX: 0, pageY: "828" } }, "Page.getLayoutMetrics"]
-  ])("fails as malformed with %s", async (_case: string, reply: JsonObject, method: string) => {
-    bench.surface.answer(method, reply);
+  it.each([
+    new MalformedReplyCase("boxes that aren't a list", { quads: {} }, "DOM.getContentQuads"),
+    new MalformedReplyCase("a box without four points", { quads: [[1, 2, 3, 4]] }, "DOM.getContentQuads"),
+    new MalformedReplyCase("a box with a point that isn't a number", { quads: [[1, 2, 3, 4, 5, 6, 7, "8"]] }, "DOM.getContentQuads"),
+    new MalformedReplyCase("a hit with no node", { frameId: "F1" }, "DOM.getNodeForLocation"),
+    new MalformedReplyCase("metrics without a visual viewport", { cssLayoutViewport: { pageX: 0, pageY: 0 } }, "Page.getLayoutMetrics"),
+    new MalformedReplyCase("metrics with a viewport that isn't an object", { cssVisualViewport: [0, 0] }, "Page.getLayoutMetrics"),
+    new MalformedReplyCase("metrics with a scroll that isn't a number", { cssVisualViewport: { pageX: 0, pageY: "828" } }, "Page.getLayoutMetrics")
+  ])("fails as malformed with $flaw", async (row: MalformedReplyCase) => {
+    bench.surface.answer(row.method, row.reply);
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), MalformedReplyException, { moduleCode: "browser.malformedReply" });
   });
@@ -553,10 +607,10 @@ describe("ClickTool", () => {
     const EMPTY: JsonObject = { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 0, clientHeight: 0 } };
     const LAID_OUT: JsonObject = { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 1280, clientHeight: 800 } };
     const OVERRIDE: JsonObject = { width: 1280, height: 800, deviceScaleFactor: 0, mobile: false };
-    const RELEASED: readonly (readonly [string, JsonObject])[] = [["Emulation.clearDeviceMetricsOverride", {}]];
+    const RELEASED: readonly EmulationCall[] = [new EmulationCall("Emulation.clearDeviceMetricsOverride", {})];
 
-    function emulation(): readonly (readonly [string, JsonObject])[] {
-      return bench.surface.calls.filter(t => t.method.startsWith("Emulation.")).map((t): readonly [string, JsonObject] => [t.method, t.params]);
+    function emulation(): readonly EmulationCall[] {
+      return bench.surface.calls.filter(t => t.method.startsWith("Emulation.")).map(t => new EmulationCall(t.method, t.params));
     }
 
     function neverShown(): void {
@@ -577,7 +631,7 @@ describe("ClickTool", () => {
 
       await settledAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })));
 
-      expect(emulation()).toEqual([["Emulation.setDeviceMetricsOverride", OVERRIDE], ...RELEASED]);
+      expect(emulation()).toEqual([new EmulationCall("Emulation.setDeviceMetricsOverride", OVERRIDE), ...RELEASED]);
       // Read twice a moment apart after the layout, until the page rests, then pressed with no scroll for an element in view.
       const layout: number = bench.methods.indexOf("Emulation.setDeviceMetricsOverride");
       expect([bench.methods.includes("DOM.scrollIntoViewIfNeeded"), bench.methods.slice(layout, bench.methods.indexOf("DOM.getNodeForLocation", layout))
@@ -676,7 +730,7 @@ describe("ClickTool", () => {
       bench.surface.fail("Emulation.setDeviceMetricsOverride", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "The call failed"));
 
       await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), ProtocolFailedException, { moduleCode: "browser.protocol" });
-      expect(emulation()).toEqual([["Emulation.setDeviceMetricsOverride", OVERRIDE], ...RELEASED]);
+      expect(emulation()).toEqual([new EmulationCall("Emulation.setDeviceMetricsOverride", OVERRIDE), ...RELEASED]);
       expect(bench.methods.includes("DOM.scrollIntoViewIfNeeded")).toBe(false);
     });
 
@@ -699,24 +753,24 @@ describe("ClickTool", () => {
         .toEqual(["Clicked.", ["The view view-1 may keep the size it was laid out at: PageAnswerTimedOutException: The page didn't answer in time."]]);
     });
 
-    it.each<[string, JsonObject]>([
-      ["no width", { cssVisualViewport: { clientHeight: 600 } }],
-      ["no height", { cssVisualViewport: { clientWidth: 800 } }]
-    ])("fails as malformed with a viewport that has %s", async (_case: string, reply: JsonObject) => {
-      bench.surface.answer("Page.getLayoutMetrics", reply);
+    it.each([
+      new MalformedMetricsCase("no width", { cssVisualViewport: { clientHeight: 600 } }),
+      new MalformedMetricsCase("no height", { cssVisualViewport: { clientWidth: 800 } })
+    ])("fails as malformed with a viewport that has $flaw", async (row: MalformedMetricsCase) => {
+      bench.surface.answer("Page.getLayoutMetrics", row.reply);
 
       await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), MalformedReplyException, { moduleCode: "browser.malformedReply" });
       expect(bench.methods.includes("DOM.scrollIntoViewIfNeeded")).toBe(false);
     });
   });
 
-  it.each<[string, JsonObject]>([
-    ["metrics without a visual viewport", { cssLayoutViewport: { pageX: 0, pageY: 0 } }],
-    ["metrics with a viewport that isn't an object", { cssVisualViewport: [0, 0] }],
-    ["metrics with a scroll that isn't a number", { cssVisualViewport: { pageX: 0, pageY: "828", clientWidth: 800, clientHeight: 600 } }]
-  ])("fails as malformed with %s after the page was found to have a size", async (_case: string, reply: JsonObject) => {
+  it.each([
+    new MalformedMetricsCase("metrics without a visual viewport", { cssLayoutViewport: { pageX: 0, pageY: 0 } }),
+    new MalformedMetricsCase("metrics with a viewport that isn't an object", { cssVisualViewport: [0, 0] }),
+    new MalformedMetricsCase("metrics with a scroll that isn't a number", { cssVisualViewport: { pageX: 0, pageY: "828", clientWidth: 800, clientHeight: 600 } })
+  ])("fails as malformed with $flaw after the page was found to have a size", async (row: MalformedMetricsCase) => {
     let reads: number = 0;
-    bench.surface.answerWith("Page.getLayoutMetrics", () => ++reads < 2 ? { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } } : reply);
+    bench.surface.answerWith("Page.getLayoutMetrics", () => ++reads < 2 ? { cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 800, clientHeight: 600 } } : row.reply);
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) })), MalformedReplyException, { moduleCode: "browser.malformedReply" });
     expect(mouseEvents()).toEqual([]);
@@ -730,14 +784,14 @@ describe("ClickTool", () => {
   });
 
   it("refuses a button or a count it doesn't take, before it sends anything", async () => {
-    const cases: readonly (readonly [JsonObject, abstract new (...args: never[]) => Error])[] = [
-      [{ reference: "e1", button: "side" }, ArgumentNotOneOfException],
-      [{ reference: "e1", clickCount: 4 }, ArgumentTooLargeException],
-      [{ reference: "e1", clickCount: 0 }, ArgumentNotWholeNumberException],
-      [{ reference: "e1", clickCount: 1.5 }, ArgumentNotWholeNumberException]
+    const cases: readonly RefusedInputCase[] = [
+      new RefusedInputCase({ reference: "e1", button: "side" }, ArgumentNotOneOfException),
+      new RefusedInputCase({ reference: "e1", clickCount: 4 }, ArgumentTooLargeException),
+      new RefusedInputCase({ reference: "e1", clickCount: 0 }, ArgumentNotWholeNumberException),
+      new RefusedInputCase({ reference: "e1", clickCount: 1.5 }, ArgumentNotWholeNumberException)
     ];
-    for (const [input, type] of cases)
-      await CallFailures.expectAsync(bench.runAsync(tool, bench.call(input)), type, { reason: "Refused" });
+    for (const row of cases)
+      await CallFailures.expectAsync(bench.runAsync(tool, bench.call(row.input)), row.type, { reason: "Refused" });
     expect(bench.surface.calls).toEqual([]);
   });
 
@@ -756,7 +810,7 @@ describe("ClickTool", () => {
     await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.FORM_BUTTON) }));
 
     expect(bench.permissions.requests.map(t => t.risk)).toEqual([ToolRisk.High]);
-    expect(bench.surface.calls.filter(t => t.method === "DOM.describeNode" && t.params["objectId"] !== undefined).map(t => t.params))
+    expect(bench.surface.calls.filter(t => t.method === "DOM.describeNode" && !Object.isUndefined(t.params["objectId"])).map(t => t.params))
       .toContainEqual({ objectId: "form-4", depth: -1, pierce: true });
   });
 
@@ -772,19 +826,18 @@ describe("ClickTool", () => {
     expect([bench.permissions.requests.map(t => t.risk), mouseEvents().map(t => t["type"])]).toEqual([[ToolRisk.Medium], ["mouseMoved"]]);
   });
 
-  it.each<[string, string, (params: JsonObject) => boolean]>([
-    ["the scroll into view", "DOM.scrollIntoViewIfNeeded", () => true],
-    ["the mouse move", "Input.dispatchMouseEvent", params => params["type"] === "mouseMoved"]
-  ])("presses nothing when the page's handler for %s gives the button's form a password field, since the risk is read right before the press", async (_case: string,
-    method: string, isChanging: (params: JsonObject) => boolean) => {
+  it.each([
+    new RiskChangeCase("the scroll into view", "DOM.scrollIntoViewIfNeeded", () => true),
+    new RiskChangeCase("the mouse move", "Input.dispatchMouseEvent", params => params["type"] === "mouseMoved")
+  ])("presses nothing when the page's handler for $step gives the button's form a password field, since the risk is read right before the press", async (row: RiskChangeCase) => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     ShopPage.serve(bench, ShopPage.FORM_BUTTON);
     // The button is below the view until a scroll brings it in, so the click scrolls to it.
     let isScrolled: boolean = false;
     bench.surface.answerWith("DOM.getContentQuads", () => ({ quads: [quadAt(isScrolled ? 10 : 700, 10)] }));
-    bench.surface.answerWith(method, (params: JsonObject) => {
-      isScrolled ||= method === "DOM.scrollIntoViewIfNeeded";
-      if (isChanging(params))
+    bench.surface.answerWith(row.method, (params: JsonObject) => {
+      isScrolled ||= row.method === "DOM.scrollIntoViewIfNeeded";
+      if (row.isChanging(params))
         ShopPage.showDocument(bench, ShopPage.document(true));
       return {};
     });
