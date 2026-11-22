@@ -142,6 +142,15 @@ describe("RiskClassifier", () => {
       expect(RiskClassifier.classifyKey("a", inForm(node("INPUT", { type: "email" })), signIn)).toBe(ToolRisk.Medium);
     });
 
+    it("treats Enter on a checkbox, a radio button or a select of a form that holds a secret field as high, and on a textarea, or a button or a reset button that it only clicks, as medium", () => {
+      const signIn: readonly NodeFacts[] = [node("INPUT", { type: "password" })];
+      expect(["checkbox", "radio", "RADIO", "range"].map(t => RiskClassifier.classifyKey("Enter", inForm(node("INPUT", { type: t })), signIn)))
+        .toEqual([ToolRisk.High, ToolRisk.High, ToolRisk.High, ToolRisk.High]);
+      expect(RiskClassifier.classifyTyping(inForm(node("INPUT", { type: "checkbox" })), true, signIn)).toBe(ToolRisk.High);
+      expect(["button", "reset"].map(t => RiskClassifier.classifyKey("Enter", inForm(node("INPUT", { type: t })), signIn))).toEqual([ToolRisk.Medium, ToolRisk.Medium]);
+      expect(["SELECT", "OUTPUT", "TEXTAREA"].map(t => RiskClassifier.classifyKey("Enter", inForm(node(t)), signIn))).toEqual([ToolRisk.High, ToolRisk.High, ToolRisk.Medium]);
+    });
+
     it("classifies Enter or Space on a control as a click on it", () => {
       expect(RiskClassifier.classifyKey("Enter", inForm(node("BUTTON")), NO_FORM)).toBe(ToolRisk.Medium);
       expect(RiskClassifier.classifyKey(" ", inBody(node("A", { href: "https://other.test/" })), NO_FORM)).toBe(ToolRisk.Medium);
