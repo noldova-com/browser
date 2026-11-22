@@ -196,7 +196,7 @@ The fixtures below only give those fakes their answers, as Desktop's main proces
 
 ## The fixture host app
 
-**Not yet:** the serial tests, slow runs and checks on a real desktop that use the fixture host app are the design they follow; none is built.
+**Not yet:** of the serial tests, `agent-input-focus.spec.ts` exists; the others, the slow runs and the checks on a real desktop that use the fixture host app are the design they follow, and none of those is built.
 
 The end-to-end workflows run in a fixture host app in this repository: an app built on Noldova Desktop's published packages, with this module's package in its `desktop.modules`, as Noldova Desktop's MODULES.md says under "Modules from packages".
 - **Its template** is `e2e/app`: its `package.json` pins Noldova Desktop's published packages and names the module's package and two modules of its own, the agent double and the relay double, in its `desktop.modules`.

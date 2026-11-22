@@ -48,6 +48,25 @@ async function fieldAsync(app: TestApp, bindings: JsonObject): Promise<string> {
   return reference;
 }
 
+// Presses the letter in the window, one key at a time, until the agent's call has settled, so the person's keys overlap the whole call; returns
+// what was typed.
+async function typeUntilSettledAsync(app: TestApp, call: Promise<JsonValue>, letter: string): Promise<string> {
+  let isSettled: boolean = false;
+  const settled: Promise<void> = call.then(() => {
+    isSettled = true;
+  }, () => {
+    isSettled = true;
+  });
+  let typed: string = "";
+  do {
+    await app.window.keyboard.press(letter);
+    typed += letter;
+  } while (!isSettled);
+  await settled;
+  await call;
+  return typed;
+}
+
 async function isFieldFocusedAsync(app: TestApp): Promise<boolean> {
   return app.window.evaluate((selector: string) => document.activeElement === document.querySelector(selector), FIELD);
 }
@@ -63,12 +82,12 @@ test.describe("an agent's input while the person types in the window", () => {
     await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
     await app.requestAsync("agent-double.planAnswer", { action: "browser.pressKey", answer: "allowOnce" });
 
-    await Promise.all([callAsync(app, bindings, "browser_type", { reference: name, text: "Ada" }), app.window.keyboard.type("def")]);
+    const duringText: string = await typeUntilSettledAsync(app, callAsync(app, bindings, "browser_type", { reference: name, text: "Ada" }), "d");
     const afterText: boolean = await isFieldFocusedAsync(app);
-    await Promise.all([callAsync(app, bindings, "browser_press_key", { key: "x" }), app.window.keyboard.type("ghi")]);
+    const duringKey: string = await typeUntilSettledAsync(app, callAsync(app, bindings, "browser_press_key", { key: "x" }), "g");
 
     expect([afterText, await isFieldFocusedAsync(app)], "The agent's input took the focus from the address field.").toEqual([true, true]);
-    await expect(field, "A key the person typed didn't reach the address field.").toHaveValue("abcdefghi");
+    await expect(field, "A key the person typed didn't reach the address field.").toHaveValue(`abc${duringText}${duringKey}`);
     expect(await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('name').value"), "The agent's input didn't reach the page's field.").toBe("Adax");
     expect(await app.viewPages.runAtAsync(docs.url("/"), "keys.join(',')"), "A key the person typed reached the page.").toBe("x");
   });
