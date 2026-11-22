@@ -85,8 +85,8 @@ The page itself runs in the view's own renderer, isolated as [SECURITY-MODEL.md]
 Each page is a document of the window part, `browser.page`: a tab in Noldova Desktop's document groups, which the person moves, splits and closes like any other document.
 Its look follows the app's design, whose rules this section writes out.
 
-- **Opening:** the app opens a page with the window part's command `browser.openPage`, whose arguments are `{ profileKey, url?, instance? }`: the workspace the page belongs to, when given the address it goes to first, through the origin check, and when given the page document's instance, which the app picks to bind an agent session to the page.
-  A key that isn't 1 to 64 lowercase letters, digits and hyphens, starting with a letter or a digit, a `url` that isn't a string, or an `instance` that isn't a lowercase UUID, makes the command unavailable and fails its run.
+- **Opening:** the app opens a page with the window part's command `browser.openPage`, whose arguments are `{ profileKey, url?, instance? }`: the workspace the page belongs to, never `links`, which the module keeps for the person's links, when given the address it goes to first, through the origin check, and when given the page document's instance, which the app picks to bind an agent session to the page.
+  A key that isn't 1 to 64 lowercase letters, digits and hyphens, starting with a letter or a digit, or is `links`, a `url` that isn't a string, or an `instance` that isn't a lowercase UUID, makes the command unavailable and fails its run.
   An `instance` already open on the same workspace brings that page forward as it is, without going to the address; one open on another workspace fails the run.
   Noldova Desktop keeps a document's instances to each window, so an `instance` this window doesn't hold is claimed first, with `browser.claimPage`, which checks and holds in one step: of two windows that claim a page at once only one has it, and one that another window has, shown or not, fails the run.
   The runtime part keeps, in memory, the window and connection that has each page: the one that claimed it, kept its record or reported it open, until that window forgets it, closes for good, or its connection goes; a window that shows or closes a page another window has changes neither its record nor who has it.
@@ -327,6 +327,7 @@ The window part is Noldova Desktop's in-app browser: a web link the person opens
 - **Opening:** `openAsync` treats the link as the person's own action, as a [typed address](#typed-addresses) is: the runtime part allows its origin first, through `browser.allowTypedAddress`, then the link opens in a new tab of the document area, as a page on the workspace `links`.
   An address the runtime part refuses, an answer that isn't one, a failed request or a part that deactivated meanwhile rejects, and Noldova Desktop then opens the link in the system's browser.
 - **The links workspace:** every link's page shares one workspace, `links`, the person's own browsing, apart from the workspaces the app opens pages on for its teammates; so sign-ins there aren't shared with an app's workspace's pages, nor theirs with it.
+  The module keeps the key for itself: `browser.openPage` refuses it as invalid arguments, and a tool call whose session the app bound to it fails as `browser.unbound`, so no app's pages or agents share the person's link browsing.
   The module can't tell which of the app's workspaces a link came from, since Noldova Desktop's path carries none.
 
 ## 7. Agent tools
@@ -350,7 +351,7 @@ The runtime part registers eight tools by default, which `module.json` declares 
 | `profileKey` | That page's workspace; a page open in another workspace is refused |
 | `agentName` | The agent's name, which the page shows while the agent acts; the presence on the page reads it, not the tools |
 
-- A call whose session has no `page` or `profileKey`, whose page is open in another workspace, or whose page two windows' views show, fails as `Unavailable` with `browser.unbound`; a page that isn't open fails as `Unavailable` with `browser.viewClosed`.
+- A call whose session has no `page` or `profileKey`, whose `profileKey` is the module's own `links`, whose page is open in another workspace, or whose page two windows' views show, fails as `Unavailable` with `browser.unbound`; a page that isn't open fails as `Unavailable` with `browser.viewClosed`.
   Reopening a closed page for an agent is the app's job, which it doesn't do yet; until then, `browser.viewClosed` is what the agent sees.
 - A tool error, such as a refused origin, a stale reference or a time limit, returns to the agent as an error result.
 - When a session ends, the module drops its references, its console cursors and its pending permission requests, and cancels its running calls.
@@ -560,7 +561,7 @@ The module's own codes, each `browser.<name>` as Noldova Desktop writes them, wi
 | `browser.riskRose` | `Stale` | The page made the element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; the tool fails as `Stale`, and past the point of no return the call's result is `OutcomeUncertain` with this code in its message |
 | `browser.landedElsewhere` | `Stale` | The page moved between the check after the grant and the navigation, so the navigation left or reached a page its request didn't name; past the point of no return, the call's result is `OutcomeUncertain` with this code in its message |
 | `browser.notSubmitted` | `Stale` | The text was typed, but the page then gave its form a secret field, so the Enter wasn't sent; the tool fails as `Stale`, and since the text was sent the call's result is `OutcomeUncertain` with this code in its message |
-| `browser.unbound` | `Unavailable` | The app bound the session to no page, to a page of another workspace, or to a page two views show |
+| `browser.unbound` | `Unavailable` | The app bound the session to no page, to the `links` workspace, to a page of another workspace, or to a page two views show |
 | `browser.handedOver` | `Denied` | The person chose to do the action themself, so the call ran nothing and the page is theirs, focused on the field |
 | `browser.takenOver` | `Unavailable` | The person took the page over from this session, which can't act on it again until it ends |
 | `browser.toolsOff` | `Unavailable` | The person turned the browser's tools off for agents in Settings |

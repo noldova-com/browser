@@ -38,7 +38,7 @@ export class Resources {
   public static readonly localSitesSetting: string = "browser.localSites";
   public static readonly popupSitesSetting: string = "browser.popupSites";
   public static readonly linkProfile: string = "links";
-  public static readonly openPageArguments: string = "browser.openPage needs { profileKey, url?, instance? }: a profile key of lowercase letters, digits and hyphens, the address as text, and the instance as a lowercase UUID.";
+  public static readonly openPageArguments: string = "browser.openPage needs { profileKey, url?, instance? }: a profile key of lowercase letters, digits and hyphens other than links, the address as text, and the instance as a lowercase UUID.";
   public static readonly profileKeyPattern: RegExp = /^[a-z0-9][a-z0-9-]{0,63}$/u;
   public static readonly instancePattern: RegExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
   public static readonly typedAddressAnswer: string = "The runtime part's answer to a typed address isn't one.";

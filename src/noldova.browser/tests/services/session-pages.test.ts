@@ -6,10 +6,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { ToolCall, ToolFailureCode } from "@noldova/desktop.runtime";
+import { ToolCall } from "@noldova/desktop.runtime";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { CallFailureException } from "../../src/exceptions/call-failure.exception.ts";
 import { PageNotOpenException } from "../../src/exceptions/page-not-open.exception.ts";
 import { PageUnboundException } from "../../src/exceptions/page-unbound.exception.ts";
 import { SessionPage } from "../../src/models/session-page.ts";
@@ -19,17 +18,6 @@ import { ScriptedViews } from "../fixtures/scripted-views.fixture.ts";
 
 function call(bindings: JsonObject): ToolCall {
   return new ToolCall("session-1", "conversation-1", bindings, {}, Date.now() + 5_000, new AbortController().signal);
-}
-
-function failureOf(pages: SessionPages, bindings: JsonObject): readonly [unknown, ToolFailureCode, string, string | null] {
-  try {
-    pages.find(call(bindings));
-  } catch (error: unknown) {
-    if (error instanceof CallFailureException)
-      return [error.constructor, error.reason, error.message, error.moduleCode];
-    throw error;
-  }
-  throw new Error("find returned a page.");
 }
 
 describe("SessionPages", () => {
@@ -55,29 +43,31 @@ describe("SessionPages", () => {
   });
 
   it("fails as unbound when the app bound no page or no workspace, or bound them as other than text", () => {
-    const unbound: readonly [unknown, ToolFailureCode, string, string] = [PageUnboundException, ToolFailureCode.Unavailable, "The app bound this session to no page of its workspace.", "browser.unbound"];
+    expect(() => pages.find(call({}))).toThrow(PageUnboundException);
+    expect(() => pages.find(call({ page: "page-a" }))).toThrow(PageUnboundException);
+    expect(() => pages.find(call({ profileKey: "workspace-1" }))).toThrow(PageUnboundException);
+    expect(() => pages.find(call({ page: 7, profileKey: "workspace-1" }))).toThrow(PageUnboundException);
+    expect(() => pages.find(call({ page: "page-a", profileKey: null }))).toThrow(PageUnboundException);
+  });
 
-    expect(failureOf(pages, {})).toEqual(unbound);
-    expect(failureOf(pages, { page: "page-a" })).toEqual(unbound);
-    expect(failureOf(pages, { profileKey: "workspace-1" })).toEqual(unbound);
-    expect(failureOf(pages, { page: 7, profileKey: "workspace-1" })).toEqual(unbound);
-    expect(failureOf(pages, { page: "page-a", profileKey: null })).toEqual(unbound);
+  it("fails as unbound when the app bound the links workspace, the person's own browsing, even to a link's page open there", () => {
+    surface.profileKeys.set("view-2", "links");
+
+    expect(() => pages.find(call({ page: "page-a", profileKey: "links" }))).toThrow(PageUnboundException);
   });
 
   it("fails as unbound when two windows' views show the bound page, rather than guess which one the app meant", () => {
     surface.instances.set("view-1", "page-a");
 
-    expect(failureOf(pages, { page: "page-a", profileKey: "workspace-1" })).toEqual([PageUnboundException, ToolFailureCode.Unavailable, "The app bound this session to no page of its workspace.", "browser.unbound"]);
+    expect(() => pages.find(call({ page: "page-a", profileKey: "workspace-1" }))).toThrow(PageUnboundException);
   });
 
   it("fails as closed when no open view shows the bound page, the pane without an instance included", () => {
-    const closed: readonly [unknown, ToolFailureCode, string, string] = [PageNotOpenException, ToolFailureCode.Unavailable, "The session's page isn't open; ask the person to open it again.", "browser.viewClosed"];
-
-    expect(failureOf(pages, { page: "page-c", profileKey: "workspace-1" })).toEqual(closed);
-    expect(failureOf(pages, { page: "", profileKey: "workspace-1" })).toEqual(closed);
+    expect(() => pages.find(call({ page: "page-c", profileKey: "workspace-1" }))).toThrow(PageNotOpenException);
+    expect(() => pages.find(call({ page: "", profileKey: "workspace-1" }))).toThrow(PageNotOpenException);
   });
 
   it("refuses a page of another workspace than the bound one", () => {
-    expect(failureOf(pages, { page: "page-b", profileKey: "workspace-1" })).toEqual([PageUnboundException, ToolFailureCode.Unavailable, "The app bound this session to no page of its workspace.", "browser.unbound"]);
+    expect(() => pages.find(call({ page: "page-b", profileKey: "workspace-1" }))).toThrow(PageUnboundException);
   });
 });

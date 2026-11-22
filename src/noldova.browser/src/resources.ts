@@ -82,6 +82,7 @@ export class Resources {
   public static readonly unboundCode: string = "browser.unbound";
   public static readonly pageBinding: string = "page";
   public static readonly profileKeyBinding: string = "profileKey";
+  public static readonly linkProfile: string = "links";
   public static readonly agentNameBinding: string = "agentName";
   public static readonly takenOver: string = "The person took this page over; this session can't act on it again.";
   public static readonly takenOverCode: string = "browser.takenOver";

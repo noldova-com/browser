@@ -284,6 +284,18 @@ describe("RuntimePart", () => {
     expect(await requestAsync(context, BrowserMethods.holdPages, { instances: [instance] }, ShellClients.mainProcess, 2)).toEqual({ agents: [], refused: [instance] });
   });
 
+  it("refuses a session an app bound to the links workspace, the person's own browsing, even on a link's page open there", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const views: ScriptedViews = pageViews(instance);
+    views.profileKeys.set("view-1", "links");
+    const context: BrowserContext = new BrowserContext(views);
+    await new RuntimePart().activateAsync(context);
+
+    expect(await context.tools.openSession("conversation-1", { page: instance, profileKey: "links", agentName: "Scout" }).callAsync("browser_snapshot", {}))
+      .toMatchObject({ isFailure: true, code: "Unavailable", moduleCode: "browser.unbound" });
+    expect(views.calls.map(t => t.method)).not.toContain("Accessibility.getFullAXTree");
+  });
+
   it("logs an agent it fails to record, and the call goes on", async () => {
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const context: BrowserContext = new BrowserContext(pageViews(instance));

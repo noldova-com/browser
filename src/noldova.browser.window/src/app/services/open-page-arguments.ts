@@ -15,12 +15,12 @@ import { PageAnswers } from "./page-answers.ts";
 
 export class OpenPageArguments {
   public static isValid(commandArguments: JsonValue): boolean {
-    return OpenPageArguments.tryRead(commandArguments) !== null;
+    return !Object.isNull(OpenPageArguments.tryRead(commandArguments));
   }
 
   public static read(commandArguments: JsonValue): PageOpening {
     const opening: PageOpening | null = OpenPageArguments.tryRead(commandArguments);
-    if (opening === null)
+    if (Object.isNull(opening))
       throw new OpenPageArgumentsInvalidException();
     return opening;
   }
@@ -29,12 +29,12 @@ export class OpenPageArguments {
     if (!PageAnswers.isObject(commandArguments))
       return null;
     const { profileKey, url, instance } = commandArguments;
-    if (typeof profileKey !== "string" || !Resources.profileKeyPattern.test(profileKey))
+    if (!Object.isString(profileKey) || !Resources.profileKeyPattern.test(profileKey) || profileKey === Resources.linkProfile)
       return null;
-    if (instance !== undefined && (typeof instance !== "string" || !Resources.instancePattern.test(instance)))
+    if (!Object.isUndefined(instance) && (!Object.isString(instance) || !Resources.instancePattern.test(instance)))
       return null;
-    if (url !== undefined && typeof url !== "string")
+    if (!Object.isUndefined(url) && !Object.isString(url))
       return null;
-    return new PageOpening(profileKey, url === undefined || url.trim() === "" ? null : url, instance ?? null);
+    return new PageOpening(profileKey, Object.isUndefined(url) || url.trim() === "" ? null : url, instance ?? null);
   }
 }

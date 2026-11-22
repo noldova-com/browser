@@ -29,8 +29,8 @@ describe("OpenPageArguments", () => {
       .toStrictEqual([new PageOpening("workspace-1", null, null), new PageOpening("workspace-1", null, null)]);
   });
 
-  it("refuses arguments that aren't an object, or lack or misspell their fields", () => {
-    for (const commandArguments of [null, "workspace-1", ["workspace-1"], {}, { profileKey: 1 }, { profileKey: "Workspace" }, { profileKey: `a${"b".repeat(64)}` },
+  it("refuses arguments that aren't an object, lack or misspell their fields, or name the person's own links workspace", () => {
+    for (const commandArguments of [null, "workspace-1", ["workspace-1"], {}, { profileKey: 1 }, { profileKey: "Workspace" }, { profileKey: `a${"b".repeat(64)}` }, { profileKey: "links" },
       { profileKey: "workspace-1", url: 1 }, { profileKey: "workspace-1", url: null },
       { profileKey: "workspace-1", instance: 1 }, { profileKey: "workspace-1", instance: "page-1" }, { profileKey: "workspace-1", instance: INSTANCE.toUpperCase() },
       { profileKey: "workspace-1", instance: `${INSTANCE}0` }, { profileKey: "workspace-1", instance: null }]) {

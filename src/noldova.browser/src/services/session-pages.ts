@@ -25,15 +25,15 @@ export class SessionPages {
   public find(call: ToolCall): SessionPage {
     const instance: JsonValue | undefined = call.bindings[Resources.pageBinding];
     const profileKey: JsonValue | undefined = call.bindings[Resources.profileKeyBinding];
-    if (typeof instance !== "string" || typeof profileKey !== "string")
+    if (!Object.isString(instance) || !Object.isString(profileKey) || profileKey === Resources.linkProfile)
       throw new PageUnboundException();
     const views: readonly WebViewInfo[] = this.webViews.list().filter(t => t.pane.name.text === Resources.pageDocument && t.pane.instance === instance);
     const view: WebViewInfo | undefined = views[0];
-    if (view === undefined)
+    if (Object.isUndefined(view))
       throw new PageNotOpenException(instance);
     if (views.length > 1 || view.profileKey !== profileKey)
       throw new PageUnboundException();
     const agentName: JsonValue | undefined = call.bindings[Resources.agentNameBinding];
-    return new SessionPage(view.id, instance, profileKey, typeof agentName === "string" ? agentName : "");
+    return new SessionPage(view.id, instance, profileKey, Object.isString(agentName) ? agentName : "");
   }
 }
