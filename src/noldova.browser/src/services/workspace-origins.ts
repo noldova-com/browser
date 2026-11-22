@@ -59,7 +59,7 @@ export class WorkspaceOrigins {
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     const view: WebViewInfo | undefined = this.viewsOf(request.instance).find(t => t.profileKey === request.profileKey);
-    if (view === undefined)
+    if (Object.isUndefined(view))
       throw new TypedRedirectPageNotOpenException(request.instance, request.profileKey);
     if (this.stopped.has(view.id))
       throw new TypedRedirectAfterAgentException(request.instance);
@@ -146,7 +146,7 @@ export class WorkspaceOrigins {
 
   private readAsync(profileKey: string): Promise<ReadonlySet<string>> {
     let origins: Promise<ReadonlySet<string>> | undefined = this.kept.get(profileKey);
-    if (origins === undefined) {
+    if (Object.isUndefined(origins)) {
       origins = this.store.readAsync(profileKey).then(t => new Set(t), error => {
         this.kept.delete(profileKey);
         throw error;
