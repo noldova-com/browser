@@ -14,6 +14,7 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import "@noldova/context.core";
 import { JsonReader, type JsonValue } from "@noldova/context.json";
 import { type ElectronApplication, type Page, type TestInfo, _electron, expect } from "playwright/test";
 
@@ -26,6 +27,22 @@ import { type ViewRequest, ViewRequests } from "./view-requests.ts";
 
 interface IDownloadSession {
   setDownloadPath(path: string): void;
+}
+
+// What owns a session in the main process: a web contents, as the download folder sees it.
+interface ISessionOwner {
+  readonly session: IDownloadSession;
+}
+
+// A size in CSS pixels, sent to the main process and the window's page.
+class WindowSize {
+  public readonly width: number;
+  public readonly height: number;
+
+  public constructor(width: number, height: number) {
+    this.width = width;
+    this.height = height;
+  }
 }
 
 class AppRun {
@@ -121,8 +138,8 @@ export class TestApp {
       app.setPath("downloads", folder);
       globalThis.noldovaDownloadSessions = sessions;
       app.on("session-created", own);
-      app.on("web-contents-created", (_event: unknown, contents: { readonly session: IDownloadSession }) => own(contents.session));
-      const made: IDownloadSession[] = [session.defaultSession, ...webContents.getAllWebContents().map((t: { readonly session: IDownloadSession }) => t.session)];
+      app.on("web-contents-created", (_event: unknown, contents: ISessionOwner) => own(contents.session));
+      const made: IDownloadSession[] = [session.defaultSession, ...webContents.getAllWebContents().map((t: ISessionOwner) => t.session)];
       for (const each of made)
         own(each);
     }, path.join(path.dirname(dataDirectory), TestApp.DOWNLOADS_FOLDER));
@@ -170,14 +187,19 @@ export class TestApp {
 
   // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it.
   public async resizeAsync(width: number, height: number): Promise<void> {
-    await this.run.application.evaluate(({ BrowserWindow }, size: { readonly width: number; readonly height: number }): void => {
+    const size = new WindowSize(width, height);
+    await this.run.application.evaluate(({ BrowserWindow }, wanted: WindowSize): void => {
       for (const window of BrowserWindow.getAllWindows()) {
         window.unmaximize();
-        window.setContentSize(size.width, size.height);
+        window.setContentSize(wanted.width, wanted.height);
       }
-    }, { width, height });
-    await expect.poll(() => this.window.evaluate(() => [innerWidth, innerHeight]), { message: `The window never took the size ${String(width)} by ${String(height)}.` })
-      .toEqual([width, height]);
+    }, size);
+    // Above a device scale of 1, as a forced scale on Windows, the window's frame may round its content a device pixel short, which reads as one
+    // CSS pixel less; at 1 the page has the size exactly.
+    await expect.poll(() => this.window.evaluate((wanted: WindowSize): boolean => {
+      const allowed = devicePixelRatio > 1 ? 1 : 0;
+      return [wanted.width - innerWidth, wanted.height - innerHeight].every(t => t >= 0 && t <= allowed);
+    }, size), { message: `The window never took the size ${String(width)} by ${String(height)}, or one CSS pixel less above a device scale of 1.` }).toBe(true);
   }
 
   public async requestAsync(method: string, payload: JsonValue): Promise<JsonValue> {
@@ -257,7 +279,7 @@ export class TestApp {
 
   private async closeAsync(): Promise<void> {
     const child = this.run.process;
-    if (child.exitCode !== null || child.signalCode !== null)
+    if (!Object.isNull(child.exitCode) || !Object.isNull(child.signalCode))
       return;
 
     const exited = once(child, "exit");
