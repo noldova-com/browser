@@ -10,7 +10,7 @@ import { UnansweredCallException } from "@noldova/desktop.protocol/testing";
 import { CommandContribution, DocumentContribution, StatusBarItemContribution, StatusBarItemState, StatusBarSide } from "@noldova/desktop.window";
 import { describe, expect, it } from "vitest";
 
-import { WindowContext } from "./window-context.fixture.ts";
+import { OpenedDocument, TitleUpdate, WindowContext, WindowRequest } from "./window-context.fixture.ts";
 
 describe("WindowContext", () => {
   it("registers each document, command and status-bar item module.json declares once, and refuses an undeclared or repeated one, or a tab row place menus.json doesn't declare", () => {
@@ -54,5 +54,19 @@ describe("WindowContext", () => {
     await expect(context.writeSettingAsync("browser.popupSites", "other.example")).rejects.toBe(failure);
 
     expect(context.readSetting("browser.popupSites")).toBe("example.com");
+  });
+
+  it("records each opened document, document update and request as its named class", async () => {
+    const context: WindowContext = new WindowContext();
+
+    context.openDocument("browser.page", "tab-2", "New tab", { after: "tab-1", activate: false });
+    context.updateDocument("browser.page", "tab-2", { title: "Plans and pricing" });
+    await context.requestAsync("browser.readAppName", null);
+
+    expect([context.opened, context.titles, context.requests]).toStrictEqual([
+      [new OpenedDocument("browser.page", "tab-2", "New tab", "tab-1", null, false, undefined)],
+      [new TitleUpdate("tab-2", { title: "Plans and pricing" })],
+      [new WindowRequest("browser.readAppName", null)]
+    ]);
   });
 });
