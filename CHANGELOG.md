@@ -4,6 +4,53 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.5
+
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.13 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` takes Noldova Desktop's protocol and window packages as peers at `>=0.0.13 <0.1.0` (#159, #189, #196, #254, #258) and `@noldova/ui.components.angular` at `>=0.0.26 <0.1.0` (#161, #172, #186, #198, #202, #211, #217, #240, #256).
+  The three packages take `@noldova/context.exceptions` and `@noldova/context.json` as peers at `>=0.0.12 <0.1.0`, and `@noldova/browser.window` (#236) and `@noldova/browser` (#242) now take `@noldova/context.core` as a peer, which each part's entry imports first; every context peer starts at 0.0.12 (#251).
+- `browser_navigate`'s wait ends on a move within the document, `Page.navigatedWithinDocument`, which `webViews.json` now declares, unless the frame took a new document first (#157).
+- `browser_navigate` takes a load only once the main frame has committed the document of the newest navigation started since its wait began, through `Page.frameStartedNavigating`, which `webViews.json` now declares; `browser_wait_for` says how long it waited and sends `Page.enable` before a load wait (#212).
+- After the person allows a navigation, `browser_navigate` reads the page again and fails as `Stale`, moving nowhere, when its document or address changed since the card; once the move has loaded, a page that landed elsewhere than asked fails with the new code `browser.landedElsewhere`, as `OutcomeUncertain` (#193).
+- Reload on a page that failed to load reloads the address that failed, read from the frame's `unreachableUrl`, and the card's From names it (#219).
+- A frame's URL keeps its fragment in every tool's text and the console's navigation lines, and navigate's landing checks match a page at a fragment; the structured page still holds only the origin and path (#215).
+- A Stop or Take over while `browser_navigate` allows a new site leaves the page where it was, and a queued call whose session ended takes no control of the page; both fail as stopped (#187).
+- `browser_wait_for` hears a page again in each frame that navigates, and reads the page once more at its limit (#167).
+- A view whose Runtime start fails stops its tracker, so a reference lookup on it gives nothing at once and the next use starts it again in full (#229).
+- `browser_type` replaces what its field holds, and an empty text clears it, through a new pinned function in `webViews.json`; a field that isn't a text field gets the text at its caret, as before (#203).
+  `browser_type` reads the document again after its text, and `browser_press_key` after a key other than Enter or Space, and fails as `OutcomeUncertain` when it changed; the documents state the window that remains for a click, Enter and Space (#207).
+- `browser_press_key` with Shift and a letter sends its capital, and typed text, addresses and references count their length in code points, as the tools' schemas do (#208).
+- A click on, or a screenshot of, an element the engine doesn't lay out, such as one under `display: none`, fails as not visible, `browser.notVisible`, instead of a protocol failure, and `browser_type` refuses such a field before any input (#209).
+- A scrolled snapshot whose start falls inside an element its walk doesn't enter, such as an svg icon's path or a hidden part, starts at that element instead of giving only its ancestors' lines (#204).
+- A click, a typed Enter or a pressed key that navigates the main frame is reported with the page the navigation loaded, or with the page's address and a still-loading note when the call's time ends first; `webViews.json` declares `Page.frameRequestedNavigation` and `Page.frameStoppedLoading` for it (#243).
+- While the main frame waits for its next document, a call waits for it only as long as its time allows: `browser_snapshot` and `browser_screenshot` report the page still shown as still loading, `browser_console` answers at once, and an answer that reports a page still loading reads its address and title from the view's history (#246, #252).
+  A click, typing, a key press or a navigation whose page is still loading at the call's read margin fails as `Unavailable` with the new code `browser.pageLoading`, before any input.
+- `browser_screenshot` reads the frame again after its capture and fails as `Stale`, keeping no image, when the page went to another document meanwhile, so an image never carries another document's origin (#263).
+- The element facts that rate a click's or an Enter's risk take the form the engine resolves in the element's own tree, so a button in a shadow root no longer takes the page's form of the same id; the pinned function in `webViews.json` changes with it (#265).
+- The workspace key `links` is the module's own: `browser.openPage` refuses it as invalid arguments, and a tool call whose session is bound to it fails as `Unavailable` with `browser.unbound`, so an agent never acts in the person's own browsing (#266).
+- A typed address that Noldova Desktop refuses stays in the field, marked invalid and described by the refused page's heading, until the person edits it or enters again (#163).
+- Enter held down in the address field enters the address once; an entered address still waiting for its answer is left when another navigation starts, a load starts, an agent's call that can move the page starts, or the person presses Stop or Escape; and the lock and "Not secure" show only beside the page's own address (#199).
+  `@noldova/browser.protocol` exports `TypedAddressLeft`, `TypedAddressAnswerKind.Left` and `TypedAddressRequest`'s `instance`.
+- A typed private address or a name in `.local` with no scheme defaults to `http:`, or to the scheme of the single site Sites on this computer or network names at its host and port (#218).
+- Ctrl+L (Cmd+L on macOS), Escape and F6 work while the page has the focus; Escape stops a loading page, from the `stop` loading key `webViews.json` now declares, and reaches a page that loaded (#237).
+- A page's new window opens only for a request that used the person's press, or from a site in the new setting Allow pop-ups, `browser.popupSites`; any other is blocked, with Pop-up blocked in the toolbar, whose menu opens the pop-up or always allows pop-ups from its host (#234).
+- A middle, Ctrl or Cmd click on a link opens its tab at once for each click, behind the page (#91).
+- A link in another site's frame to a site the workspace doesn't allow shows the refused page in that frame, naming the view "<app>'s browser" (#99).
+- Every text of the pane that names the module says "<app>'s browser", or "this browser" while the app's name is unknown (#183); the new-window notice starts with a capital, and the local-sites hint and setting ask for the address with its scheme (#173).
+- The agent bar's button reads and is named Stop teammate, apart from the toolbar's Stop (#174), and the teammate tag ends with its ellipsis at the page's right edge instead of being cut off (#170).
+- A request notice is announced only when its text changes (#175), and a stopped pop-up's notice and a typed address's refusal stay through the same load's commit, title, stop and failure (#225).
+- A restored page whose record can't be read shows "This page can't open again" with Close instead of staying blank (#164), and such a page opened again shows in its tab (#221).
+- A restored tab that hasn't shown yet comes forward at its kept address when `browser.openPage` names its instance with another address (#270).
+- A restored tab whose claim failed keeps a page that a run here claims while the tab's record is read, instead of marking it moved to another window (#271).
+- A zoom event whose factor isn't a finite number above zero is dropped instead of showing "NaN%", and the window part asks to be rebuilt instead of failing when it deactivates during a reconnect (#272).
+- Closing a page's tab drops its refusal (#220) and a pending place it never showed (#223), and a page closed while its tab awaits its claim or its view opens no view and keeps no agent or record (#224).
+- A page whose view is opening keeps its place in the window, so a run of `browser.openPage` on another workspace fails and one on its own brings it forward (#226).
+- New page and Ctrl+T are off on a page whose view never opened or has closed, and open nothing beside it (#268).
+- The find bar and More's Find on page work only while the page loads or is loaded; an open bar closes when its page leaves those states, giving Reload a focus it held, and a page that comes back from another window shows no bar (#264).
+- When another window takes the shown page while the focus is inside it, the focus moves to the state's Close (#200).
+- A tab keeps its title while its page loads without one of its own, a title that only repeats the page's address included, and shows the address only once a load ends without a title, so a restored tab no longer reads New tab and then its address before its title (#261).
+- Tests and CI: the zoom and scroll reset in the window specs (#166), an end-to-end request's answer limit and a failed test's trace (#169), the downloads folder check after a refusal (#180), the window run's session logs and pinned headless shell (#184, #190), commits, failed loads and a renderer's end in `views.log` (#214), the page keys spec's wait for a painted page (#247), the fixture app's committed lockfile (#249), vitest at 5.0.5 (#231), context's development pins at 0.0.9 and 0.0.10 (#177, #192), and the workflows at `.github`'s v2.41.0, v2.41.1, v2.41.2 and v2.41.4 (#182, #206, #228, #233).
+  The packages are unchanged by these.
+
 ## 0.0.4
 
 - `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.8 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` takes Noldova Desktop's protocol and window packages as peers at `>=0.0.8 <0.1.0` (#71, #80, #82, #94, #101) and `@noldova/ui.components.angular` at `>=0.0.17 <0.1.0` (#73, #109).
