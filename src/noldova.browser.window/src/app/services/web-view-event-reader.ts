@@ -31,44 +31,44 @@ export class WebViewEventReader {
         return new ViewCrashEvent();
       case WebViewEventKind.State: {
         const { address, title, isLoading, canGoBack, canGoForward } = event.details;
-        return typeof address === "string" && typeof title === "string" && typeof isLoading === "boolean" && typeof canGoBack === "boolean"
-          && typeof canGoForward === "boolean"
+        return Object.isString(address) && Object.isString(title) && Object.isBoolean(isLoading) && Object.isBoolean(canGoBack)
+          && Object.isBoolean(canGoForward)
           ? new ViewStateEvent(address, title, isLoading, canGoBack, canGoForward)
           : null;
       }
       case WebViewEventKind.LoadFailed: {
         const { address, code, description } = event.details;
-        return typeof address === "string" && typeof code === "number" && typeof description === "string" ? new ViewLoadFailureEvent(address, code, description) : null;
+        return Object.isString(address) && Object.isNumber(code) && Object.isString(description) ? new ViewLoadFailureEvent(address, code, description) : null;
       }
       case WebViewEventKind.NavigationRefused: {
         const { address, origin, isRedirect } = event.details;
-        return typeof address === "string" && typeof origin === "string" && typeof isRedirect === "boolean"
+        return Object.isString(address) && Object.isString(origin) && Object.isBoolean(isRedirect)
           ? new ViewRefusalEvent(address, origin, isRedirect)
           : null;
       }
       case WebViewEventKind.ProfileCleared: {
         const { profileKey } = event.details;
-        return typeof profileKey === "string" ? new ViewProfileClearedEvent(profileKey) : null;
+        return Object.isString(profileKey) ? new ViewProfileClearedEvent(profileKey) : null;
       }
       case WebViewEventKind.RequestRefused: {
         const { request, origin } = event.details;
         const refused: RefusedRequest | null = WebViewEventReader.readRefusedRequest(request);
-        return refused !== null && typeof origin === "string" ? new ViewRequestRefusalEvent(refused, origin) : null;
+        return !Object.isNull(refused) && Object.isString(origin) ? new ViewRequestRefusalEvent(refused, origin) : null;
       }
       case WebViewEventKind.NewWindowRequested: {
         const { address, hadRecentInput, origin, disposition, fromPress } = event.details;
-        return typeof address === "string" && typeof hadRecentInput === "boolean" && (typeof origin === "string" || origin === null)
-          && (typeof disposition === "string" || disposition === undefined) && (typeof fromPress === "boolean" || fromPress === undefined)
+        return Object.isString(address) && Object.isBoolean(hadRecentInput) && (Object.isString(origin) || Object.isNull(origin))
+          && (Object.isString(disposition) || Object.isUndefined(disposition)) && (Object.isBoolean(fromPress) || Object.isUndefined(fromPress))
           ? new ViewNewWindowEvent(address, hadRecentInput, origin, disposition === Resources.backgroundTabDisposition, fromPress === true)
           : null;
       }
       case WebViewEventKind.Key: {
         const { name } = event.details;
-        return typeof name === "string" ? new ViewKeyEvent(name) : null;
+        return Object.isString(name) ? new ViewKeyEvent(name) : null;
       }
       case WebViewEventKind.Zoom: {
         const { factor } = event.details;
-        return typeof factor === "number" ? new ViewZoomEvent(factor) : null;
+        return Object.isNumber(factor) && Number.isFinite(factor) && factor > 0 ? new ViewZoomEvent(factor) : null;
       }
       default:
         return null;
@@ -76,6 +76,6 @@ export class WebViewEventReader {
   }
 
   private static readRefusedRequest(value: unknown): RefusedRequest | null {
-    return typeof value === "string" ? Object.values(RefusedRequest).find(t => Resources.refusedRequestNames[t] === value) ?? null : null;
+    return Object.isString(value) ? Object.values(RefusedRequest).find(t => Resources.refusedRequestNames[t] === value) ?? null : null;
   }
 }

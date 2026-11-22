@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { RefusedRequest } from "../../../src/app/enums/refused-request.ts";
 import { ViewCloseEvent } from "../../../src/app/models/view-close-event.ts";
 import { ViewCrashEvent } from "../../../src/app/models/view-crash-event.ts";
+import type { ViewEvent } from "../../../src/app/models/view-event.ts";
 import { ViewKeyEvent } from "../../../src/app/models/view-key-event.ts";
 import { ViewLoadFailureEvent } from "../../../src/app/models/view-load-failure-event.ts";
 import { ViewNewWindowEvent } from "../../../src/app/models/view-new-window-event.ts";
@@ -38,21 +39,15 @@ describe("WebViewEventReader", () => {
   });
 
   it("reads the page's state with its address, title, loading and history", () => {
-    const details = { address: "https://one.example/", title: "One", isLoading: true, canGoBack: false, canGoForward: true };
-
-    expect(WebViewEventReader.read(event(WebViewEventKind.State, details))).toStrictEqual(new ViewStateEvent("https://one.example/", "One", true, false, true));
+    expect(WebViewEventReader.read(event(WebViewEventKind.State, { address: "https://one.example/", title: "One", isLoading: true, canGoBack: false, canGoForward: true }))).toStrictEqual(new ViewStateEvent("https://one.example/", "One", true, false, true));
   });
 
   it("reads a failed load with its address, the engine's code and its description", () => {
-    const details = { address: "https://gone.example/", code: -105, description: "ERR_NAME_NOT_RESOLVED" };
-
-    expect(WebViewEventReader.read(event(WebViewEventKind.LoadFailed, details))).toStrictEqual(new ViewLoadFailureEvent("https://gone.example/", -105, "ERR_NAME_NOT_RESOLVED"));
+    expect(WebViewEventReader.read(event(WebViewEventKind.LoadFailed, { address: "https://gone.example/", code: -105, description: "ERR_NAME_NOT_RESOLVED" }))).toStrictEqual(new ViewLoadFailureEvent("https://gone.example/", -105, "ERR_NAME_NOT_RESOLVED"));
   });
 
   it("reads a refused navigation with its address, its origin and whether a redirect led there", () => {
-    const details = { address: "https://refused.example/", origin: "https://refused.example", isRedirect: true };
-
-    expect(WebViewEventReader.read(event(WebViewEventKind.NavigationRefused, details))).toStrictEqual(new ViewRefusalEvent("https://refused.example/", "https://refused.example", true));
+    expect(WebViewEventReader.read(event(WebViewEventKind.NavigationRefused, { address: "https://refused.example/", origin: "https://refused.example", isRedirect: true }))).toStrictEqual(new ViewRefusalEvent("https://refused.example/", "https://refused.example", true));
   });
 
   it("reads a cleared profile with its key", () => {
@@ -60,7 +55,7 @@ describe("WebViewEventReader", () => {
   });
 
   it("reads each request the host refuses, with the origin that asked", () => {
-    const requests = ["download", "newWindow", "permission", "fileChooser", "authentication", "certificate", "nestedView"] as const;
+    const requests: string[] = ["download", "newWindow", "permission", "fileChooser", "authentication", "certificate", "nestedView"];
 
     expect(requests.map(t => WebViewEventReader.read(event(WebViewEventKind.RequestRefused, { request: t, origin: "https://one.example" }))))
       .toStrictEqual(Object.values(RefusedRequest).filter(t => t !== RefusedRequest.PopupSites).map(t => new ViewRequestRefusalEvent(t, "https://one.example")));
@@ -74,7 +69,7 @@ describe("WebViewEventReader", () => {
   });
 
   it("reads a new window's disposition as whether the engine asked for a background tab", () => {
-    const read = (disposition: string): unknown =>
+    const read = (disposition: string): ViewEvent | null =>
       WebViewEventReader.read(event(WebViewEventKind.NewWindowRequested, { address: "https://two.example/", hadRecentInput: true, origin: null, disposition }));
 
     expect(["background-tab", "foreground-tab", "new-window", "default"].map(read)).toStrictEqual([
@@ -86,8 +81,8 @@ describe("WebViewEventReader", () => {
   });
 
   it("reads whether a new window used the person's press, and takes an event without it as one that didn't", () => {
-    const read = (fromPress: boolean | undefined): unknown => WebViewEventReader.read(event(WebViewEventKind.NewWindowRequested,
-      { address: "https://two.example/", hadRecentInput: true, origin: null, disposition: "background-tab", ...(fromPress === undefined ? {} : { fromPress }) }));
+    const read = (fromPress: boolean | undefined): ViewEvent | null => WebViewEventReader.read(event(WebViewEventKind.NewWindowRequested,
+      { address: "https://two.example/", hadRecentInput: true, origin: null, disposition: "background-tab", ...(Object.isUndefined(fromPress) ? {} : { fromPress }) }));
 
     expect([true, false, undefined].map(read)).toStrictEqual([
       new ViewNewWindowEvent("https://two.example/", true, null, true, true),
@@ -102,6 +97,11 @@ describe("WebViewEventReader", () => {
 
   it("reads the view's new zoom factor", () => {
     expect(WebViewEventReader.read(event(WebViewEventKind.Zoom, { factor: 1.25 }))).toStrictEqual(new ViewZoomEvent(1.25));
+  });
+
+  it("reads nothing for a zoom factor that isn't a finite number above zero, so the pane never shows one as a size", () => {
+    expect([Number.NaN, Number.POSITIVE_INFINITY, 0, -1.25].map(t => WebViewEventReader.read(malformed(WebViewEventKind.Zoom, { factor: t }))))
+      .toEqual([null, null, null, null]);
   });
 
   it("reads nothing for the kinds the pane doesn't follow", () => {

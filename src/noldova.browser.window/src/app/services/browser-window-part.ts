@@ -44,15 +44,19 @@ export class BrowserWindowPart implements IWindowPart {
   }
 
   public async reconnectAsync(): Promise<boolean> {
-    if (this.pages === null)
+    const pages: Pages | null = this.pages;
+    if (Object.isNull(pages))
       return false;
-    const isReported: boolean = await this.pages.reportOpenAsync();
-    const isRead: boolean = await this.pages.readActivitiesAsync();
-    return isReported && isRead;
+    const isReported: boolean = await pages.reportOpenAsync();
+    if (this.pages !== pages)
+      return false;
+    const isRead: boolean = await pages.readActivitiesAsync();
+    return isReported && isRead && this.pages === pages;
   }
 
   public deactivateAsync(): Promise<void> {
-    this.pages?.close();
+    if (!Object.isNull(this.pages))
+      this.pages.close();
     this.pages = null;
     return Promise.resolve();
   }
