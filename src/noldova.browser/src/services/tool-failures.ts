@@ -136,6 +136,9 @@ export class ToolFailures {
 
   public static forCall(cause: unknown, progress: ActionProgress, isNonResumable: boolean): ToolFailure {
     const plain: CallFailureException = ToolFailures.toException(cause, false);
+    // The base refuses a key that is one of the app's shortcuts before the page gets it, so the refusal stands past the point of no return.
+    if (plain instanceof ShortcutRefusedException)
+      return plain.toFailure();
     if (isNonResumable && progress.isInputSent && !ToolFailures.isGoneOnFocus(cause, progress))
       return new OutcomeUncertainException(plain.moduleCode ?? plain.reason, cause).toFailure();
     if (progress.isGranted && plain instanceof StaleReferenceException)

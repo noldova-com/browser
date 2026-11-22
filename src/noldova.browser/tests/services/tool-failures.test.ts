@@ -217,8 +217,8 @@ describe("ToolFailures", () => {
     sent.markInputSent();
     const failures: readonly WebViewFailure[] = [
       ...[
-        WebViewFailureKind.NotOwned, WebViewFailureKind.NotAllowed, WebViewFailureKind.ShortcutRefused, WebViewFailureKind.TimedOut, WebViewFailureKind.TooLarge,
-        WebViewFailureKind.ViewClosed, WebViewFailureKind.Crashed, WebViewFailureKind.ProfileCleared, WebViewFailureKind.Unavailable
+        WebViewFailureKind.NotOwned, WebViewFailureKind.NotAllowed, WebViewFailureKind.TimedOut, WebViewFailureKind.TooLarge, WebViewFailureKind.ViewClosed,
+        WebViewFailureKind.Crashed, WebViewFailureKind.ProfileCleared, WebViewFailureKind.Unavailable
       ].map(t => new WebViewFailure(t)),
       new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node found")
     ];
@@ -231,6 +231,14 @@ describe("ToolFailures", () => {
       expect(after.code, failure.kind).toBe(ToolFailureCode.OutcomeUncertain);
       expect(after.message, failure.kind).toContain(`(${before.moduleCode ?? before.code})`);
     }
+  });
+
+  it("keeps a key refused as one of the app's shortcuts refused after the action sent its input, since the page never got it", () => {
+    const sent: ActionProgress = granted();
+    sent.markInputSent();
+
+    expect(ToolFailures.forCall(relayed(new WebViewFailure(WebViewFailureKind.ShortcutRefused)), sent, true))
+      .toEqual(new ToolFailure(ToolFailureCode.Refused, "The key is one of the app's shortcuts, which a page never gets.", "browser.shortcutRefused"));
   });
 
   it("reads a hit test that found nothing as a page that isn't showing, referenced or not, and another missing node as a stale reference", () => {

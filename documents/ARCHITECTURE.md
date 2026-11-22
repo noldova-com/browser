@@ -541,7 +541,7 @@ A tool that fails rejects with Noldova Desktop's `ToolFailureException`, whose `
 | `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop teammate or Take over |
 | `Stale` | The page changed after the grant, so nothing ran; a snapshot's page went to another document during each of its two reads; or a screenshot's page went to another document during its capture; take a new snapshot or screenshot |
 | `TimedOut` | The call's time limit passed before its point of no return |
-| `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus; the message keeps the reason it ended with |
+| `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus, and a key refused as one of the app's shortcuts, which the page never got; the message keeps the reason it ended with |
 | `TooLarge` | The page's answer or the result is over its limit, even cut |
 | `Unavailable` | The pane can't answer, or the module was switched off, with the module code `browser.viewClosed`, `browser.pageCrashed` or `browser.profileCleared` when the pane is gone, or a fault in the module, with its module code |
 
