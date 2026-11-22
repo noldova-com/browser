@@ -12,8 +12,9 @@ import { AccessibilityNode } from "../../src/models/accessibility-node.ts";
 
 describe("AccessibilityNode", () => {
   it("keeps its fields", () => {
-    const accessibilityNode: AccessibilityNode = new AccessibilityNode("2", false, "textbox", "Email", "a@shop.test", ["3"], 5, true);
+    const accessibilityNode: AccessibilityNode = new AccessibilityNode("2", false, "textbox", "Email", "a@shop.test", ["3"], 5, true, [9]);
 
-    expect([accessibilityNode.id, accessibilityNode.isIgnored, accessibilityNode.role, accessibilityNode.name, accessibilityNode.value, accessibilityNode.childIds, accessibilityNode.backendNodeId, accessibilityNode.isFocused]).toEqual(["2", false, "textbox", "Email", "a@shop.test", ["3"], 5, true]);
+    expect([accessibilityNode.id, accessibilityNode.isIgnored, accessibilityNode.role, accessibilityNode.name, accessibilityNode.value, accessibilityNode.childIds, accessibilityNode.backendNodeId, accessibilityNode.isFocused, accessibilityNode.labelledBy])
+      .toEqual(["2", false, "textbox", "Email", "a@shop.test", ["3"], 5, true, [9]]);
   });
 });

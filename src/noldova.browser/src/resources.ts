@@ -311,6 +311,10 @@ export class Resources {
   public static readonly valueField: string = "value";
   public static readonly childIdsField: string = "childIds";
   public static readonly propertiesField: string = "properties";
+  public static readonly sourcesField: string = "sources";
+  public static readonly attributeField: string = "attribute";
+  public static readonly attributeValueField: string = "attributeValue";
+  public static readonly relatedNodesField: string = "relatedNodes";
   public static readonly readMilliseconds: number = 1_000;
   public static readonly getFrameTreeMethod: "Page.getFrameTree" = "Page.getFrameTree";
   public static readonly setDeviceMetricsOverrideMethod: "Emulation.setDeviceMetricsOverride" = "Emulation.setDeviceMetricsOverride";

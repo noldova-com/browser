@@ -13,8 +13,8 @@ import { AccessibilityTree } from "../../src/models/accessibility-tree.ts";
 
 describe("AccessibilityTree", () => {
   it("keeps its root, and every node with the root first", () => {
-    const root: AccessibilityNode = new AccessibilityNode("1", false, "RootWebArea", "Cart", "", ["2"], 1, false);
-    const button: AccessibilityNode = new AccessibilityNode("2", false, "button", "Pay", "", [], 2, true);
+    const root: AccessibilityNode = new AccessibilityNode("1", false, "RootWebArea", "Cart", "", ["2"], 1, false, []);
+    const button: AccessibilityNode = new AccessibilityNode("2", false, "button", "Pay", "", [], 2, true, []);
     const tree: AccessibilityTree = new AccessibilityTree(root, [button]);
 
     expect([tree.root, tree.nodes]).toEqual([root, [root, button]]);

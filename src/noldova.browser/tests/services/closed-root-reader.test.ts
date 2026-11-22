@@ -8,12 +8,14 @@
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import type { AccessibilityNode } from "../../src/models/accessibility-node.ts";
 import type { ClosedRead } from "../../src/models/closed-read.ts";
+import { AccessibilitySnapshot } from "../../src/services/accessibility-snapshot.ts";
 import { ClosedRootReader } from "../../src/services/closed-root-reader.ts";
 import { ViewCalls } from "../../src/services/view-calls.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
@@ -25,6 +27,13 @@ function node(id: string, role: string, name: string, childIds: readonly string[
     nodeId: id, ignored: isIgnored, role: { type: "role", value: role }, name: { type: "computedString", value: name }, value: { type: "string", value },
     childIds: [...childIds], backendDOMNodeId: Number(id)
   };
+}
+
+// A node whose name the engine built from the elements `aria-labelledby` names.
+function labelled(id: string, role: string, name: string, elements: readonly number[], childIds: readonly string[] = []): JsonObject {
+  return { ...node(id, role, name, childIds), name: { type: "computedString", value: name, sources: [
+    { type: "relatedElement", attribute: "aria-labelledby", attributeValue: { type: "idrefList", value: "x", relatedNodes: elements.map(t => ({ backendDOMNodeId: t })) } }
+  ] } };
 }
 
 const HOST: JsonObject = node("10", "generic", "", ["11", "12", "13", "16"]);
@@ -130,6 +139,137 @@ describe("ClosedRootReader", () => {
 
     expect([rows(read), read?.isCut]).toEqual([[[1, "heading", "Cart", "", false, null], [2, "StaticText", "Cart", "", false, null]], true]);
     expect(surface.calls.at(-1)?.method).toBe("Accessibility.disable");
+  });
+
+  it("masks in a name each secret field's value below the node, through every level, and keeps the rest of the name and other fields' values", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay with 1234 for a@b.test 1234", ["12", "13"])] }).root;
+    children({ 20: [GROUP, CODE], 12: [EMAIL, BUY] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect(name).toBe("Pay with •••••• for a@b.test ••••••");
+    expect(surface.calls.map(t => [t.method, t.params])).toEqual([
+      ["Accessibility.enable", {}],
+      ["Accessibility.getChildAXNodes", { id: "20" }],
+      ["DOM.describeNode", { backendNodeId: 13 }],
+      ["Accessibility.getChildAXNodes", { id: "13" }],
+      ["Accessibility.getChildAXNodes", { id: "12" }],
+      ["DOM.describeNode", { backendNodeId: 15 }],
+      ["Accessibility.getChildAXNodes", { id: "15" }],
+      ["Accessibility.getChildAXNodes", { id: "14" }],
+      ["Accessibility.disable", {}]
+    ]);
+  });
+
+  it("masks in a name every field value of the elements it is built from through aria-labelledby, wherever they are, and of the nodes below them", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555 to a@b.test", [30, 31])] }).root;
+    const referenced: Readonly<Record<string, readonly JsonObject[]>> = { 30: [node("30", "textbox", "Code", [], "555")], 31: [node("31", "group", "", ["33"])] };
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [...referenced[String(t["backendNodeId"])] ?? []] }));
+    children({ 31: [node("33", "textbox", "Email", [], "a@b.test")] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options);
+
+    expect(name).toBe("Send •••••• to ••••••");
+    expect(surface.calls.filter(t => t.method === "Accessibility.getPartialAXTree").map(t => t.params)).toEqual([
+      { backendNodeId: 30, fetchRelatives: false }, { backendNodeId: 31, fetchRelatives: false }
+    ]);
+    expect(surface.calls.map(t => t.method)).not.toContain("DOM.describeNode");
+  });
+
+  it("masks a name whole when the page removed an element it is built from through aria-labelledby, or the reply leaves the element out", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30, 32])] }).root;
+    const reader: ClosedRootReader = new ClosedRootReader(new ViewCalls(surface.relay), log);
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: t["backendNodeId"] === 30 ? [node("30", "textbox", "Code", [], "555")] : [] }));
+
+    const leftOut: string = await reader.readNameAsync("view-1", button, options);
+    surface.fail("Accessibility.getPartialAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+    const removed: string = await reader.readNameAsync("view-1", button, options);
+
+    expect([leftOut, removed]).toEqual(["••••••", "••••••"]);
+    expect(surface.calls.map(t => t.method)).not.toContain("Accessibility.getChildAXNodes");
+  });
+
+  it("masks a name whole once the step's time is nearly over while it reads the elements the name is built from", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 500, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30])] }).root;
+    surface.answer("Accessibility.getPartialAXTree", { nodes: [node("30", "textbox", "Code", [], "555")] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options);
+
+    expect([name, surface.calls.map(t => t.method)]).toEqual(["••••••", ["Accessibility.enable", "Accessibility.getPartialAXTree", "Accessibility.disable"]]);
+  });
+
+  it("masks in a line's name and its ancestors' names every field value of the elements it is built from through aria-labelledby", async () => {
+    const parts: Readonly<Record<string, readonly JsonObject[]>> = { 10: [node("10", "generic", "", ["40"])], 30: [node("30", "textbox", "Code", [], "555")] };
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [...parts[String(t["backendNodeId"])] ?? []] }));
+    children({ 10: [node("40", "group", "Send 555", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    const read: ClosedRead | null = await readAsync();
+
+    expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Send ••••••", "", false, null], [4, "button", "Send ••••••", "", false, 21]], false]);
+  });
+
+  it("stops, cut, at a line built from an element the page removed through aria-labelledby", async () => {
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: t["backendNodeId"] === 10 ? [node("10", "generic", "", ["40"])] : [] }));
+    children({ 10: [node("40", "group", "Pay", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    const read: ClosedRead | null = await readAsync();
+
+    expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Pay", "", false, null]], true]);
+  });
+
+  it("stops, cut, once the step's time is nearly over while it reads the elements a line's name is built from", async () => {
+    const now: number = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    surface.answerWith("Accessibility.getPartialAXTree", t => {
+      if (t["backendNodeId"] !== 30)
+        return { nodes: [node("10", "generic", "", ["40"])] };
+      clock.mockReturnValue(now + 60_000);
+      return { nodes: [node("30", "textbox", "Code", [], "555")] };
+    });
+    children({ 10: [node("40", "group", "Send 555", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    try {
+      const read: ClosedRead | null = await readAsync();
+
+      expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Send 555", "", false, null]], true]);
+    }
+    finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("gives a name with nothing below it, or no name, as it is, reading nothing", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const nodes: readonly AccessibilityNode[] = AccessibilitySnapshot.readChildren({ nodes: [node("15", "textbox", "Email", [], "a@b.test"), node("12", "generic", "", ["14"])] });
+    const reader: ClosedRootReader = new ClosedRootReader(new ViewCalls(surface.relay), log);
+
+    expect(await Promise.all(nodes.map(t => reader.readNameAsync("view-1", t, options)))).toEqual(["Email", ""]);
+    expect(surface.calls).toEqual([]);
+  });
+
+  it("reads each node below a name once, when a reply names the node as its own descendant", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay now", ["21"])] }).root;
+    children({ 20: [node("21", "group", "", ["20"])], 21: [node("20", "LabelText", "Pay now", ["21"])] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect(name).toBe("Pay now");
+    expect(surface.calls.filter(t => t.method === "Accessibility.getChildAXNodes").map(t => t.params)).toEqual([{ id: "20" }, { id: "21" }]);
+  });
+
+  it("masks a name whole once the step's time is nearly over, since a value below it may be unread", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 500, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay with 1234", ["13"])] }).root;
+    children({ 20: [CODE] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect([name, surface.calls.at(-1)?.method]).toEqual(["••••••", "Accessibility.disable"]);
   });
 
   it("stops, cut, once the step's time is nearly over", async () => {
