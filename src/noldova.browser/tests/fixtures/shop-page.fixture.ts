@@ -33,6 +33,7 @@ export class ShopPage {
   public static readonly BANNER: number = 8;
   public static readonly PASSWORD: number = 9;
   public static readonly SEARCH: number = 10;
+  public static readonly SIGN_IN_FORM: number = 11;
   public static readonly SIGN_IN: number = 12;
   public static readonly EMAIL: number = 13;
   public static readonly COUPON: number = 14;
@@ -56,6 +57,8 @@ export class ShopPage {
     [8, { backendNodeId: 8, nodeName: "DIV", attributes: ["class", "banner"] }],
     [9, { backendNodeId: 9, nodeName: "INPUT", attributes: ["type", "password", "name", "pin"] }],
     [10, { backendNodeId: 10, nodeName: "INPUT", attributes: ["type", "search"] }],
+    [11, { backendNodeId: 11, nodeName: "FORM", attributes: ["id", "sign-in", "aria-label", "Sign in to the shop"], children: [{ backendNodeId: 13 }, { backendNodeId: 9 },
+      { backendNodeId: 12 }] }],
     [12, { backendNodeId: 12, nodeName: "BUTTON", attributes: [] }],
     [13, { backendNodeId: 13, nodeName: "INPUT", attributes: ["type", "email"] }],
     [14, { backendNodeId: 14, nodeName: "INPUT", attributes: ["type", "text", "name", "coupon"] }],

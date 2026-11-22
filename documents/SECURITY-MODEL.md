@@ -383,7 +383,7 @@ Each item over 2,000 characters is cut with an ellipsis.
 Each tool that may change the page classifies its action before it acts, and every call of it raises exactly one request with that risk level.
 A read-only tool whose maximum risk is Low, which only reads the page, raises none: Noldova Desktop runs its call without one and refuses any request it raises.
 A low-risk request says that it doesn't ask the person, and the app's policy decides whether it does.
-A click is classified by the topmost element at its point, which `DOM.getNodeForLocation` finds, not by the referenced element alone, so an element laid over the referenced one is what the click is judged by.
+A click is classified by the topmost element at its point, which `DOM.getNodeForLocation` finds, not by the referenced element alone: an element laid over the referenced one stops the click, and one inside it is read right before each press, so a click on a container whose centre is a high-risk element, such as a submit button of a form with a secret field, presses nothing and ends with `browser.innerElementRiskier`, and the agent clicks that element's own reference, which asks at high risk.
 A medium or high action asks the person as the table says.
 Only a navigation within the allowed origins is a low-risk action: every click, and all typing and every key outside a secret field, is at least medium.
 A page's script can make any of them submit or send, and text the page plants could otherwise lead the agent to act with no card for the person to see.
