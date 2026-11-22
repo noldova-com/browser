@@ -63,8 +63,10 @@ export class ClosedRootReader {
     await this.calls.sendAsync(viewId, Resources.accessibilityEnableMethod, {}, options);
     try {
       const reading: CallOptions = options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes);
-      const labelled: readonly string[] | null = await this.readValuesAsync(viewId, await this.readLabelledByAsync(viewId, node, reading), [], true,
-        reading);
+      const referenced: readonly AccessibilityNode[] | null = await this.readLabelledByAsync(viewId, node, reading);
+      if (Object.isNull(referenced))
+        return Resources.maskedValue;
+      const labelled: readonly string[] | null = await this.readValuesAsync(viewId, referenced, [], true, reading);
       if (Object.isNull(labelled))
         return Resources.maskedValue;
       const below: readonly string[] | null = await this.readValuesAsync(viewId, await this.readChildrenAsync(viewId, node, reading), [node.id], false,
@@ -102,8 +104,8 @@ export class ClosedRootReader {
       const isShown: boolean = !node.isIgnored && !(Resources.liftedRoles.has(node.role) && node.name === "");
       const isListed: boolean = isShown && (!isInteractive || Resources.actionableRoles.has(node.role) || node.role === Resources.headingRole);
       const isMasked: boolean = await this.isMaskedAsync(viewId, node, options);
-      const labelled: readonly string[] | null = await this.readValuesAsync(viewId, await this.readLabelledByAsync(viewId, node, options), [], true,
-        options);
+      const referenced: readonly AccessibilityNode[] | null = await this.readLabelledByAsync(viewId, node, options);
+      const labelled: readonly string[] | null = Object.isNull(referenced) ? null : await this.readValuesAsync(viewId, referenced, [], true, options);
       if (Object.isNull(labelled))
         return new ClosedRead(lines, true, isDeeper);
       const secrets: readonly string[] = isMasked ? [node.value, ...labelled] : labelled;
@@ -173,14 +175,17 @@ export class ClosedRootReader {
     return values;
   }
 
-  // The nodes of the elements the node's name is built from through `aria-labelledby`, wherever they are in the page; none for an element
-  // the page removed.
-  private async readLabelledByAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<readonly AccessibilityNode[]> {
+  // The nodes of the elements the node's name is built from through `aria-labelledby`, wherever they are in the page. None when the page
+  // removed one of them: the name was built while it was there, so a value from it may be in the name, unread.
+  private async readLabelledByAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<readonly AccessibilityNode[] | null> {
     const nodes: AccessibilityNode[] = [];
     for (const element of node.labelledBy) {
       const read: readonly AccessibilityNode[] | null = await ClosedRootReader.readNodesAsync(
         () => this.calls.sendAsync(viewId, Resources.getPartialAXTreeMethod, { backendNodeId: element, fetchRelatives: false }, options));
-      nodes.push(...read?.filter(t => t.backendNodeId === element) ?? []);
+      const found: AccessibilityNode | undefined = read?.find(t => t.backendNodeId === element);
+      if (Object.isUndefined(found))
+        return null;
+      nodes.push(found);
     }
     return nodes;
   }

@@ -164,7 +164,7 @@ describe("ClosedRootReader", () => {
 
   it("masks in a name every field value of the elements it is built from through aria-labelledby, wherever they are, and of the nodes below them", async () => {
     const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
-    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555 to a@b.test", [30, 31, 32])] }).root;
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555 to a@b.test", [30, 31])] }).root;
     const referenced: Readonly<Record<string, readonly JsonObject[]>> = { 30: [node("30", "textbox", "Code", [], "555")], 31: [node("31", "group", "", ["33"])] };
     surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [...referenced[String(t["backendNodeId"])] ?? []] }));
     children({ 31: [node("33", "textbox", "Email", [], "a@b.test")] });
@@ -173,17 +173,23 @@ describe("ClosedRootReader", () => {
 
     expect(name).toBe("Send •••••• to ••••••");
     expect(surface.calls.filter(t => t.method === "Accessibility.getPartialAXTree").map(t => t.params)).toEqual([
-      { backendNodeId: 30, fetchRelatives: false }, { backendNodeId: 31, fetchRelatives: false }, { backendNodeId: 32, fetchRelatives: false }
+      { backendNodeId: 30, fetchRelatives: false }, { backendNodeId: 31, fetchRelatives: false }
     ]);
     expect(surface.calls.map(t => t.method)).not.toContain("DOM.describeNode");
   });
 
-  it("keeps a name whole when the page removed the elements it is built from through aria-labelledby", async () => {
+  it("masks a name whole when the page removed an element it is built from through aria-labelledby, or the reply leaves the element out", async () => {
     const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
-    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30])] }).root;
-    surface.fail("Accessibility.getPartialAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30, 32])] }).root;
+    const reader: ClosedRootReader = new ClosedRootReader(new ViewCalls(surface.relay), log);
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: t["backendNodeId"] === 30 ? [node("30", "textbox", "Code", [], "555")] : [] }));
 
-    expect(await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options)).toBe("Send 555");
+    const leftOut: string = await reader.readNameAsync("view-1", button, options);
+    surface.fail("Accessibility.getPartialAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+    const removed: string = await reader.readNameAsync("view-1", button, options);
+
+    expect([leftOut, removed]).toEqual(["••••••", "••••••"]);
+    expect(surface.calls.map(t => t.method)).not.toContain("Accessibility.getChildAXNodes");
   });
 
   it("masks a name whole once the step's time is nearly over while it reads the elements the name is built from", async () => {
@@ -204,6 +210,15 @@ describe("ClosedRootReader", () => {
     const read: ClosedRead | null = await readAsync();
 
     expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Send ••••••", "", false, null], [4, "button", "Send ••••••", "", false, 21]], false]);
+  });
+
+  it("stops, cut, at a line built from an element the page removed through aria-labelledby", async () => {
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: t["backendNodeId"] === 10 ? [node("10", "generic", "", ["40"])] : [] }));
+    children({ 10: [node("40", "group", "Pay", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    const read: ClosedRead | null = await readAsync();
+
+    expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Pay", "", false, null]], true]);
   });
 
   it("stops, cut, once the step's time is nearly over while it reads the elements a line's name is built from", async () => {
