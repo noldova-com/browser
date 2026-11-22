@@ -197,6 +197,20 @@ describe("a call while a navigation is pending", () => {
     expect(bench.methods.slice(before)).toEqual([]);
   });
 
+  it("waits on a navigation that started before any read of a view followed from its opening, and reports the page still loading", async () => {
+    void bench.kit.navigations.followAsync(ToolBench.VIEW);
+    await vi.advanceTimersByTimeAsync(0);
+    startNavigation();
+    const before: number = bench.methods.length;
+    const running: Promise<ToolResult> = bench.runAsync(new SnapshotTool(bench.kit), bench.call({}));
+    await vi.advanceTimersByTimeAsync(5_000 - Resources.readMarginMilliseconds);
+
+    const result: ToolResult = await running;
+
+    expect([texts(result).slice(-2), bench.methods.slice(before)]).toEqual([[Resources.formatNavigated("https://shop.test/cart/", "Cart"), Resources.stillLoading],
+      ["Page.getNavigationHistory"]]);
+  });
+
   it("fails a navigation as the page still loading when the next document doesn't come in time, and sends no enable, which would wait for it", async () => {
     await watchAsync();
     startNavigation();

@@ -233,6 +233,23 @@ test.describe("the agent tools on a real page", () => {
     await expect.poll(() => app.viewPages.listAsync(), { message: "The next page never loaded once its answer came." }).toEqual([new ViewPage(docs.url("/next"), NEXT_TITLE)]);
   });
 
+  test("reads of a page that went on to a held page before any tool read it answer in their time, reporting that page as still loading", async ({ app, servers }) => {
+    const docs = await servers.startAsync("docs.localhost", { "/": LINKS, "/next": NEXT });
+    const bindings = await openAsync(app, docs);
+    const release = docs.hold("/next");
+    await app.viewPages.runAtAsync(docs.url("/"), "setTimeout(() => location.assign('/next')); ''");
+    await expect.poll(() => docs.requests.some(t => t.path === "/next"), { message: "The page never asked for the next page." }).toBe(true);
+
+    const read = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot"));
+    const logged = JSON.stringify(await callAsync(app, bindings, "browser_console"));
+    release();
+
+    expect(read.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`,
+      "The page is still loading; wait for it with browser_wait_for before you act on it."]);
+    expect(logged, "The console read named another page.").toContain(`"url":"${docs.url("/")}"`);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The next page never loaded once its answer came." }).toEqual([new ViewPage(docs.url("/next"), NEXT_TITLE)]);
+  });
+
   test("typing into a field that replaces itself on focus types nothing and fails as a changed page, and typing again after a new snapshot works", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": SWAPPING });
     const bindings = await openAsync(app, docs);

@@ -7,9 +7,9 @@
  */
 
 import { BrowserEvents, BrowserMethods } from "@noldova/browser.protocol";
-import { FailureCode, ShellClients, WebViewEventKind } from "@noldova/desktop.protocol";
-import { ClientClosure, type IMethodHandler, MethodFailureException, MethodRegisteredException, ProductFileException, ProductInfo, RequestContext,
-  ToolRegisteredException, type ToolSession } from "@noldova/desktop.runtime";
+import { FailureCode, ShellClients, WebViewEventKind, WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { ClientClosure, type IMethodHandler, MethodFailureException, MethodRegisteredException, ModuleDeactivatedException, ProductFileException, ProductInfo,
+  RequestContext, ToolRegisteredException, type ToolSession, WebViewFailureException } from "@noldova/desktop.runtime";
 import { afterEach, describe, expect, it, type MockInstance, vi } from "vitest";
 
 import { PageInstanceInvalidException } from "../src/exceptions/page-instance-invalid.exception.ts";
@@ -33,11 +33,19 @@ import type { JsonObject, JsonValue } from "../src/types/json-value.ts";
 import { BrowserContext, linesAsync, SqliteModuleDatabase, writtenTo } from "./fixtures/desktop-fakes.fixture.ts";
 import { ProductFile } from "./fixtures/product-file.fixture.ts";
 import { ScriptedViews } from "./fixtures/scripted-views.fixture.ts";
+import { UnhandledRejections } from "./fixtures/unhandled-rejections.fixture.ts";
 
 const REFERENCE: SnapshotReference = new SnapshotReference("view-1", "document", 7);
 const PAGE: ShownPage = new ShownPage("https://shop.test/", "Shop");
 const FRAME: JsonValue = { frameTree: { frame: { id: "F1", loaderId: "L1", url: "https://shop.test/", securityOrigin: "https://shop.test" } } };
 const TREE: JsonValue = { nodes: [{ nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Shop" } }] };
+
+// Views whose frame tree, which the part reads as it follows each view, fails as a view's does, unless a test scripts it.
+function viewsOf(viewIds: readonly string[]): ScriptedViews {
+  const surface: ScriptedViews = new ScriptedViews(viewIds);
+  surface.fail("Page.getFrameTree", new WebViewFailure(WebViewFailureKind.Crashed));
+  return surface;
+}
 
 function pageViews(...instances: readonly string[]): ScriptedViews {
   const surface: ScriptedViews = new ScriptedViews(instances.map((_instance, index) => `view-${index + 1}`));
@@ -81,6 +89,7 @@ function requestAsync(context: BrowserContext, method: string, payload: JsonValu
 
 describe("RuntimePart", () => {
   afterEach(() => {
+    UnhandledRejections.stop();
     vi.restoreAllMocks();
   });
 
@@ -172,7 +181,7 @@ describe("RuntimePart", () => {
   });
 
   it("withdraws what it registered when the registry already holds one of its tools, and follows no view", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     context.tools.register(ToolDescriptors.snapshot, { handleAsync: async () => ToolResults.text("tree", PAGE) });
 
@@ -187,7 +196,7 @@ describe("RuntimePart", () => {
   });
 
   it("keeps a page's record, which a later run reads, until the window forgets it", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     const part: RuntimePart = new RuntimePart();
     await part.activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -195,7 +204,7 @@ describe("RuntimePart", () => {
     expect(await requestAsync(context, BrowserMethods.readPage, { instance })).toBeNull();
     expect(await requestAsync(context, BrowserMethods.rememberPage, { instance, profileKey: "workspace-1", url: "https://docs.example.com/pricing" })).toBeNull();
     await part.deactivateAsync();
-    const later: BrowserContext = new BrowserContext(new ScriptedViews([]), context.database);
+    const later: BrowserContext = new BrowserContext(viewsOf([]), context.database);
     await new RuntimePart().activateAsync(later);
 
     expect(await requestAsync(later, BrowserMethods.readPage, { instance })).toEqual({ instance, profileKey: "workspace-1", url: "https://docs.example.com/pricing" });
@@ -204,7 +213,7 @@ describe("RuntimePart", () => {
   });
 
   it("claims a page for one window at a time, checking and holding in one step, until that window forgets it or closes, or its connection goes, and a later run holds none", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     const part: RuntimePart = new RuntimePart();
     await part.activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -228,13 +237,13 @@ describe("RuntimePart", () => {
     expect(await claim(4, 1, other)).toEqual({ agentName: null, isClaimed: true, isHere: false, record: null });
 
     await part.deactivateAsync();
-    const later: BrowserContext = new BrowserContext(new ScriptedViews([]), context.database);
+    const later: BrowserContext = new BrowserContext(viewsOf([]), context.database);
     await new RuntimePart().activateAsync(later);
     expect(await requestAsync(later, BrowserMethods.claimPage, { instance }, ShellClients.mainProcess, 9)).toEqual({ agentName: null, isClaimed: true, isHere: false, record });
   });
 
   it("holds the pages a window reports open, shown or not, leaves a page another window has to it, and keeps its record from that other window", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const other: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
@@ -300,7 +309,7 @@ describe("RuntimePart", () => {
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const context: BrowserContext = new BrowserContext(pageViews(instance));
     await new RuntimePart().activateAsync(context);
-    context.database.failNext("run", new Error("The disk is full."));
+    context.database.failNext("run", Object.assign(new Error("The disk is full."), { code: "ERR_SQLITE_ERROR" }));
 
     const result: unknown = await context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" }).callAsync("browser_snapshot", {});
 
@@ -308,8 +317,19 @@ describe("RuntimePart", () => {
       .toEqual([expect.objectContaining({ isFailure: false }), ["The agent of a page wasn't recorded, so a window may not count it after a restart: Error: The disk is full."]]);
   });
 
+  it("fails the call, logging nothing, when recording its agent fails with a bug rather than the database's failure", async () => {
+    const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const context: BrowserContext = new BrowserContext(pageViews(instance));
+    await new RuntimePart().activateAsync(context);
+    context.database.failNext("run", new TypeError("The store broke."));
+
+    const result: unknown = await context.tools.openSession("conversation-1", { page: instance, profileKey: "workspace-1", agentName: "Scout" }).callAsync("browser_snapshot", {});
+
+    expect([result, writtenTo(context.log)]).toEqual([expect.objectContaining({ isFailure: true }), []]);
+  });
+
   it("lets go of a page the asking window has, keeping its record, and leaves a page another window has to it", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     const record = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
@@ -323,7 +343,7 @@ describe("RuntimePart", () => {
   });
 
   it("clears a workspace's browsing data", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     await new RuntimePart().activateAsync(context);
 
@@ -332,7 +352,7 @@ describe("RuntimePart", () => {
   });
 
   it("refuses the page and browsing-data requests from the command line, a module's own entry or no window, and keeps or clears nothing", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     await new RuntimePart().activateAsync(context);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
@@ -355,7 +375,7 @@ describe("RuntimePart", () => {
   });
 
   it("fails page and browsing-data requests that aren't ones", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
 
     const failures: readonly (readonly [string, new (...args: never[]) => WindowRequestMalformedException])[] = [
@@ -371,7 +391,7 @@ describe("RuntimePart", () => {
   it("fails the app's name when the build has no product file", async () => {
     using product: ProductFile = new ProductFile();
     vi.spyOn(ProductInfo, "current", "get").mockImplementation(() => ProductInfo.read(product.missing));
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
 
     await expect(requestAsync(context, BrowserMethods.readAppName, null)).rejects.toThrow(ProductFileException);
@@ -380,7 +400,7 @@ describe("RuntimePart", () => {
   it("gives the app's name, as its build's product file names it, to any client", async () => {
     using product: ProductFile = new ProductFile();
     vi.spyOn(ProductInfo, "current", "get").mockImplementation(() => ProductInfo.read(product.file));
-    const context: BrowserContext = new BrowserContext(new ScriptedViews([]));
+    const context: BrowserContext = new BrowserContext(viewsOf([]));
     await new RuntimePart().activateAsync(context);
 
     expect(await requestAsync(context, BrowserMethods.readAppName, null)).toBe(ProductFile.NAME);
@@ -407,7 +427,7 @@ describe("RuntimePart", () => {
   });
 
   it("gives a view that opens its workspace's origins, as the module's database keeps them", async () => {
-    const surface: ScriptedViews = new ScriptedViews([]);
+    const surface: ScriptedViews = viewsOf([]);
     await partOf().part.activateAsync(new BrowserContext(surface, await databaseWithAsync("workspace-1", ["https://kept.example"])));
 
     const allowed: Promise<readonly string[]> = surface.allowedAsync("view-1");
@@ -417,7 +437,7 @@ describe("RuntimePart", () => {
   });
 
   it("gives the views already open when it activates their workspace's origins", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
+    const surface: ScriptedViews = viewsOf(["view-1", "view-2"]);
     surface.profileKeys.set("view-2", "workspace-2");
     const allowed: Promise<(readonly string[])[]> = Promise.all(["view-1", "view-2"].map(t => surface.allowedAsync(t)));
     await partOf().part.activateAsync(new BrowserContext(surface, await databaseWithAsync("workspace-2", ["https://kept.example"])));
@@ -426,7 +446,7 @@ describe("RuntimePart", () => {
   });
 
   it("answers the window's word on a page only once the page's views have their workspace's origins, and null", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
+    const surface: ScriptedViews = viewsOf(["view-1", "view-2"]);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     surface.instances.set("view-1", instance);
     const context: BrowserContext = new BrowserContext(surface, await databaseWithAsync("workspace-1", ["https://kept.example"]));
@@ -453,7 +473,7 @@ describe("RuntimePart", () => {
   });
 
   it("answers null and logs the window's word on a page with no open view, giving no view origins", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface, await databaseWithAsync("workspace-1", ["https://kept.example"]));
     const given: Promise<readonly string[]> = surface.allowedAsync("view-1");
     await new RuntimePart().activateAsync(context);
@@ -560,7 +580,7 @@ describe("RuntimePart", () => {
     });
 
   it("answers a typed address: its origin joins the workspace's views and the database, which a later run reads", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     const part: RuntimePart = new RuntimePart();
     await part.activateAsync(context);
@@ -570,7 +590,7 @@ describe("RuntimePart", () => {
     expect(surface.allowedOrigins.get("view-1")).toEqual(["https://docs.example.com"]);
     await part.deactivateAsync();
 
-    const later: ScriptedViews = new ScriptedViews([]);
+    const later: ScriptedViews = viewsOf([]);
     await new RuntimePart().activateAsync(new BrowserContext(later, context.database));
     const allowed: Promise<readonly string[]> = later.allowedAsync("view-2");
     later.open("view-2", "workspace-1");
@@ -579,7 +599,7 @@ describe("RuntimePart", () => {
   });
 
   it("allows the sites on this computer or network that the settings name, and once the person changes them, the new ones alone, in every open view", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     context.settingValues.set("browser.localSites", "http://127.0.0.1:4173, not a site");
     await new RuntimePart().activateAsync(context);
@@ -595,7 +615,7 @@ describe("RuntimePart", () => {
   });
 
   it("lets a page's view follow a typed address's redirect without keeping it, ends it on the window's word, and forgets it once the view closes", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
+    const surface: ScriptedViews = viewsOf(["view-1", "view-2"]);
     const instance: string = "0f8fad5b-d9cb-469f-a165-70867728950e";
     surface.instances.set("view-1", instance);
     const context: BrowserContext = new BrowserContext(surface);
@@ -615,7 +635,7 @@ describe("RuntimePart", () => {
   });
 
   it("answers a typed address it refuses with the reason, and keeps nothing", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews(["view-1"]));
+    const context: BrowserContext = new BrowserContext(viewsOf(["view-1"]));
     await new RuntimePart().activateAsync(context);
 
     expect(await typeAsync(context, { profileKey: "workspace-1", url: "file:///etc/hosts" })).toEqual({ kind: "Refused", reason: "NotWeb" });
@@ -623,7 +643,7 @@ describe("RuntimePart", () => {
   });
 
   it("refuses a typed address from the command line, a module's own entry or no window, and keeps nothing", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const context: BrowserContext = new BrowserContext(surface);
     await new RuntimePart().activateAsync(context);
     const request: JsonValue = { profileKey: "workspace-1", url: "https://docs.example.com/pricing" };
@@ -638,7 +658,7 @@ describe("RuntimePart", () => {
   });
 
   it("fails a typed-address request that isn't one", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews(["view-1"]));
+    const context: BrowserContext = new BrowserContext(viewsOf(["view-1"]));
     await new RuntimePart().activateAsync(context);
 
     await expect(typeAsync(context, { profileKey: "workspace-1" })).rejects.toThrow(WindowRequestUnreadException);
@@ -654,7 +674,7 @@ describe("RuntimePart", () => {
   });
 
   it("ignores the view events it doesn't follow", async () => {
-    const surface: ScriptedViews = new ScriptedViews([]);
+    const surface: ScriptedViews = viewsOf([]);
     const context: BrowserContext = new BrowserContext(surface);
     await partOf().part.activateAsync(context);
 
@@ -667,7 +687,7 @@ describe("RuntimePart", () => {
   });
 
   it("logs the settings' new sites it couldn't give the open views", async () => {
-    const context: BrowserContext = new BrowserContext(new ScriptedViews(["view-1"]));
+    const context: BrowserContext = new BrowserContext(viewsOf(["view-1"]));
     context.database.run("DROP TABLE allowed_origins");
     await partOf().part.activateAsync(context);
 
@@ -679,8 +699,51 @@ describe("RuntimePart", () => {
     ]);
   });
 
+  it("rethrows, logging nothing, a bug in giving the settings' new sites or a view's origins, rather than the main process's or the database's failure", async () => {
+    const surface: ScriptedViews = viewsOf(["view-1"]);
+    const context: BrowserContext = new BrowserContext(surface);
+    const applied: Promise<readonly string[]> = surface.allowedAsync("view-1");
+    await partOf().part.activateAsync(context);
+    await applied;
+    const settingsBug: TypeError = new TypeError("The settings' origins broke.");
+    const viewBug: TypeError = new TypeError("The view's origins broke.");
+
+    surface.webViews.answer("setAllowedOriginsAsync", () => Promise.reject(settingsBug));
+    const fromSettings: Promise<unknown> = UnhandledRejections.nextAsync();
+    context.changeSetting("browser.localSites", "http://127.0.0.1:4173");
+    const settingsRejection: unknown = await fromSettings;
+    surface.webViews.answer("setAllowedOriginsAsync", () => Promise.reject(viewBug));
+    const fromView: Promise<unknown> = UnhandledRejections.nextAsync();
+    surface.open("view-2", "workspace-1");
+
+    expect([settingsRejection, await fromView, writtenTo(context.log)]).toEqual([settingsBug, viewBug, []]);
+  });
+
+  it("logs the settings' new sites and a view's origins it couldn't give when the main process fails the call or the part stops", async () => {
+    const failures: readonly Error[] = [new WebViewFailureException(new WebViewFailure(WebViewFailureKind.ViewClosed)), new ModuleDeactivatedException("browser")];
+    const logged: (readonly string[])[] = [];
+    for (const failure of failures) {
+      const surface: ScriptedViews = viewsOf(["view-1"]);
+      const context: BrowserContext = new BrowserContext(surface);
+      const applied: Promise<readonly string[]> = surface.allowedAsync("view-1");
+      await partOf().part.activateAsync(context);
+      await applied;
+      surface.webViews.answer("setAllowedOriginsAsync", () => Promise.reject(failure));
+
+      const fromSettings: Promise<readonly string[]> = linesAsync(context.log, 1);
+      context.changeSetting("browser.localSites", "http://127.0.0.1:4173");
+      await fromSettings;
+      const fromView: Promise<readonly string[]> = linesAsync(context.log, 2);
+      surface.open("view-2", "workspace-1");
+      logged.push(await fromView);
+    }
+
+    expect(logged).toEqual(failures.map(t => [`The sites on this computer or network weren't given to every open page: ${String(t)}`,
+      `The allowed origins of view view-2 weren't applied: ${String(t)}`]));
+  });
+
   it("logs origins it couldn't give a view", async () => {
-    const surface: ScriptedViews = new ScriptedViews([]);
+    const surface: ScriptedViews = viewsOf([]);
     const context: BrowserContext = new BrowserContext(surface);
     await partOf().part.activateAsync(context);
     context.database.run("DROP TABLE allowed_origins");
@@ -693,7 +756,7 @@ describe("RuntimePart", () => {
   });
 
   it("forgets a closed view's references and cursors, and only the references of a view that crashed or lost its profile", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const { part, states } = partOf();
     await part.activateAsync(new BrowserContext(surface));
     for (const kind of [WebViewEventKind.Crashed, WebViewEventKind.ProfileCleared]) {
@@ -713,8 +776,8 @@ describe("RuntimePart", () => {
     expect(states().readCursor("one", "view-1")).toBe(0);
   });
 
-  it("drops a closed view's Runtime tracker and console ring and stops hearing the view, and keeps another view's", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
+  it("drops a closed view's Runtime tracker, console ring and navigations and stops hearing the view, and keeps another view's", async () => {
+    const surface: ScriptedViews = viewsOf(["view-1", "view-2"]);
     surface.acknowledge(...ScriptedViews.emptyReplies);
     const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
     await new RuntimePart().activateAsync(new BrowserContext(surface));
@@ -728,11 +791,25 @@ describe("RuntimePart", () => {
     const listening: number = surface.protocolListenerCount - before;
     kept.consoles?.start("view-1", "https://shop.test");
 
-    expect([listening, kept.consoles?.read("view-1", 0).next]).toEqual([1, 0]);
+    expect([listening, kept.consoles?.read("view-1", 0).next]).toEqual([0, 0]);
+  });
+
+  it("follows the navigations of each view open at its start and of each view that opens later, from before any read", async () => {
+    const surface: ScriptedViews = viewsOf(["view-1"]);
+    const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
+    await new RuntimePart().activateAsync(new BrowserContext(surface));
+    surface.open("view-2", "workspace-1");
+    const pending: boolean[] = ["view-1", "view-2"].map(view => {
+      surface.emitProtocolEvent(view, "Page.frameNavigated", { frame: { id: `${view}-main`, url: "https://shop.test/" } });
+      surface.emitProtocolEvent(view, "Page.frameStartedNavigating", { frameId: `${view}-main`, url: "https://shop.test/help", loaderId: "L2", navigationType: "differentDocument" });
+      return kitOf(create).navigations.isPending(view);
+    });
+
+    expect(pending).toEqual([true, true]);
   });
 
   it("drops the Runtime tracker of a view that crashed, keeping its ring's entries, so its next use starts the new debugging session's Runtime again", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     surface.acknowledge(...ScriptedViews.emptyReplies);
     const create: MockInstance<typeof BrowserTools.create> = vi.spyOn(BrowserTools, "create");
     await new RuntimePart().activateAsync(new BrowserContext(surface));
@@ -748,7 +825,7 @@ describe("RuntimePart", () => {
   });
 
   it("stops following the views when it deactivates, and deactivating again or first does nothing", async () => {
-    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    const surface: ScriptedViews = viewsOf(["view-1"]);
     const { part, states } = partOf();
     await expect(part.deactivateAsync()).resolves.toBeUndefined();
     await part.activateAsync(new BrowserContext(surface));

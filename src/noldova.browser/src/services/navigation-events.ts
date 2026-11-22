@@ -34,6 +34,15 @@ export class NavigationEvents {
     return event.method === Resources.frameNavigatedEvent && JsonShapes.isObject(frame) && frame[Resources.idField] === frameId;
   }
 
+  // The frame whose document the event commits, when it is the view's main frame, the one frame with no parent.
+  public static mainCommitOf(event: WebViewProtocolEvent): string | null {
+    const frame: JsonValue | undefined = event.params[Resources.frameField];
+    if (event.method !== Resources.frameNavigatedEvent || !JsonShapes.isObject(frame) || !Object.isUndefined(frame[Resources.parentIdField]))
+      return null;
+    const id: JsonValue | undefined = frame[Resources.idField];
+    return Object.isString(id) ? id : null;
+  }
+
   // Whether the frame stopped loading, which ends its navigation only once it started, as the old document's stop may come before.
   public static isStop(event: WebViewProtocolEvent, frameId: string): boolean {
     return event.method === Resources.frameStoppedLoadingEvent && event.params[Resources.frameIdField] === frameId;

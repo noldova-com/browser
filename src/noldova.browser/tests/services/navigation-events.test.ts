@@ -51,6 +51,18 @@ describe("NavigationEvents", () => {
     expect(commits).toEqual([true, false, false, false]);
   });
 
+  it("names the main frame a commit names, and none for a frame with a parent, an id that isn't text, no frame or another event", () => {
+    const named: (string | null)[] = [
+      event("Page.frameNavigated", { frame: { id: "main", url: "https://shop.test/" } }),
+      event("Page.frameNavigated", { frame: { id: "inner", parentId: "main", url: "https://shop.test/ad" } }),
+      event("Page.frameNavigated", { frame: { id: 7, url: "https://shop.test/" } }),
+      event("Page.frameNavigated", { frame: "main" }),
+      event("Page.frameStartedNavigating", { frame: { id: "main" } }),
+    ].map(t => NavigationEvents.mainCommitOf(t));
+
+    expect(named).toEqual(["main", null, null, null, null]);
+  });
+
   it("finds the frame's stop, and none of another frame or event", () => {
     const stops: boolean[] = [
       event("Page.frameStoppedLoading", { frameId: "main" }),

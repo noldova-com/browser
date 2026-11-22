@@ -345,6 +345,8 @@ export class Resources {
   public static readonly exceptionSource: string = "exception";
   public static readonly parentIdField: string = "parentId";
   public static readonly quadPoints: number = 4;
+  // The code of the error Node's SQLite engine throws for a statement that fails.
+  public static readonly databaseFailureCode: string = "ERR_SQLITE_ERROR";
   public static readonly originsMigrationId: string = "create-allowed-origins";
   public static readonly createOriginsTable: string =
     "CREATE TABLE allowed_origins (profile_key TEXT NOT NULL, origin TEXT NOT NULL, position INTEGER NOT NULL, PRIMARY KEY (profile_key, origin)) STRICT";

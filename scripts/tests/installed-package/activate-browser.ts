@@ -15,8 +15,8 @@ import { isDeepStrictEqual } from "node:util";
 import { RuntimePart } from "@noldova/browser/runtime";
 import { TypedAddressAllowed, TypedAddressRequest } from "@noldova/browser.protocol";
 import { type JsonObject, JsonReader, type JsonValue } from "@noldova/context.json";
-import { QualifiedName, ShellClients, WebViewEvent, WebViewEventKind, WebViewInfo, WebViewPane } from "@noldova/desktop.protocol";
-import { EventChannel, type IMethodHandler, type IRuntimePart, Registration, RequestContext } from "@noldova/desktop.runtime";
+import { QualifiedName, ShellClients, WebViewEvent, WebViewEventKind, WebViewFailure, WebViewFailureKind, WebViewInfo, WebViewPane } from "@noldova/desktop.protocol";
+import { EventChannel, type IMethodHandler, type IRuntimePart, Registration, RequestContext, WebViewFailureException } from "@noldova/desktop.runtime";
 import { FakeRuntimePartContext } from "@noldova/desktop.runtime/testing";
 
 import { InstalledPackageException } from "../../exceptions/installed-package.exception.ts";
@@ -79,6 +79,8 @@ context.webViews.answer("setAllowedOriginsAsync", (viewId, origins) => {
   return Promise.resolve();
 });
 context.webViews.answer("setControlledAsync", () => Promise.resolve());
+// The part reads each view's frame tree as it opens; the installed view doesn't answer, as a view that went away doesn't.
+context.webViews.relay.answer("sendAsync", () => Promise.reject(new WebViewFailureException(new WebViewFailure(WebViewFailureKind.ViewClosed))));
 const following: () => readonly number[] = (): readonly number[] => [context.webViews.activeCallsOf("onViewEvent").length, context.tools.activeCallsOf("onSessionEnded").length];
 
 await part.activateAsync(context);

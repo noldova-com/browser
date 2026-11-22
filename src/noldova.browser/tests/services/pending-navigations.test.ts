@@ -6,12 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { WebViewEventKind } from "@noldova/desktop.protocol";
-import { ToolAbortReason } from "@noldova/desktop.runtime";
+import { WebViewEventKind, WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { ModuleDeactivatedException, ToolAbortReason } from "@noldova/desktop.runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CallCancelledException } from "../../src/exceptions/call-cancelled.exception.ts";
 import { PendingNavigations } from "../../src/services/pending-navigations.ts";
+import type { JsonValue } from "../../src/types/json-value.ts";
 import { ScriptedViews } from "../fixtures/scripted-views.fixture.ts";
 
 describe("PendingNavigations", () => {
@@ -88,6 +89,102 @@ describe("PendingNavigations", () => {
     expect([old, navigations.isPending("view-1"), surface.protocolListenerCount, surface.viewListenerCount]).toEqual([false, true, 1, 1]);
   });
 
+  it("follows a view before any read once a commit names its main frame, and no frame's navigation before that or an inner frame's after", () => {
+    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    surface.hang("Page.getFrameTree");
+    const navigations: PendingNavigations = new PendingNavigations(surface.webViews);
+    void navigations.followAsync("view-1");
+    start(surface);
+    const unnamed: boolean = navigations.isPending("view-1");
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "main", url: "https://shop.test/" } });
+    surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "inner", parentId: "main", url: "https://shop.test/ad" } });
+    start(surface, "inner");
+    const inner: boolean = navigations.isPending("view-1");
+    start(surface);
+    void navigations.followAsync("view-1");
+
+    expect([unnamed, inner, navigations.isPending("view-1"), surface.protocolListenerCount, surface.viewListenerCount]).toEqual([false, false, true, 1, 1]);
+  });
+
+  const TREE: JsonValue = { frameTree: { frame: { id: "main", loaderId: "L1", url: "https://shop.test/", securityOrigin: "https://shop.test" } } };
+
+  it("names a followed view's main frame from its frame tree, read within the longest wait Noldova Desktop takes, so a navigation that starts before any commit is followed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const surface: ScriptedViews = new ScriptedViews(["view-1"]);
+    surface.answer("Page.getFrameTree", TREE);
+    const navigations: PendingNavigations = new PendingNavigations(surface.webViews);
+    void navigations.followAsync("view-1");
+    await vi.advanceTimersByTimeAsync(0);
+    start(surface);
+
+    expect([navigations.isPending("view-1"), surface.calls.map(t => [t.method, t.timeoutMilliseconds])]).toEqual([true, [["Page.getFrameTree", 10_000]]]);
+  });
+
+  it("keeps the main frame a commit named before the frame tree answered, and leaves unnamed a view whose frame tree fails or isn't an object", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const named: ScriptedViews = new ScriptedViews(["view-1"]);
+    let release: (value: JsonValue) => void = () => undefined;
+    named.answerWith("Page.getFrameTree", () => new Promise<JsonValue>(resolve => release = resolve));
+    const failing: ScriptedViews = new ScriptedViews(["view-1"]);
+    failing.fail("Page.getFrameTree", new WebViewFailure(WebViewFailureKind.Crashed));
+    const odd: ScriptedViews = new ScriptedViews(["view-1"]);
+    odd.answer("Page.getFrameTree", "main");
+    const pending: boolean[] = [];
+    for (const surface of [named, failing, odd]) {
+      const navigations: PendingNavigations = new PendingNavigations(surface.webViews);
+      void navigations.followAsync("view-1");
+      await vi.advanceTimersByTimeAsync(0);
+      start(surface, "main");
+      const unnamed: boolean = navigations.isPending("view-1");
+      surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "first", url: "https://shop.test/" } });
+      release(TREE);
+      await vi.advanceTimersByTimeAsync(0);
+      start(surface, "first");
+      const first: boolean = navigations.isPending("view-1");
+      surface.emitProtocolEvent("view-1", "Page.frameNavigated", { frame: { id: "first", url: "https://shop.test/" } });
+      start(surface, "main");
+      pending.push(unnamed, first, navigations.isPending("view-1"));
+    }
+
+    expect(pending).toEqual([false, true, false, false, true, false, false, true, false]);
+  });
+
+  it("settles following a view whose frame tree fails as the view does, as the part stops or is malformed, and fails it with any other failure of the read", async () => {
+    const failing: ScriptedViews = new ScriptedViews(["view-1"]);
+    failing.fail("Page.getFrameTree", new WebViewFailure(WebViewFailureKind.Crashed));
+    const stopped: ScriptedViews = new ScriptedViews(["view-1"]);
+    stopped.answerWith("Page.getFrameTree", () => {
+      throw new ModuleDeactivatedException("browser");
+    });
+    const malformed: ScriptedViews = new ScriptedViews(["view-1"]);
+    malformed.answer("Page.getFrameTree", { frameTree: {} });
+    const broken: ScriptedViews = new ScriptedViews(["view-1"]);
+    const bug: TypeError = new TypeError("The relay broke.");
+    broken.answerWith("Page.getFrameTree", () => {
+      throw bug;
+    });
+
+    await expect(new PendingNavigations(failing.webViews).followAsync("view-1")).resolves.toBeUndefined();
+    await expect(new PendingNavigations(stopped.webViews).followAsync("view-1")).resolves.toBeUndefined();
+    await expect(new PendingNavigations(malformed.webViews).followAsync("view-1")).resolves.toBeUndefined();
+    await expect(new PendingNavigations(broken.webViews).followAsync("view-1")).rejects.toBe(bug);
+  });
+
+  it("stops following every view as it is disposed, and a view it follows again starts over", () => {
+    const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
+    surface.hang("Page.getFrameTree");
+    const navigations: PendingNavigations = new PendingNavigations(surface.webViews);
+    void navigations.followAsync("view-1");
+    navigations.watch("view-2", "main");
+    start(surface, "main", "view-2");
+
+    navigations[Symbol.dispose]();
+    const listeners: number[] = [surface.protocolListenerCount, surface.viewListenerCount];
+    void navigations.followAsync("view-2");
+
+    expect([listeners, navigations.isPending("view-2"), surface.protocolListenerCount]).toEqual([[0, 0], false, 1]);
+  });
+
   it("ends a pending navigation on the view's crash and keeps watching it, and forgets the view once it closed", () => {
     const surface: ScriptedViews = new ScriptedViews(["view-1", "view-2"]);
     const navigations: PendingNavigations = new PendingNavigations(surface.webViews);
@@ -96,14 +193,15 @@ describe("PendingNavigations", () => {
     surface.emitViewEvent("view-2", WebViewEventKind.Crashed);
     const otherView: boolean = navigations.isPending("view-1");
     surface.emitViewEvent("view-1", WebViewEventKind.Crashed);
-    const crashed: [boolean, number] = [navigations.isPending("view-1"), surface.protocolListenerCount];
+    const crashedPending: boolean = navigations.isPending("view-1");
+    const crashedListeners: number = surface.protocolListenerCount;
     start(surface);
     const again: boolean = navigations.isPending("view-1");
 
     surface.emitViewEvent("view-1", WebViewEventKind.Closed);
 
-    expect([otherView, crashed, again, navigations.isPending("view-1"), surface.protocolListenerCount, surface.viewListenerCount])
-      .toEqual([true, [false, 1], true, false, 0, 0]);
+    expect([otherView, crashedPending, crashedListeners, again, navigations.isPending("view-1"), surface.protocolListenerCount, surface.viewListenerCount])
+      .toEqual([true, false, 1, true, false, 0, 0]);
   });
 
   it("settles the next start of a navigation in a watched view", async () => {

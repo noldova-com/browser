@@ -8,7 +8,8 @@
 
 import { BrowserEvents, BrowserMethods, HeldPages, LocalSites, PageAgent, PageClaim, type PageRecord, type TypedAddressAnswer, TypedAddressLeft, type TypedAddressRequest } from "@noldova/browser.protocol";
 import { Failure, FailureCode, ShellClients, WebViewEventKind, type WebViewEvent } from "@noldova/desktop.protocol";
-import { type EventChannel, type IModuleLog, type IRuntimePart, type IRuntimePartContext, MethodFailureException, type Migration, ProductInfo, type RequestContext } from "@noldova/desktop.runtime";
+import { type EventChannel, type IModuleLog, type IRuntimePart, type IRuntimePartContext, MethodFailureException, type Migration, ModuleDeactivatedException, ProductInfo, type RequestContext,
+  WebViewFailureException } from "@noldova/desktop.runtime";
 
 import { PageHolders } from "./models/page-holders.ts";
 import type { SessionPage } from "./models/session-page.ts";
@@ -34,7 +35,7 @@ export class RuntimePart implements IRuntimePart {
     const host: ToolHost = new ToolHost(context.tools, sessions, context.settings);
     const origins: WorkspaceOrigins = new WorkspaceOrigins(context.webViews, new DatabaseOriginStore(context.database), RuntimePart.readLocalSites(context));
     context.settings.onChanged(Resources.localSitesSetting, () => void origins.changeSettingsAsync(RuntimePart.readLocalSites(context))
-      .catch((error: unknown) => context.log.write(Resources.formatLocalSitesNotApplied(String(error)))));
+      .catch((error: unknown) => context.log.write(Resources.formatLocalSitesNotApplied(String(RuntimePart.unapplied(error))))));
     const pages: DatabasePageStore = new DatabasePageStore(context.database);
     const holders: PageHolders = new PageHolders();
     const registrations: Disposable[] = [host.start()];
@@ -43,12 +44,13 @@ export class RuntimePart implements IRuntimePart {
       registrations.push(activities);
       const kit: ToolKit = new ToolKit(context.webViews, sessions, origins, t => activities.publish(t), t => RuntimePart.recordAgent(pages, t, context.log), context.log);
       registrations.push(context.tools.onSessionEnded(t => kit.stops.endSession(t)));
+      registrations.push(kit.navigations);
       for (const tool of BrowserTools.create(kit))
         registrations.push(host.register(tool));
       context.registerMethod(BrowserMethods.allowTypedAddress, {
         handleAsync: async t => {
           const request: TypedAddressRequest = PageRequests.readTypedAddress(RuntimePart.fromWindow(t).payload);
-          const movesOn = (): number | null => request.instance === null ? null : kit.stops.movesOn(request.instance);
+          const movesOn = (): number | null => Object.isNull(request.instance) ? null : kit.stops.movesOn(request.instance);
           const moves: number | null = movesOn();
           const answer: TypedAddressAnswer = await origins.allowTypedAsync(request, () => movesOn() !== moves);
           return (movesOn() === moves ? answer : new TypedAddressLeft()).toJson();
@@ -82,7 +84,7 @@ export class RuntimePart implements IRuntimePart {
       context.registerMethod(BrowserMethods.readPage, {
         handleAsync: t => RuntimePart.answer(() => {
           const record: PageRecord | null = pages.read(PageRequests.readPage(RuntimePart.fromWindow(t).payload).instance);
-          return record === null ? null : record.toJson();
+          return Object.isNull(record) ? null : record.toJson();
         })
       });
       context.registerMethod(BrowserMethods.forgetPage, {
@@ -110,7 +112,7 @@ export class RuntimePart implements IRuntimePart {
           const held: readonly string[] = instances.filter(u => holders.claim(u, t).isClaimed);
           const agents: readonly PageAgent[] = held.flatMap(u => {
             const agentName: string | null = pages.readAgent(u);
-            return agentName === null ? [] : [new PageAgent(u, agentName)];
+            return Object.isNull(agentName) ? [] : [new PageAgent(u, agentName)];
           });
           return new HeldPages(instances.filter(u => !held.includes(u)), agents).toJson();
         })
@@ -145,8 +147,10 @@ export class RuntimePart implements IRuntimePart {
       context.registerMethod(BrowserMethods.readAppName, { handleAsync: () => RuntimePart.answer(() => ProductInfo.current.name) });
       context.onClientClosed(t => holders.close(t));
       this.stopEvents = context.webViews.onViewEvent(t => RuntimePart.follow(t, sessions, kit, origins, context.log));
-      for (const view of context.webViews.list())
+      for (const view of context.webViews.list()) {
         kit.letGoUnheld(view.id);
+        void kit.navigations.followAsync(view.id);
+      }
     }
     catch (error) {
       RuntimePart.dispose(registrations);
@@ -173,6 +177,7 @@ export class RuntimePart implements IRuntimePart {
       case WebViewEventKind.Opened:
         RuntimePart.apply(origins, event.view, String(event.details[Resources.profileKeyField]), log);
         kit.letGoUnheld(event.view);
+        void kit.navigations.followAsync(event.view);
         break;
       case WebViewEventKind.Closed:
         sessions.dropView(event.view);
@@ -196,6 +201,8 @@ export class RuntimePart implements IRuntimePart {
       pages.writeAgent(page.instance, page.agentName);
     }
     catch (error) {
+      if (!RuntimePart.isDatabaseFailure(error))
+        throw error;
       log.write(Resources.formatAgentNotRecorded(String(error)));
     }
   }
@@ -208,11 +215,24 @@ export class RuntimePart implements IRuntimePart {
   }
 
   private static apply(origins: WorkspaceOrigins, viewId: string, profileKey: string, log: IModuleLog): void {
-    void origins.applyAsync(viewId, profileKey).catch((error: unknown) => log.write(Resources.formatOriginsNotApplied(viewId, String(error))));
+    void origins.applyAsync(viewId, profileKey)
+      .catch((error: unknown) => log.write(Resources.formatOriginsNotApplied(viewId, String(RuntimePart.unapplied(error)))));
+  }
+
+  // Origins aren't applied when the main process fails the call, the part stops first or the database fails; anything else is a bug.
+  private static unapplied(error: unknown): unknown {
+    if (!(error instanceof WebViewFailureException || error instanceof ModuleDeactivatedException || RuntimePart.isDatabaseFailure(error)))
+      throw error;
+    return error;
+  }
+
+  // Noldova Desktop's database throws the engine's own error when a statement fails.
+  private static isDatabaseFailure(error: unknown): boolean {
+    return error instanceof Error && "code" in error && error.code === Resources.databaseFailureCode;
   }
 
   private static fromWindow(request: RequestContext): RequestContext {
-    if (request.window === null || request.client !== ShellClients.mainProcess)
+    if (Object.isNull(request.window) || request.client !== ShellClients.mainProcess)
       throw new MethodFailureException(new Failure(FailureCode.Unauthorized, Resources.requestNotFromWindow));
     return request;
   }
