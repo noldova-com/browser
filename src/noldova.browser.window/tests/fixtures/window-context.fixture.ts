@@ -114,7 +114,7 @@ export class WindowContext extends FakeWindowPartContext {
     this.webViews = this.views.webViews;
     this.answer("registerDocument", t => {
       WindowContext.requireDeclared(t.name, WindowContext.declaredDocuments, this.documents);
-      if (t.tabRowPlace !== null && !WindowContext.declaredMenuPlaces.has(t.tabRowPlace))
+      if (!Object.isNull(t.tabRowPlace) && !WindowContext.declaredMenuPlaces.has(t.tabRowPlace))
         throw new UnansweredCallException(t.tabRowPlace);
       this.documents.push(t);
     });
@@ -125,7 +125,7 @@ export class WindowContext extends FakeWindowPartContext {
     this.answer("registerStatusBarItem", t => {
       WindowContext.requireDeclared(t.name, WindowContext.declaredStatusBarItems, this.statusBarItems);
       const item: StatusBarItem = new StatusBarItem(t, state => {
-        if (state.command !== null && !WindowContext.declaredCommands.has(state.command))
+        if (!Object.isNull(state.command) && !WindowContext.declaredCommands.has(state.command))
           throw new UnansweredCallException(state.command);
       });
       this.statusBarItems.push(item);
@@ -155,7 +155,7 @@ export class WindowContext extends FakeWindowPartContext {
     this.answer("writeSettingAsync", (name, value) => {
       if (!WindowContext.settingDefaults.has(name))
         return Promise.reject(new UnansweredCallException(name));
-      if (this.settingFailure !== null)
+      if (!Object.isNull(this.settingFailure))
         return Promise.reject(this.settingFailure);
       this.settings.set(name, value);
       return Promise.resolve();
@@ -225,6 +225,6 @@ export class WindowContext extends FakeWindowPartContext {
 
   private static answerDeclared(method: string): Promise<JsonValue> {
     const answer: JsonValue | undefined = WindowContext.requestAnswers.get(method);
-    return answer === undefined ? Promise.reject(new UnansweredCallException(method)) : Promise.resolve(answer);
+    return Object.isUndefined(answer) ? Promise.reject(new UnansweredCallException(method)) : Promise.resolve(answer);
   }
 }
