@@ -36,6 +36,10 @@ export class WorkspaceOrigins {
     const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
+    // An address the person types in a page starts a typed load there, whose redirects pass again until an agent's call starts on it.
+    if (!Object.isNull(request.instance))
+      for (const view of this.viewsOf(request.instance))
+        this.stopped.delete(view.id);
     return this.inTurnAsync(request.profileKey, async () => {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
       if (isLeft())
@@ -77,10 +81,15 @@ export class WorkspaceOrigins {
     }));
   }
 
+  /** An agent's call on the page stops its typed load's redirects, whether or not one passed yet, until the window ends the load. */
+  public stopRedirects(viewId: string): void {
+    this.stopped.add(viewId);
+  }
+
   public stopPassingAsync(viewId: string, profileKey: string): Promise<void> {
+    this.stopRedirects(viewId);
     if (!this.passing.has(viewId))
       return Promise.resolve();
-    this.stopped.add(viewId);
     return this.endViewPassingAsync(viewId, profileKey);
   }
 

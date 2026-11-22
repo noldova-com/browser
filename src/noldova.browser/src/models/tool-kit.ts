@@ -150,6 +150,7 @@ export class ToolKit {
         throw ToolFailures.fromAbort(call.signal.reason);
       this.ensureFree(call, page, generation);
       this.recordAgent(page);
+      this.origins.stopRedirects(page.viewId);
       if (this.origins.isPassing(page.viewId)) {
         await this.origins.stopPassingAsync(page.viewId, page.profileKey);
         // The person may stop or take the page, or the session end, while its typed redirects stop passing.
