@@ -398,7 +398,7 @@ describe("TypeTool", () => {
     expect([bench.permissions.requests.map(t => t.risk), sent("Input.insertText")]).toEqual([[ToolRisk.Medium], []]);
   });
 
-  it("types nothing and fails as moved when the field's select handler gives the focus to a password field after the field selection", async () => {
+  it("types nothing and fails as moved when the focus has moved to a password field by the check after the field selection", async () => {
     ShopPage.focusOnSelect(bench, ShopPage.CART_PIN);
 
     await CallFailures.expectAsync(bench.runAsync(tool, bench.call({ reference: reference(ShopPage.SEARCH), text: "red" })), FocusMovedException,

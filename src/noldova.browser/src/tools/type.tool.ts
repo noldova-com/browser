@@ -76,7 +76,8 @@ export class TypeTool implements IBrowserTool {
       await this.kit.calls.sendAsync(page.viewId, Resources.focusMethod, { backendNodeId: element.backendNodeId }, options);
       await this.kit.confirmRiskAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
       const isSelected: boolean = await this.kit.selectFieldAsync(page.viewId, element.backendNodeId, options);
-      // The selection fires the field's select event, whose handler can move the focus too, so the focus is checked after it, right before the text.
+      // The focus is checked after the selection, right before the text. The selection's select and selectionchange events fire at the next
+      // animation frame, so their handlers usually run after this check, in the window that remains, and it catches them only when a frame came first.
       await this.kit.confirmFocusAsync(page.viewId, element.backendNodeId, facts, risk, classify, options);
       const deleting: KeyPress = KeyEvents.press(Resources.deleteKey, 0);
       if (text !== "")
