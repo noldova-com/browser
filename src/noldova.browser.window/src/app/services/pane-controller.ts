@@ -45,6 +45,10 @@ export class PaneController {
     return this.hearing.zoom;
   }
 
+  public get favicon(): string | null {
+    return this.hearing.favicon;
+  }
+
   public onChange(listener: (status: PaneStatus) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -60,6 +64,10 @@ export class PaneController {
 
   public onZoom(listener: (factor: number) => void): () => void {
     return this.hearing.onZoom(listener);
+  }
+
+  public onFavicon(listener: (image: string | null) => void): () => void {
+    return this.hearing.onFavicon(listener);
   }
 
   public onRefusedRedirect(listener: (event: ViewRefusalEvent) => boolean): () => void {

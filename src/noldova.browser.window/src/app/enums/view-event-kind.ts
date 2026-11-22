@@ -16,7 +16,8 @@ export const ViewEventKind = {
   RequestRefused: "RequestRefused",
   NewWindowRequested: "NewWindowRequested",
   Key: "Key",
-  Zoom: "Zoom"
+  Zoom: "Zoom",
+  Favicon: "Favicon"
 } as const;
 
 export type ViewEventKind = (typeof ViewEventKind)[keyof typeof ViewEventKind];

@@ -25,6 +25,7 @@ import { ViewProfileClearedEvent } from "../../../src/app/models/view-profile-cl
 import { ViewRefusalEvent } from "../../../src/app/models/view-refusal-event.ts";
 import { ViewRequestRefusalEvent } from "../../../src/app/models/view-request-refusal-event.ts";
 import { ViewStateEvent } from "../../../src/app/models/view-state-event.ts";
+import { ViewFaviconEvent } from "../../../src/app/models/view-favicon-event.ts";
 import { ViewZoomEvent } from "../../../src/app/models/view-zoom-event.ts";
 import { NavigationStarts } from "../../../src/app/services/navigation-starts.ts";
 import { PaneController } from "../../../src/app/services/pane-controller.ts";
@@ -467,6 +468,21 @@ describe("PaneController", () => {
     view.emit(new ViewZoomEvent(2));
 
     expect([heard, controller.zoom, controller.status.state]).toEqual([[1.5, 0.25], 0.25, PaneState.Empty]);
+  });
+
+  it("follows the page's icon through the view's Favicon event, without a change of status, until it closes", () => {
+    const icon: string = "data:image/png;base64,iVBORw0KGgo=";
+    const { controller, view } = open();
+    const heard: (string | null)[] = [];
+    controller.onFavicon(t => heard.push(t));
+    const first: string | null = controller.favicon;
+
+    view.emit(new ViewFaviconEvent(icon));
+    view.emit(new ViewFaviconEvent(icon));
+    controller.close();
+    view.emit(new ViewFaviconEvent(null));
+
+    expect([first, heard, controller.favicon, controller.status.state]).toEqual([null, [icon], icon, PaneState.Empty]);
   });
 
   it("is unavailable without a view, and refuses to navigate, move, reload, stop, zoom or find, ending no search", async () => {

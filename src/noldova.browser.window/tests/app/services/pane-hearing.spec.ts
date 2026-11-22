@@ -110,11 +110,26 @@ describe("PaneHearing", () => {
     expect(changes).toStrictEqual([REFUSED, loading, REFUSED, loaded, FAILED_REFUSED]);
   });
 
+  it("keeps the page's icon from none and tells the icon listeners of each change once, until they stop listening", () => {
+    const icon: string = "data:image/png;base64,iVBORw0KGgo=";
+    const images: (string | null)[] = [];
+    const stop: () => void = hearing.onFavicon(t => images.push(t));
+    const first: string | null = hearing.favicon;
+
+    for (const image of [null, icon, icon, null])
+      hearing.showFavicon(image);
+    stop();
+    hearing.showFavicon(icon);
+
+    expect([first, images, hearing.favicon]).toStrictEqual([null, [icon, null], icon]);
+  });
+
   it("stops every listener at clear", () => {
     const heard: string[] = [];
     hearing.onNewWindow(() => heard.push("window"));
     hearing.onKey(() => heard.push("key"));
     hearing.onZoom(() => heard.push("zoom"));
+    hearing.onFavicon(() => heard.push("favicon"));
     hearing.onRefusedRedirect(() => {
       heard.push("redirect");
       return true;
@@ -124,6 +139,7 @@ describe("PaneHearing", () => {
     hearing.openWindow(new ViewNewWindowEvent("https://two.example/", true, null));
     hearing.pressKey(new ViewKeyEvent("reload"));
     hearing.zoomTo(2);
+    hearing.showFavicon("data:image/png;base64,iVBORw0KGgo=");
     hearing.refuse(REFUSED_REDIRECT);
 
     expect(heard).toStrictEqual([]);

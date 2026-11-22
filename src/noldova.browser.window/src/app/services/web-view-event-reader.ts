@@ -12,6 +12,7 @@ import { Resources } from "../../resources.ts";
 import { RefusedRequest } from "../enums/refused-request.ts";
 import { ViewCloseEvent } from "../models/view-close-event.ts";
 import { ViewCrashEvent } from "../models/view-crash-event.ts";
+import { ViewFaviconEvent } from "../models/view-favicon-event.ts";
 import type { ViewEvent } from "../models/view-event.ts";
 import { ViewKeyEvent } from "../models/view-key-event.ts";
 import { ViewLoadFailureEvent } from "../models/view-load-failure-event.ts";
@@ -69,6 +70,10 @@ export class WebViewEventReader {
       case WebViewEventKind.Zoom: {
         const { factor } = event.details;
         return Object.isNumber(factor) && Number.isFinite(factor) && factor > 0 ? new ViewZoomEvent(factor) : null;
+      }
+      case WebViewEventKind.Favicon: {
+        const { image } = event.details;
+        return Object.isNull(image) || (Object.isString(image) && Resources.pageImagePattern.test(image)) ? new ViewFaviconEvent(image) : null;
       }
       default:
         return null;

@@ -21,6 +21,7 @@ import { PopupOffer } from "../../src/app/models/popup-offer.ts";
 import { ViewCloseEvent } from "../../src/app/models/view-close-event.ts";
 import { ViewCrashEvent } from "../../src/app/models/view-crash-event.ts";
 import { ViewEvent } from "../../src/app/models/view-event.ts";
+import { ViewFaviconEvent } from "../../src/app/models/view-favicon-event.ts";
 import { ViewKeyEvent } from "../../src/app/models/view-key-event.ts";
 import { ViewLoadFailureEvent } from "../../src/app/models/view-load-failure-event.ts";
 import { ViewNewWindowEvent } from "../../src/app/models/view-new-window-event.ts";
@@ -38,7 +39,7 @@ describe("@noldova/browser.window", () => {
   it("exports exactly its public values", () => {
     expect(Object.fromEntries(Object.entries(api))).toEqual({
       AddressRefusal, BrowserWindowException, PaneController, PaneHearing, PaneState, PaneStates, PaneStatus, PaneUnavailableException, PlaceholderTracker, PopupOffer, RefusedRequest,
-      ViewCloseEvent, ViewCrashEvent, ViewEvent, ViewEventKind, ViewKeyEvent, ViewLoadFailureEvent, ViewNewWindowEvent, ViewProfileClearedEvent, ViewRefusalEvent,
+      ViewCloseEvent, ViewCrashEvent, ViewEvent, ViewEventKind, ViewFaviconEvent, ViewKeyEvent, ViewLoadFailureEvent, ViewNewWindowEvent, ViewProfileClearedEvent, ViewRefusalEvent,
       ViewRequestRefusalEvent, ViewStateEvent, ViewZoomEvent, windowPart: expect.any(BrowserWindowPart)
     });
   });

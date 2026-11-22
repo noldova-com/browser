@@ -23,6 +23,7 @@ interface IOpenedDocument {
   readonly after: string | null;
   readonly marker: IDocumentMarker | null;
   readonly activate: boolean | undefined;
+  readonly imageGlyph: string | undefined;
 }
 
 export class WindowContext extends FakeWindowPartContext {
@@ -101,7 +102,7 @@ export class WindowContext extends FakeWindowPartContext {
     });
     this.answer("openDocument", (name, instance, title, options) =>
       void this.opened.push({ name, instance, title, after: options?.after ?? null, marker: options?.marker ?? null,
-        activate: options?.activate }));
+        activate: options?.activate, imageGlyph: options?.imageGlyph }));
     this.answer("closeDocument", (_name, instance) => void this.closed.push(instance));
     this.answer("updateDocument", (_name, instance, update) => void this.titles.push({ instance, update }));
     this.answer("listOpenDocumentsAsync", () => this.openDocuments instanceof Error ? Promise.reject(this.openDocuments) : Promise.resolve(this.openDocuments));

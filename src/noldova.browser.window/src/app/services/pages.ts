@@ -45,6 +45,7 @@ import { PopupSites } from "./popup-sites.ts";
 
 export class Pages {
   private static readonly registry: WeakMap<IWindowPartContext, Pages> = new WeakMap<IWindowPartContext, Pages>();
+  private static readonly pageOptions: IDocumentOptions = { imageGlyph: Resources.pageImageGlyph };
   private readonly context: IWindowPartContext;
   private readonly pending: Map<string, PagePlace> = new Map<string, PagePlace>();
   // Pages the person closed here while an agent's call ran on them, until that call ends or the page opens again: a refusal that comes after its
@@ -151,6 +152,8 @@ export class Pages {
     }
     if (Object.isNull(open) || open.length === 0)
       return true;
+    for (const instance of open)
+      this.context.updateDocument(Resources.pageDocument, instance, { imageGlyph: Resources.pageImageGlyph });
     let held: HeldPages;
     try {
       held = PageAnswers.readHeldPages(await this.context.requestAsync(BrowserMethods.holdPages, new OpenPagesRequest([...open]).toJson()));
@@ -183,7 +186,7 @@ export class Pages {
     if (!Object.isUndefined(place)) {
       if (place.profileKey !== profileKey)
         throw new PageOnOtherWorkspaceException(instance, profileKey);
-      this.context.openDocument(Resources.pageDocument, instance, Object.isUndefined(shown) ? Resources.formatTabTitle(place.url) : shown.tab.title);
+      this.context.openDocument(Resources.pageDocument, instance, Object.isUndefined(shown) ? Resources.formatTabTitle(place.url) : shown.tab.title, Pages.pageOptions);
       return instance;
     }
     this.pending.set(instance, new PagePlace(profileKey, Object.isNull(url) ? "" : url));
@@ -437,7 +440,7 @@ export class Pages {
       this.closed.delete(activity.instance);
     const held: PaneTab | undefined = activity.state === PageActivityState.Ended && activity.isHandedOver ? [...this.shown.keys()].find(t => t.id === activity.instance) : undefined;
     if (!Object.isUndefined(held))
-      this.context.openDocument(Resources.pageDocument, activity.instance, held.title);
+      this.context.openDocument(Resources.pageDocument, activity.instance, held.title, Pages.pageOptions);
   }
 
   private noteShown(): void {
@@ -469,9 +472,9 @@ export class Pages {
       const last: string | undefined = this.lastAsked.get(opener.id);
       const after: string = !Object.isUndefined(last) && this.holds(last) ? last : opener.id;
       const marker: IDocumentMarker = { glyph: Resources.openerGlyph, label: Resources.formatOpenedFrom(opener.title) };
-      return isBehind ? { after, marker, activate: false } : { after, marker };
+      return isBehind ? { ...Pages.pageOptions, after, marker, activate: false } : { ...Pages.pageOptions, after, marker };
     }
-    return {};
+    return Pages.pageOptions;
   }
 
   private static apply(shown: ReadonlyMap<string, PageActivity>, activity: PageActivity): ReadonlyMap<string, PageActivity> {
@@ -728,6 +731,10 @@ export class Pages {
         tab.controller.offerPopup(event.address, event.origin);
     });
     const stopRedirects: () => void = tab.controller.onRefusedRedirect(event => this.followRedirect(tab, place, event));
+    // A new view starts without an icon and Desktop names none until the page has one, so the tab drops the image an earlier view gave it.
+    const showImage = (image: string | null): void => this.context.updateDocument(Resources.pageDocument, tab.id, { image });
+    showImage(tab.controller.favicon);
+    const stopImage: () => void = tab.controller.onFavicon(showImage);
     const stopStarts: () => void = NavigationStarts.listen(tab.controller, () => {
       if (this.starting !== tab)
         this.leaveEntry(tab);
@@ -737,6 +744,7 @@ export class Pages {
       stopStatus();
       stopWindows();
       stopRedirects();
+      stopImage();
       stopStarts();
       clearWorking?.();
     };

@@ -61,7 +61,8 @@ export class FakeWebView implements IWebViewHandle {
     [ViewEventKind.RequestRefused]: WebViewEventKind.RequestRefused,
     [ViewEventKind.NewWindowRequested]: WebViewEventKind.NewWindowRequested,
     [ViewEventKind.Key]: WebViewEventKind.Key,
-    [ViewEventKind.Zoom]: WebViewEventKind.Zoom
+    [ViewEventKind.Zoom]: WebViewEventKind.Zoom,
+    [ViewEventKind.Favicon]: WebViewEventKind.Favicon
   };
   private static readonly LEAST_ZOOM: number = 0.25;
   private static readonly GREATEST_ZOOM: number = 5;

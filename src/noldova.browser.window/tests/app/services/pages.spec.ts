@@ -29,6 +29,7 @@ import type { PaneTab } from "../../../src/app/models/pane-tab.ts";
 import { PopupOffer } from "../../../src/app/models/popup-offer.ts";
 import { RefusedPage } from "../../../src/app/models/refused-page.ts";
 import { ViewCrashEvent } from "../../../src/app/models/view-crash-event.ts";
+import { ViewFaviconEvent } from "../../../src/app/models/view-favicon-event.ts";
 import { ViewLoadFailureEvent } from "../../../src/app/models/view-load-failure-event.ts";
 import { ViewNewWindowEvent } from "../../../src/app/models/view-new-window-event.ts";
 import { ViewRefusalEvent } from "../../../src/app/models/view-refusal-event.ts";
@@ -177,7 +178,7 @@ describe("Pages", () => {
     await pages.showAsync(picked);
     pages.open("workspace-1", null, picked);
 
-    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", {}], ["browser.page", picked, "New tab"]], []]);
+    expect([opening.mock.calls, underlines()]).toEqual([[["browser.page", picked, "New tab", { imageGlyph: "public" }], ["browser.page", picked, "New tab", { imageGlyph: "public" }]], []]);
   });
 
   it("logs an activity event that isn't one, without its payload, and changes no page", () => {
@@ -213,7 +214,7 @@ describe("Pages", () => {
     context.emit(BrowserEvents.pageActivity, { ...typing, activity: "call-0", state: "Ended", isHandedOver: false });
     context.emit(BrowserEvents.pageActivity, { ...typing, state: "Ended" });
 
-    expect(context.opened.slice(before).map(t => [t.name, t.instance, t.title])).toEqual([["browser.page", tab.id, "Sign in"]]);
+    expect(context.opened.slice(before).map(t => [t.name, t.instance, t.title, t.imageGlyph])).toEqual([["browser.page", tab.id, "Sign in", "public"]]);
   });
 
   it("reads the calls running on the pages again when the runtime starts again, with the events that arrive meanwhile over them", async () => {
@@ -466,8 +467,8 @@ describe("Pages", () => {
     const second: string = pages.open("workspace-2", null);
 
     expect(context.opened).toEqual([
-      { name: "browser.page", instance: first, title: "https://docs.example.com/pricing", after: null, marker: null },
-      { name: "browser.page", instance: second, title: "New tab", after: null, marker: null }
+      { name: "browser.page", instance: first, title: "https://docs.example.com/pricing", after: null, marker: null, imageGlyph: "public" },
+      { name: "browser.page", instance: second, title: "New tab", after: null, marker: null, imageGlyph: "public" }
     ]);
     expect([UUID.test(first), UUID.test(second), first === second]).toEqual([true, true, false]);
   });
@@ -868,7 +869,7 @@ describe("Pages", () => {
     loading(view, "about:blank", false, "about:blank");
     loading(view, "https://docs.example.com/", true);
     loading(view, "https://docs.example.com/", true, "docs.example.com");
-    const whileLoading: number = context.titles.length;
+    const whileLoading: number = context.titles.filter(t => !Object.isUndefined(t.update.title)).length;
     loading(view, "https://docs.example.com/", false);
     loading(view, "https://docs.example.com/next", true);
     loading(view, "https://docs.example.com/next", true, "Next steps");
@@ -1057,10 +1058,41 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
     expect(context.working).toEqual([]);
-    expect(context.titles).toEqual([{ instance: tab.id, update: { title: "Plans and pricing" } }]);
+    expect(context.titles).toEqual([{ instance: tab.id, update: { image: null } }, { instance: tab.id, update: { title: "Plans and pricing" } }]);
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([
       { instance: tab.id, profileKey: "workspace-1", url: "" }, { instance: tab.id, profileKey: "workspace-1", url: "https://docs.example.com/" }
     ]);
+  });
+
+  it("shows the page's favicon as its tab's image, once each change, and none for a new view until the page names one", async () => {
+    const icon: string = "data:image/png;base64,iVBORw0KGgo=";
+    const tab = await openAsync();
+    const view = viewOf(tab);
+    const images = (): (string | null | undefined)[] => context.titles.filter(t => t.instance === tab.id && !Object.isUndefined(t.update.image)).map(t => t.update.image);
+
+    view.emit(new ViewFaviconEvent(icon));
+    view.emit(new ViewFaviconEvent(icon));
+    view.emit(new ViewFaviconEvent(null));
+    view.emit(new ViewFaviconEvent(icon));
+    pages.release(tab);
+    view.emit(new ViewFaviconEvent(null));
+
+    expect(images()).toEqual([null, icon, null, icon]);
+  });
+
+  it("opens each page tab, and gives each tab the window restored, the web's glyph in its image's place", async () => {
+    const opener = await openAsync();
+    const picked: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    pages.open("workspace-1", null, picked);
+    pages.open("workspace-1", null, picked);
+    pages.open("workspace-1", "https://docs.example.com/", null, opener);
+    pages.open("workspace-1", "https://docs.example.com/", null, opener, true);
+    const restored: readonly string[] = ["0f8fad5b-d9cb-469f-a165-70867728950e", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"];
+    context.openDocuments = restored;
+    await pages.reportOpenAsync();
+
+    expect(context.opened.map(t => t.imageGlyph)).toEqual(["public", "public", "public", "public", "public"]);
+    expect(context.titles.filter(t => !Object.isUndefined(t.update.imageGlyph))).toEqual(restored.map(instance => ({ instance, update: { imageGlyph: "public" } })));
   });
 
   it("takes the working mark away when a load fails, is refused or is stopped, so a failed or refused page shows its glyph alone", async () => {
@@ -1381,7 +1413,7 @@ describe("Pages", () => {
     context.closeByPerson(tab.id);
     await pages.clearBrowsingDataAsync(other);
 
-    expect([viewOf(tab).calls, context.working, context.titles.length]).toEqual([["close"], [], 1]);
+    expect([viewOf(tab).calls, context.working, context.titles.filter(t => Object.isUndefined(t.update.image)).length]).toEqual([["close"], [], 1]);
     expect(requestsOf(BrowserMethods.forgetPage)).toEqual([{ instance: tab.id }]);
   });
 

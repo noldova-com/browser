@@ -154,6 +154,11 @@ export declare const ViewEventKind: {
    * The view's zoom changed, from the `Zoom` event, value `"Zoom"`.
    */
   readonly Zoom: "Zoom";
+
+  /**
+   * The page's icon changed, from the `Favicon` event, value `"Favicon"`.
+   */
+  readonly Favicon: "Favicon";
 };
 
 /**
@@ -366,6 +371,66 @@ export declare class ViewKeyEvent extends ViewEvent {
    *
    * const hearing: PaneHearing = new PaneHearing(() => undefined);
    * new ViewKeyEvent("reload").followIn(hearing);
+   * ```
+   */
+  public followIn(hearing: PaneHearing): void;
+}
+
+/**
+ * The page's new icon, which its tab shows as its image, or none.
+ *
+ * @remarks
+ * The pane reads it from Noldova Desktop's `Favicon` web view event, which only the window part gets and which comes when the icon changes, after a
+ * navigation or when the page changes it; an image that isn't a `data:image` URL, which the tab couldn't draw, is read as no event.
+ */
+export declare class ViewFaviconEvent extends ViewEvent {
+  /**
+   * Names this event's kind among the {@link ViewEvent} classes.
+   */
+  public readonly kind: typeof ViewEventKind.Favicon;
+
+  /**
+   * The icon as a `data:image` URL, a PNG of at most 64 by 64 pixels from Noldova Desktop, or null when the page has none or none could be read.
+   */
+  public readonly image: string | null;
+
+  /**
+   * Makes the event.
+   *
+   * @param image The icon as a `data:image` URL, or null for none.
+   * @example
+   * ```ts
+   * import { ViewFaviconEvent } from "@noldova/browser.window";
+   *
+   * const changed: ViewFaviconEvent = new ViewFaviconEvent("data:image/png;base64,iVBORw0KGgo=");
+   * ```
+   */
+  public constructor(image: string | null);
+
+  /**
+   * Gives the status unchanged: an icon changes nothing the pane shows.
+   *
+   * @param status The status before the event.
+   * @returns This same status: the event changes nothing shown.
+   * @example
+   * ```ts
+   * import { PaneStatus, ViewFaviconEvent } from "@noldova/browser.window";
+   *
+   * const after: PaneStatus = new ViewFaviconEvent(null).applyTo(PaneStatus.empty);
+   * ```
+   */
+  public applyTo(status: PaneStatus): PaneStatus;
+
+  /**
+   * Tells the hearing the page's new icon, as {@link PaneHearing.showFavicon} does.
+   *
+   * @param hearing The pane's hearing.
+   * @example
+   * ```ts
+   * import { PaneHearing, ViewFaviconEvent } from "@noldova/browser.window";
+   *
+   * const hearing: PaneHearing = new PaneHearing(() => undefined);
+   * new ViewFaviconEvent(null).followIn(hearing);
    * ```
    */
   public followIn(hearing: PaneHearing): void;
@@ -1353,6 +1418,11 @@ export declare class PaneController {
   public get zoom(): number;
 
   /**
+   * The page's icon as a `data:image` URL, which starts as null for none and follows the view's `Favicon` events.
+   */
+  public get favicon(): string | null;
+
+  /**
    * Listens to each change of {@link PaneController.status}.
    *
    * @param listener Called with each new status, in order; it must not throw.
@@ -1416,6 +1486,22 @@ export declare class PaneController {
    * ```
    */
   public onZoom(listener: (factor: number) => void): () => void;
+
+  /**
+   * Tells the listener of each change of the page's icon, once each, without a change of status, until it stops listening or the controller closes.
+   *
+   * @param listener Called with the new icon as a `data:image` URL, or null for none.
+   * @returns The function that stops it listening.
+   * @example
+   * ```ts
+   * import type { PaneController } from "@noldova/browser.window";
+   *
+   * function follow(controller: PaneController): () => void {
+   *   return controller.onFavicon((image: string | null) => console.log(Object.isNull(image) ? "No icon" : "An icon"));
+   * }
+   * ```
+   */
+  public onFavicon(listener: (image: string | null) => void): () => void;
 
   /**
    * Asks the listener first about each redirect the origin check refused, until it stops listening or the controller closes; a listener
@@ -1803,6 +1889,11 @@ export declare class PaneHearing {
   public get zoom(): number;
 
   /**
+   * The page's icon as a `data:image` URL, null for none, which follows {@link PaneHearing.showFavicon}.
+   */
+  public get favicon(): string | null;
+
+  /**
    * Tells the listener of each new window the page asks for, until it stops listening or the hearing is cleared.
    *
    * @param listener Called with each event.
@@ -1849,6 +1940,22 @@ export declare class PaneHearing {
    * ```
    */
   public onZoom(listener: (factor: number) => void): () => void;
+
+  /**
+   * Tells the listener of each change of the page's icon, once each, until it stops listening or the hearing is cleared.
+   *
+   * @param listener Called with each icon, or null for none.
+   * @returns The function that stops it listening.
+   * @example
+   * ```ts
+   * import type { PaneHearing } from "@noldova/browser.window";
+   *
+   * function follow(hearing: PaneHearing): () => void {
+   *   return hearing.onFavicon((image: string | null) => console.log(image));
+   * }
+   * ```
+   */
+  public onFavicon(listener: (image: string | null) => void): () => void;
 
   /**
    * Asks the listener first about each redirect the origin check refused, until it stops listening or the hearing is cleared; one that takes the redirect on answers true.
@@ -1922,6 +2029,20 @@ export declare class PaneHearing {
    * ```
    */
   public zoomTo(factor: number): number;
+
+  /**
+   * Keeps the page's new icon and tells each icon listener of it, once: an icon equal to the one kept tells none.
+   *
+   * @param image The new icon as a `data:image` URL, or null for none.
+   * @example
+   * ```ts
+   * import { PaneHearing } from "@noldova/browser.window";
+   *
+   * const hearing: PaneHearing = new PaneHearing(() => undefined);
+   * hearing.showFavicon("data:image/png;base64,iVBORw0KGgo=");
+   * ```
+   */
+  public showFavicon(image: string | null): void;
 
   /**
    * Keeps the refused origin, whose failed load the pane then doesn't show, and changes the status by the refusal, unless it is a redirect

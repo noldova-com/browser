@@ -19,8 +19,10 @@ export class PaneHearing {
   private readonly redirectListeners: Set<(event: ViewRefusalEvent) => boolean> = new Set<(event: ViewRefusalEvent) => boolean>();
   private readonly keyListeners: Set<(event: ViewKeyEvent) => void> = new Set<(event: ViewKeyEvent) => void>();
   private readonly zoomListeners: Set<(factor: number) => void> = new Set<(factor: number) => void>();
+  private readonly faviconListeners: Set<(image: string | null) => void> = new Set<(image: string | null) => void>();
   private cancelled: string | null = null;
   private factor: number = 1;
+  private image: string | null = null;
 
   public constructor(changeStatus: (event: ViewEvent) => void) {
     this.changeStatus = changeStatus;
@@ -28,6 +30,10 @@ export class PaneHearing {
 
   public get zoom(): number {
     return this.factor;
+  }
+
+  public get favicon(): string | null {
+    return this.image;
   }
 
   public onNewWindow(listener: (event: ViewNewWindowEvent) => void): () => void {
@@ -43,6 +49,11 @@ export class PaneHearing {
   public onZoom(listener: (factor: number) => void): () => void {
     this.zoomListeners.add(listener);
     return () => this.zoomListeners.delete(listener);
+  }
+
+  public onFavicon(listener: (image: string | null) => void): () => void {
+    this.faviconListeners.add(listener);
+    return () => this.faviconListeners.delete(listener);
   }
 
   public onRefusedRedirect(listener: (event: ViewRefusalEvent) => boolean): () => void {
@@ -73,6 +84,14 @@ export class PaneHearing {
     return factor;
   }
 
+  public showFavicon(image: string | null): void {
+    if (image !== this.image) {
+      this.image = image;
+      for (const listener of [...this.faviconListeners])
+        listener(image);
+    }
+  }
+
   public refuse(event: ViewRefusalEvent): void {
     this.cancelled = event.origin;
     if (!event.isRedirect || ![...this.redirectListeners].some(t => t(event)))
@@ -97,5 +116,6 @@ export class PaneHearing {
     this.redirectListeners.clear();
     this.keyListeners.clear();
     this.zoomListeners.clear();
+    this.faviconListeners.clear();
   }
 }
