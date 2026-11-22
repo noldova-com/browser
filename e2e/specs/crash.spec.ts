@@ -10,10 +10,9 @@ import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const TITLE = "Crash";
 const BUSY_TITLE = "Busy";
 // A read's time limit, `Resources.stepDeadlineMilliseconds`; a call the crash didn't end would fail only then, as timed out.
@@ -43,7 +42,7 @@ class EndedCall {
 // base sends it.
 async function busyAsync(app: TestApp, docs: FixtureServer): Promise<JsonObject> {
   await app.allowLocalSitesAsync([docs.origin]);
-  const bindings = { page: await app.openPageAsync(docs.url("/")), profileKey: PROFILE_KEY };
+  const bindings = { page: await app.openPageAsync(docs.url("/")), profileKey: TestApp.PROFILE_KEY };
   await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), TITLE)]);
   const read = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings });
   expect(read, "The first read of the page failed.").toEqual(expect.objectContaining({ isFailure: false }));
@@ -69,13 +68,24 @@ function expectCrashed(call: EndedCall): void {
   expect(call.milliseconds, `${call.name} ended only at its time limit.`).toBeLessThan(STEP_DEADLINE_MILLISECONDS);
 }
 
+// A tool call that waits on the page: the tool's name and its input.
+class PendingTool {
+  public readonly name: string;
+  public readonly input: JsonObject;
+
+  public constructor(name: string, input: JsonObject) {
+    this.name = name;
+    this.input = input;
+  }
+}
+
 test.describe("a crash while calls are pending", () => {
-  const tools: readonly [string, JsonObject][] = [
-    ["browser_snapshot", {}],
-    ["browser_screenshot", {}],
-    ["browser_wait_for", { text: "Never shown", timeoutMilliseconds: 20_000 }]
+  const tools: readonly PendingTool[] = [
+    new PendingTool("browser_snapshot", {}),
+    new PendingTool("browser_screenshot", {}),
+    new PendingTool("browser_wait_for", { text: "Never shown", timeoutMilliseconds: 20_000 })
   ];
-  for (const [name, input] of tools)
+  for (const { name, input } of tools)
     test(`a crashed view ends ${name} while its command waits on the page, with the crash's error, before its time limit`, async ({ app, servers }) => {
       const docs = await servers.startAsync("docs.localhost", { "/": PAGE });
       const bindings = await busyAsync(app, docs);
@@ -95,7 +105,7 @@ test.describe("a crash while calls are pending", () => {
 
     // The module runs a page's calls one at a time, so the screenshot waits behind the snapshot until the crash.
     let isEnded = false;
-    const ended: Promise<EndedCall>[] = tools.slice(0, 2).map(async ([name, input]) => {
+    const ended: Promise<EndedCall>[] = tools.slice(0, 2).map(async ({ name, input }) => {
       const call: EndedCall = await startAsync(app, bindings, name, input);
       isEnded = true;
       return call;

@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
 
 const FIRST_TRY = { intervals: [20], message: "The double never took the request." };
 
@@ -23,7 +23,7 @@ test.describe("the test app's doubles", () => {
   test.use({ waitsForStart: false });
 
   test("a page the agent double opens before its window part activates still opens", async ({ app }) => {
-    await askAsSoonAsTakenAsync(app, "agent-double.openPage", { profileKey: "e2e", instance: randomUUID() });
+    await askAsSoonAsTakenAsync(app, "agent-double.openPage", { profileKey: TestApp.PROFILE_KEY, instance: randomUUID() });
 
     await expect(app.window.locator("nol-browser-page"), "The page opened before the window part activated never reached the window.").toHaveCount(1);
   });

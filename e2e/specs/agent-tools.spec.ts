@@ -13,10 +13,10 @@ import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const START_TITLE = "Tools";
 const NEXT_TITLE = "Next";
 const AGENT_BAR = "nol-browser-agent-bar";
@@ -62,19 +62,6 @@ const PREFILLED = `<!doctype html><title>${START_TITLE}</title>
 window.keys = [];
 for (const id of ["agree", "level"])
   document.getElementById(id).addEventListener("keydown", event => window.keys.push(id + " " + event.key));</script>`;
-
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return Object.isObject(value) && !Array.isArray(value);
-}
-
-function contentOf(result: JsonValue): readonly JsonObject[] {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).filter(isObject);
-}
-
-function textsOf(result: JsonValue): string[] {
-  return contentOf(result).map(t => t["text"]).filter((t): t is string => Object.isString(t));
-}
 
 function referenceOf(snapshot: string, line: RegExp): string {
   const reference = snapshot.split("\n").map(t => line.exec(t)?.[1]).find(t => !Object.isUndefined(t)) ?? "";
@@ -135,7 +122,7 @@ async function callAsync(app: TestApp, bindings: JsonObject, name: string, input
 
 async function openAsync(app: TestApp, docs: FixtureServer): Promise<JsonObject> {
   await app.allowLocalSitesAsync([docs.origin]);
-  const bindings = { page: await app.openPageAsync(docs.url("/")), profileKey: PROFILE_KEY };
+  const bindings = { page: await app.openPageAsync(docs.url("/")), profileKey: TestApp.PROFILE_KEY };
   await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), START_TITLE)]);
   return bindings;
 }
@@ -151,7 +138,7 @@ test.describe("the agent tools on a real page", () => {
     const bindings = await openAsync(app, docs);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
 
-    const texts = textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/next") }));
+    const texts = ToolReply.textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/next") }));
 
     expect(texts.join("\n")).toContain(`URL: ${docs.url("/next")}\nTitle: ${NEXT_TITLE}`);
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/next"), NEXT_TITLE)]);
@@ -166,8 +153,8 @@ test.describe("the agent tools on a real page", () => {
     await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
     await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
 
-    const back = textsOf(await callAsync(app, bindings, "browser_navigate", { action: "back" }));
-    const fragment = textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/#setup") }));
+    const back = ToolReply.textsOf(await callAsync(app, bindings, "browser_navigate", { action: "back" }));
+    const fragment = ToolReply.textsOf(await callAsync(app, bindings, "browser_navigate", { url: docs.url("/#setup") }));
 
     expect(back.join("\n")).toContain(`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`);
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/#setup"), START_TITLE)]);
@@ -179,15 +166,15 @@ test.describe("the agent tools on a real page", () => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
 
-    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const snapshot = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
     expect(snapshot.split("\n").slice(0, 2)).toEqual([`URL: ${docs.url("/")}`, `Title: ${START_TITLE}`]);
     const buy = referenceOf(snapshot, /- button "Buy" \[(e\d+)\]$/u);
     const name = referenceOf(snapshot, /- textbox "Name" \[(e\d+)\]$/u);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
     await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
 
-    const clicked = textsOf(await callAsync(app, bindings, "browser_click", { reference: buy }));
-    const typed = textsOf(await callAsync(app, bindings, "browser_type", { reference: name, text: "Ada" }));
+    const clicked = ToolReply.textsOf(await callAsync(app, bindings, "browser_click", { reference: buy }));
+    const typed = ToolReply.textsOf(await callAsync(app, bindings, "browser_type", { reference: name, text: "Ada" }));
 
     expect([clicked, typed].map(t => t.includes(`URL: ${docs.url("/")}`))).toEqual([true, true]);
     expect(await seenAsync(app, docs)).toEqual(["click", "input Ada"]);
@@ -197,7 +184,7 @@ test.describe("the agent tools on a real page", () => {
   test("a click on a link and typing with Enter in a form report the page they loaded", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": LINKS, "/next": NEXT, "/next?q=lamp": NEXT });
     const bindings = await openAsync(app, docs);
-    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const snapshot = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
     const link = referenceOf(snapshot, /- link "Go next"[^[]*\[(e\d+)\]/u);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
     const release = docs.hold("/next");
@@ -205,12 +192,12 @@ test.describe("the agent tools on a real page", () => {
     const clicking = callAsync(app, bindings, "browser_click", { reference: link });
     await expect.poll(() => docs.requests.some(t => t.path === "/next"), { message: "The click never asked for the next page." }).toBe(true);
     release();
-    const clicked = textsOf(await clicking);
+    const clicked = ToolReply.textsOf(await clicking);
 
     expect(clicked.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/next")}`]);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
     await callAsync(app, bindings, "browser_navigate", { url: docs.url("/") });
-    const again = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const again = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
     const query = referenceOf(again, /- textbox "Query" \[(e\d+)\]$/u);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
     const releaseQuery = docs.hold("/next?q=lamp");
@@ -218,7 +205,7 @@ test.describe("the agent tools on a real page", () => {
     const typing = callAsync(app, bindings, "browser_type", { reference: query, text: "lamp", submit: true });
     await expect.poll(() => docs.requests.some(t => t.path === "/next?q=lamp"), { message: "Enter never sent the form." }).toBe(true);
     releaseQuery();
-    const typed = textsOf(await typing);
+    const typed = ToolReply.textsOf(await typing);
 
     expect(typed.filter(t => t.startsWith("URL: ") || t.startsWith("The page is still loading"))).toEqual([`URL: ${docs.url("/next?q=lamp")}`]);
   });
@@ -226,13 +213,13 @@ test.describe("the agent tools on a real page", () => {
   test("calls while the next page is held answer in their time: a click to it reports the page it left as still loading, and reads report that page", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": LINKS, "/next": NEXT });
     const bindings = await openAsync(app, docs);
-    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
+    const snapshot = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).find(t => t.startsWith("URL: ")) ?? "";
     const link = referenceOf(snapshot, /- link "Go next"[^[]*\[(e\d+)\]/u);
     await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
     const release = docs.hold("/next");
 
-    const clicked = textsOf(await callAsync(app, bindings, "browser_click", { reference: link }));
-    const read = textsOf(await callAsync(app, bindings, "browser_snapshot"));
+    const clicked = ToolReply.textsOf(await callAsync(app, bindings, "browser_click", { reference: link }));
+    const read = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot"));
     const logged = JSON.stringify(await callAsync(app, bindings, "browser_console"));
     const asked = docs.requests.some(t => t.path === "/next");
     release();
@@ -249,7 +236,7 @@ test.describe("the agent tools on a real page", () => {
   test("typing into a field that replaces itself on focus types nothing and fails as a changed page, and typing again after a new snapshot works", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": SWAPPING });
     const bindings = await openAsync(app, docs);
-    const searchOf = async (): Promise<string> => referenceOf(textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- searchbox "Search" \[(e\d+)\]$/u);
+    const searchOf = async (): Promise<string> => referenceOf(ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- searchbox "Search" \[(e\d+)\]$/u);
     const first = await searchOf();
     await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
 
@@ -266,7 +253,7 @@ test.describe("the agent tools on a real page", () => {
   test("typing replaces what a field, a text area and an editable element hold, and an empty text clears a field", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": PREFILLED });
     const bindings = await openAsync(app, docs);
-    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
+    const snapshot = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
     const fields = [/- textbox "Email" .*\[(e\d+)\]$/u, /- textbox "Notes" .*\[(e\d+)\]$/u, /- textbox "Bio" .*\[(e\d+)\]$/u].map(t => referenceOf(snapshot, t));
     const typeAsync = async (reference: string, text: string): Promise<void> => {
       await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
@@ -286,7 +273,7 @@ test.describe("the agent tools on a real page", () => {
   test("an empty text sends no key to a checkbox or a slider, which hold no text to select", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": PREFILLED });
     const bindings = await openAsync(app, docs);
-    const snapshot = textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
+    const snapshot = ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n");
 
     for (const reference of [/- checkbox "Agree" .*\[(e\d+)\]$/u, /- slider "Level" .*\[(e\d+)\]$/u].map(t => referenceOf(snapshot, t))) {
       await app.requestAsync("agent-double.planAnswer", { action: "browser.type", answer: "allowOnce" });
@@ -302,7 +289,7 @@ test.describe("the agent tools on a real page", () => {
   test("a click on an element another covers is reported as covered, and the element isn't clicked", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
-    const buy = referenceOf(textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- button "Buy" \[(e\d+)\]$/u);
+    const buy = referenceOf(ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- button "Buy" \[(e\d+)\]$/u);
     await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('banner').hidden = false; true");
     const topmost = "const box = document.getElementById('buy').getBoundingClientRect(); document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2).id";
     expect(await app.viewPages.runAtAsync(docs.url("/"), topmost), "The banner isn't on top at the button's centre.").toBe("banner");
@@ -320,7 +307,7 @@ test.describe("the agent tools on a real page", () => {
   test("a click on and a screenshot of an element hidden after the snapshot say it isn't visible, and the element isn't clicked", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
-    const buy = referenceOf(textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- button "Buy" \[(e\d+)\]$/u);
+    const buy = referenceOf(ToolReply.textsOf(await callAsync(app, bindings, "browser_snapshot")).join("\n"), /- button "Buy" \[(e\d+)\]$/u);
     await app.viewPages.runAtAsync(docs.url("/"), "document.getElementById('buy').style.display = 'none'; true");
     await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
 
@@ -358,12 +345,12 @@ test.describe("the agent tools on a real page", () => {
     const result = await callAsync(app, bindings, "browser_screenshot");
 
     expect(await sizeAsync(), "The view's size changed during the screenshot.").toBe(last);
-    const images = contentOf(result).filter(t => t["mimeType"] === "image/png");
+    const images = ToolReply.partsOf(result).filter(t => t["mimeType"] === "image/png");
     expect(images, "The result holds no one PNG image.").toHaveLength(1);
     const data = images[0]?.["data"];
     const bytes = Buffer.from(Object.isString(data) ? data : "", "base64");
     const { width, height } = new PngSize(bytes);
-    expect(textsOf(result)[0]).toBe(`A screenshot of ${width} by ${height} pixels.`);
+    expect(ToolReply.textsOf(result)[0]).toBe(`A screenshot of ${width} by ${height} pixels.`);
     expect(Math.abs(width / height - Number(viewWidth) / Number(viewHeight)), "The image's shape isn't the view's.").toBeLessThan(0.02);
     // Left of the button and above it, so only the page's background is there.
     expect(pngPixelOf(bytes, 4, 4).map((t, i) => Math.abs(t - (BACKGROUND[i] ?? 0)) <= 3), "The image doesn't show the page's background.")
@@ -374,7 +361,7 @@ test.describe("the agent tools on a real page", () => {
     const docs = await servers.startAsync("docs.localhost", { "/": START });
     const bindings = await openAsync(app, docs);
 
-    const texts = textsOf(await callAsync(app, bindings, "browser_console"));
+    const texts = ToolReply.textsOf(await callAsync(app, bindings, "browser_console"));
 
     expect(texts[0]).toMatch(/^\d+ console entr(y|ies); the next cursor is \d+\./u);
     expect(texts.some(t => / info console at .+: tools page ready$/u.test(t)), `No entry holds the page's line: ${texts.join("\n")}`).toBe(true);

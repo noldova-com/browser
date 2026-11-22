@@ -7,9 +7,9 @@
  */
 
 import { expect, test } from "../fixtures/app-test.ts";
+import { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const CALLS = 4;
 const AGENT_BAR = "nol-browser-agent-bar";
 const PAGE_AREA = ".nol-browser-page-area";
@@ -37,7 +37,7 @@ test.describe("agent bar", () => {
     const [free = ""] = await boxes();
 
     for (let call = 0; call < CALLS; call++) {
-      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
       expect(result, `Call ${call + 1} failed.`).toEqual(expect.objectContaining({ isFailure: false }));
       await expect(app.window.locator(AGENT_BAR), `The bar isn't shown after call ${call + 1}.`).toBeVisible();
     }

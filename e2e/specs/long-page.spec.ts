@@ -9,9 +9,10 @@
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const SECTIONS = 400;
 const SECTION_NAME_LENGTH = 4_000;
 
@@ -33,20 +34,12 @@ const LONG_DOCUMENT = "<!doctype html><title>Long document</title><h2 id=\"check
   + `<div id="rows"><script>document.write(Array.from({ length: ${ROWS} }, () => '<div data-row="' + 'x'.repeat(${ROW_DATA_LENGTH}) + '"></div>').join(''))</script></div>`;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function textsOf(result: JsonValue): string[] {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  });
+  return Object.isPlainObject(value);
 }
 
 function referenceOf(snapshot: string, line: RegExp): string {
   const reference = line.exec(snapshot)?.[1];
-  if (reference === undefined)
+  if (Object.isUndefined(reference))
     throw new Error(`The snapshot names no element for ${String(line)}: ${snapshot.slice(0, 2_000)}`);
   return reference;
 }
@@ -61,11 +54,11 @@ test.describe("keys and waits on a long page", () => {
     await app.requestAsync("agent-double.planAnswer", { action: "browser.pressKey", answer: "allowOnce" });
     await app.requestAsync("agent-double.planAnswer", { action: "browser.pressKey", answer: "deny" });
 
-    const result = await app.requestAsync("agent-double.callTool", { name: "browser_press_key", input: { key: "a" }, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_press_key", input: { key: "a" }, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
-    expect(result, `The key failed: ${textsOf(result).join(" | ")}`).toEqual(expect.objectContaining({ isFailure: false }));
+    expect(result, `The key failed: ${ToolReply.textsOf(result).join(" | ")}`).toEqual(expect.objectContaining({ isFailure: false }));
     expect(await app.viewPages.runAtAsync(docs.url("/"), "document.querySelector('input').value")).toBe("a");
-    await app.requestAsync("agent-double.callTool", { name: "browser_press_key", input: { key: "Enter" }, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    await app.requestAsync("agent-double.callTool", { name: "browser_press_key", input: { key: "Enter" }, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
     // Only a key on a field the tool found focused, in a form, is asked about as submitting it.
     const asked = await app.requestAsync("agent-double.takeQuestions", {});
     const titles = (Array.isArray(asked) ? asked : []).map((t: JsonValue) => isObject(t) ? t["title"] : undefined);
@@ -82,26 +75,26 @@ test.describe("keys and waits on a long page", () => {
     await app.viewPages.runAtAsync(docs.url("/"), "document.querySelector('input').value = 'typed-secret'; 'set'");
 
     const value = await app.requestAsync("agent-double.callTool", { name: "browser_wait_for", input: { text: "typed-secret", timeoutMilliseconds: 1_000 },
-      bindings: { page: instance, profileKey: PROFILE_KEY } });
+      bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
     const result = await app.requestAsync("agent-double.callTool", { name: "browser_wait_for", input: { text: "Order placed", timeoutMilliseconds: 10_000 },
-      bindings: { page: instance, profileKey: PROFILE_KEY } });
+      bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
-    expect(result, `The wait failed: ${textsOf(result).join(" | ")}`).toEqual(expect.objectContaining({ isFailure: false }));
-    expect(textsOf(result)).toContain("The wait was met.");
-    expect(textsOf(value)).toContain("The wait wasn't met in 1000 ms.");
+    expect(result, `The wait failed: ${ToolReply.textsOf(result).join(" | ")}`).toEqual(expect.objectContaining({ isFailure: false }));
+    expect(ToolReply.textsOf(result)).toContain("The wait was met.");
+    expect(ToolReply.textsOf(value)).toContain("The wait wasn't met in 1000 ms.");
   });
 
   test("a click on a link, a click that submits a form with a secret field and a key on a focused link are asked about with their risk as on a short page, on a page whose document passes the reply limit", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/": LONG_DOCUMENT });
     await app.allowLocalSitesAsync([docs.origin]);
     const instance = await app.openPageAsync(docs.url("/"));
-    const bindings = { page: instance, profileKey: PROFILE_KEY };
+    const bindings = { page: instance, profileKey: TestApp.PROFILE_KEY };
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long document")]);
     for (const action of ["browser.click", "browser.click", "browser.pressKey"])
       await app.requestAsync("agent-double.planAnswer", { action, answer: "deny" });
     const shown = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings });
     expect(shown, `The snapshot failed: ${JSON.stringify(shown).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
-    const snapshot = textsOf(shown).join("\n");
+    const snapshot = ToolReply.textsOf(shown).join("\n");
 
     await app.requestAsync("agent-double.callTool", { name: "browser_click", input: { reference: referenceOf(snapshot, /link "First link" \[(e\d+)\]/) }, bindings });
     await app.requestAsync("agent-double.callTool", { name: "browser_click", input: { reference: referenceOf(snapshot, /button "Pay" \[(e\d+)\]/) }, bindings });

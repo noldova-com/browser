@@ -9,22 +9,25 @@
 import "@noldova/context.core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 
-// The agent double's callTool reply, a tool result with its content's text parts.
+// The agent double's callTool reply, a tool result with its content's parts.
 export class ToolReply {
-  // The text of each of the reply's content parts, one per line; a part with no text gives an empty line, and a reply with no content gives "".
+  // The reply's content parts that are objects, in order; a reply with no content gives none.
+  public static partsOf(result: JsonValue): readonly JsonObject[] {
+    const content: JsonValue | undefined = ToolReply.isJsonObject(result) ? result["content"] : undefined;
+    return (Array.isArray(content) ? content : []).filter((t: JsonValue): t is JsonObject => ToolReply.isJsonObject(t));
+  }
+
+  // The text of each part that has one, in order, leaving out parts such as images.
+  public static textsOf(result: JsonValue): string[] {
+    return ToolReply.partsOf(result).map(t => t["text"]).filter((t): t is string => Object.isString(t));
+  }
+
+  // The parts' texts, one per line; a reply with no text gives "".
   public static textOf(result: JsonValue): string {
-    const content: JsonValue | undefined = ToolReply.objectOf(result)?.["content"];
-    return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-      const text: JsonValue | undefined = ToolReply.objectOf(t)?.["text"];
-      return Object.isString(text) ? text : "";
-    }).join("\n");
+    return ToolReply.textsOf(result).join("\n");
   }
 
   private static isJsonObject(value: JsonValue | undefined): value is JsonObject {
     return Object.isObject(value) && !Array.isArray(value);
-  }
-
-  private static objectOf(value: JsonValue | undefined): JsonObject | null {
-    return ToolReply.isJsonObject(value) ? value : null;
   }
 }

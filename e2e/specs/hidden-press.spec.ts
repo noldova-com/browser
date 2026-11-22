@@ -10,10 +10,10 @@ import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const PRESS_LINE = /button "Press" \[(e\d+)\]/;
 
 const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0">`
@@ -21,12 +21,27 @@ const PAGE = (title: string): string => `<!doctype html><title>${title}</title><
   + "<form id=\"form\" method=\"post\" action=\"/posted\"></form>"
   + "<script>window.seen = []; for (const type of [\"mousedown\", \"mouseup\", \"click\"]) addEventListener(type, () => seen.push(type), true);</script>";
 
-const NAVIGATIONS = [
-  { name: "GET", path: "/next", title: "Next", script: "location.href = \"/next\"; true" },
-  { name: "POST", path: "/posted", title: "Posted", script: "document.getElementById(\"form\").submit(); true" }
-] as const;
+// A navigation the page starts while its tab is hidden: its method, the address and title it loads, and the script that starts it.
+class Navigation {
+  public readonly name: string;
+  public readonly path: string;
+  public readonly title: string;
+  public readonly script: string;
 
-async function hideAndNavigateAsync(app: TestApp, docs: FixtureServer, navigation: (typeof NAVIGATIONS)[number]): Promise<string> {
+  public constructor(name: string, path: string, title: string, script: string) {
+    this.name = name;
+    this.path = path;
+    this.title = title;
+    this.script = script;
+  }
+}
+
+const NAVIGATIONS: readonly Navigation[] = [
+  new Navigation("GET", "/next", "Next", "location.href = \"/next\"; true"),
+  new Navigation("POST", "/posted", "Posted", "document.getElementById(\"form\").submit(); true")
+];
+
+async function hideAndNavigateAsync(app: TestApp, docs: FixtureServer, navigation: Navigation): Promise<string> {
   await app.allowLocalSitesAsync([docs.origin]);
   const instance = await app.openPageAsync(docs.url("/"));
   await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "One")]);
@@ -44,18 +59,6 @@ async function callToolAsync(app: TestApp, bindings: JsonObject, name: string, i
   return result;
 }
 
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function textOf(result: JsonValue): string {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  }).join("\n");
-}
-
 test.describe("a press on a hidden page", () => {
   for (const navigation of NAVIGATIONS) {
     test(`an agent's click reaches the document a hidden tab's page loaded by a ${navigation.name} navigation`, async ({ app, servers }) => {
@@ -63,10 +66,10 @@ test.describe("a press on a hidden page", () => {
       const instance = await hideAndNavigateAsync(app, docs, navigation);
       const target = docs.url(navigation.path);
 
-      const bindings = { page: instance, profileKey: PROFILE_KEY };
-      const snapshot = textOf(await callToolAsync(app, bindings, "browser_snapshot", {}));
+      const bindings = { page: instance, profileKey: TestApp.PROFILE_KEY };
+      const snapshot = ToolReply.textOf(await callToolAsync(app, bindings, "browser_snapshot", {}));
       const reference = PRESS_LINE.exec(snapshot)?.[1];
-      if (reference === undefined)
+      if (Object.isUndefined(reference))
         throw new Error(`The snapshot names no Press button: ${snapshot}`);
       await app.requestAsync("agent-double.planAnswer", { action: "browser.click", answer: "allowOnce" });
       await callToolAsync(app, bindings, "browser_click", { reference });
@@ -79,7 +82,7 @@ test.describe("a press on a hidden page", () => {
       const docs = await servers.startAsync("docs.localhost", { "/": PAGE("One"), [navigation.path]: PAGE(navigation.title) });
       const instance = await hideAndNavigateAsync(app, docs, navigation);
       const target = docs.url(navigation.path);
-      await callToolAsync(app, { page: instance, profileKey: PROFILE_KEY }, "browser_snapshot", {});
+      await callToolAsync(app, { page: instance, profileKey: TestApp.PROFILE_KEY }, "browser_snapshot", {});
 
       await app.window.getByRole("tab", { name: navigation.title, exact: true }).click();
       const view = app.window.locator(".nol-browser-page-view").filter({ visible: true });
@@ -87,7 +90,7 @@ test.describe("a press on a hidden page", () => {
       await expect.poll(() => app.viewPages.runAtAsync(target, "performance.getEntriesByName(\"first-contentful-paint\").length > 0"),
         { message: "The page shown again never painted." }).toBe("true");
       const box = await view.boundingBox();
-      if (box === null)
+      if (Object.isNull(box))
         throw new Error("The shown page's view has no box.");
       await app.window.mouse.click(box.x + 50, box.y + 50);
 

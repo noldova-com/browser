@@ -6,12 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonObject, JsonValue } from "@noldova/context.json";
-
 import { expect, test } from "../fixtures/app-test.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const SECTIONS = 400;
 const SECTION_NAME_LENGTH = 4_000;
 const SNAPSHOT_LIMIT_BYTES = 128 * 1024;
@@ -72,22 +71,40 @@ function buttonRow(i: string): string {
   return `'<div role="button" aria-label="Row ' + ${i} + ' word'.repeat(${BUTTON_NAME_WORDS}) + '" data-pad="' + 'x'.repeat(${ROW_PAD_LENGTH}) + '"></div>'`;
 }
 
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+// A page of many rows under one element: the test's title, the rows' role, the words in each row's name, the row's script and the box after them.
+class RowsCase {
+  public readonly title: string;
+  public readonly role: string;
+  public readonly words: number;
+  public readonly row: (i: string) => string;
+  public readonly box: string;
+
+  public constructor(title: string, role: string, words: number, row: (i: string) => string, box: string) {
+    this.title = title;
+    this.role = role;
+    this.words = words;
+    this.row = row;
+    this.box = box;
+  }
+}
+
+// A long page scrolled to an element the walk doesn't enter: what it is, the page, and what the hit test finds there.
+class StopCase {
+  public readonly stop: string;
+  public readonly page: string;
+  public readonly hitOn: string;
+
+  public constructor(stop: string, page: string, hitOn: string) {
+    this.stop = stop;
+    this.page = page;
+    this.hitOn = hitOn;
+  }
 }
 
 function treeOf(notes: readonly string[]): string {
   const snapshot = notes.find(t => t.includes("\n- RootWebArea")) ?? "";
   expect(snapshot, `No text holds the tree: ${notes.map(t => t.slice(0, 200)).join(" | ")}`).not.toBe("");
   return snapshot.slice(snapshot.indexOf("\n- RootWebArea") + 1);
-}
-
-function textsOf(result: JsonValue): string[] {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  });
 }
 
 test.describe("a snapshot of a long page", () => {
@@ -97,11 +114,11 @@ test.describe("a snapshot of a long page", () => {
     const instance = await app.openPageAsync(docs.url("/"));
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Long page")]);
 
-    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
     expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
     // The result may carry other texts, such as where its content comes from, beside the snapshot and its notes.
-    const notes = textsOf(result);
+    const notes = ToolReply.textsOf(result);
     const tree = treeOf(notes);
     expect(tree.split("\n").slice(0, 3).map(t => t.replace(/ "Section 0 .*"/u, " \"Section 0 …\""))).toEqual([
       "- RootWebArea \"Long page\"",
@@ -115,10 +132,10 @@ test.describe("a snapshot of a long page", () => {
     expect(notes).not.toContain(FROM_VIEW_NOTE);
   });
 
-  for (const [title, role, words, row, box] of [
-    ["a page with 12,000 short link rows under one element", "link", 0, linkRow(0), BOX],
-    ["a page with 12,000 link rows of 30-word names under one element", "link", LINK_NAME_WORDS, linkRow(LINK_NAME_WORDS), BOX],
-    ["a page with more children under one element than one reply could list", "button", BUTTON_NAME_WORDS, buttonRow, ""]] as const)
+  for (const { title, role, words, row, box } of [
+    new RowsCase("a page with 12,000 short link rows under one element", "link", 0, linkRow(0), BOX),
+    new RowsCase("a page with 12,000 link rows of 30-word names under one element", "link", LINK_NAME_WORDS, linkRow(LINK_NAME_WORDS), BOX),
+    new RowsCase("a page with more children under one element than one reply could list", "button", BUTTON_NAME_WORDS, buttonRow, "")])
     test(`${title} gives its first lines, with references and the cut note, and a search that is whole or names what it left, within the step's time`, async ({ app, servers }, testInfo) => {
       const docs = await servers.startAsync("docs.localhost", { "/": rowsPage("Rows page", ROWS, row, box) });
       await app.allowLocalSitesAsync([docs.origin]);
@@ -126,12 +143,12 @@ test.describe("a snapshot of a long page", () => {
       await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Rows page")]);
 
       const started = performance.now();
-      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
       const milliseconds = Math.round(performance.now() - started);
       testInfo.annotations.push({ type: "snapshot ms", description: String(milliseconds) });
 
       expect(result, `The snapshot failed: ${JSON.stringify(result).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
-      const notes = textsOf(result);
+      const notes = ToolReply.textsOf(result);
       const tree = treeOf(notes);
       expect(tree).toMatch(new RegExp(`^ *- StaticText "${ROWS_BEFORE}"$(?:\\n.*)*?\\n *- ${role} "Row 0(?: word){${words}}" \\[e\\d+\\]$`, "mu"));
       expect(tree).toMatch(new RegExp(`^ *- ${role} "Row 1(?: word){${words}}" \\[e\\d+\\]$`, "mu"));
@@ -141,7 +158,7 @@ test.describe("a snapshot of a long page", () => {
       if (box === "")
         expect(notes).toContain(UNSEARCHED_NOTE);
       else {
-        const unsearched = notes.map(t => ROWS_UNSEARCHED.exec(t)?.[1]).filter(t => t !== undefined).map(t => Number(t.replaceAll(",", "")));
+        const unsearched = notes.map(t => ROWS_UNSEARCHED.exec(t)?.[1]).filter((t): t is string => !Object.isUndefined(t)).map(t => Number(t.replaceAll(",", "")));
         testInfo.annotations.push({ type: "unsearched", description: String(unsearched[0] ?? 0) });
         expect(unsearched.every(t => t >= 1 && t <= 12_002), `Unsearched: ${unsearched.join(", ")}`).toBe(true);
         expect(unsearched.length <= 1 && (unsearched.length === 1 || /^ *- button "Inside" \[e\d+\]$/mu.test(tree)),
@@ -160,12 +177,12 @@ test.describe("a snapshot of a long page", () => {
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "Rows page")]);
 
     const started = performance.now();
-    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
     const milliseconds = Math.round(performance.now() - started);
     testInfo.annotations.push({ type: "snapshot ms", description: String(milliseconds) });
 
     expect(result, `The snapshot failed: ${JSON.stringify(result).slice(0, 2_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
-    const notes = textsOf(result);
+    const notes = ToolReply.textsOf(result);
     expect(treeOf(notes)).toMatch(/^ *- link "Row 0" \[e1\]$/mu);
     expect(notes.filter(t => t.includes("were not searched"))).toEqual([]);
     expect(milliseconds, `The snapshot took ${milliseconds} ms.`).toBeLessThan(STEP_MS);
@@ -179,10 +196,10 @@ test.describe("a snapshot of a long page", () => {
     const scrolled = await app.viewPages.runAtAsync(docs.url("/"), "document.querySelectorAll('li')[200].scrollIntoView(); String(window.scrollY)");
     expect(Number(scrolled), "The page didn't scroll.").toBeGreaterThan(0);
 
-    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
     expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
-    const notes = textsOf(result);
+    const notes = ToolReply.textsOf(result);
     const tree = treeOf(notes);
     const sections = [...tree.matchAll(/^ {6}- link "Section (\d+) /gmu)].map(t => Number(t[1]));
     const [first = -1] = sections;
@@ -199,7 +216,7 @@ test.describe("a snapshot of a long page", () => {
     expect(notes).toEqual(expect.arrayContaining([FROM_VIEW_NOTE, CUT_NOTE]));
   });
 
-  for (const [stop, page, hitOn] of [["an svg icon", longPage(ICON), "path false"], ["a block inside an aria-hidden one", longPage(HIDDEN), "div true"]] as const) {
+  for (const { stop, page, hitOn } of [new StopCase("an svg icon", longPage(ICON), "path false"), new StopCase("a block inside an aria-hidden one", longPage(HIDDEN), "div true")]) {
     test(`on a long page scrolled to ${stop}, the snapshot starts where the walk stops, which it doesn't enter, and gives what follows`, async ({ app, servers }) => {
       const docs = await servers.startAsync("docs.localhost", { "/": page });
       await app.allowLocalSitesAsync([docs.origin]);
@@ -209,10 +226,10 @@ test.describe("a snapshot of a long page", () => {
         + " const hit = document.elementFromPoint(innerWidth / 2, innerHeight / 4); hit.localName + ' ' + String(hit.closest('[aria-hidden]') !== null)");
       expect(hit, `The view's point isn't on ${stop}.`).toBe(hitOn);
 
-      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: PROFILE_KEY } });
+      const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
       expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
-      const notes = textsOf(result);
+      const notes = ToolReply.textsOf(result);
       const tree = treeOf(notes);
       const sections = [...tree.matchAll(/^ {6}- link "Section (\d+) /gmu)].map(t => Number(t[1]));
       expect(sections.slice(0, 3)).toEqual([STOP_SECTION, STOP_SECTION + 1, STOP_SECTION + 2]);
@@ -230,10 +247,10 @@ test.describe("a snapshot of a long page", () => {
       + " document.elementFromPoint(innerWidth / 2, innerHeight / 4).textContent");
     expect(hit, "The view's point isn't on the section's link.").toBe(`Section ${STOP_SECTION}`);
 
-    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: { depth: DEEP_DEPTH }, bindings: { page: instance, profileKey: PROFILE_KEY } });
+    const result = await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: { depth: DEEP_DEPTH }, bindings: { page: instance, profileKey: TestApp.PROFILE_KEY } });
 
     expect(result, "The snapshot failed.").toEqual(expect.objectContaining({ isFailure: false }));
-    const notes = textsOf(result);
+    const notes = ToolReply.textsOf(result);
     const tree = treeOf(notes);
     const items = [...tree.matchAll(/^ {4}- listitem "Item (\d+) /gmu)].map(t => Number(t[1]));
     expect(items.slice(0, 3)).toEqual([STOP_SECTION, STOP_SECTION + 1, STOP_SECTION + 2]);

@@ -9,10 +9,10 @@
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 const CUT_NOTE = "The snapshot was cut at its limit; take another with interactive or a depth for less, read an element's part by its reference with part, or scroll and take another.";
 
 // A custom element whose closed root holds a heading, a button and a password field; the page's own script keeps the root.
@@ -48,26 +48,14 @@ const WIDE = `<!doctype html><title>Wide</title><div id="wide"><div id="host" ro
 <script>document.getElementById("host").attachShadow({ mode: "closed" }).innerHTML = "<button>Hidden buy</button>";</script>`;
 const UNSEARCHED_NOTE = "Closed parts inside <div id=\"wide\"> were not searched, as there was too much to describe in one answer or in the time for it; a closed part there shows only its element's line.";
 
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function textsOf(result: JsonValue): string[] {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  });
-}
-
 function linesOf(result: JsonValue): string[] {
-  const snapshot = textsOf(result).find(t => t.startsWith("URL: ")) ?? "";
+  const snapshot = ToolReply.textsOf(result).find(t => t.startsWith("URL: ")) ?? "";
   expect(snapshot, `No text holds the snapshot: ${JSON.stringify(result).slice(0, 2_000)}`).not.toBe("");
   return snapshot.split("\n").slice(3);
 }
 
 function referenceOf(lines: readonly string[], line: RegExp): string {
-  const reference = lines.map(t => line.exec(t)?.[1]).find(t => t !== undefined) ?? "";
+  const reference = lines.map(t => line.exec(t)?.[1]).find(t => !Object.isUndefined(t)) ?? "";
   expect(reference, `No line matches ${String(line)}: ${lines.join("\n")}`).not.toBe("");
   return reference;
 }
@@ -76,7 +64,7 @@ async function openAsync(app: TestApp, url: string, title: string): Promise<Json
   await app.allowLocalSitesAsync([new URL(url).origin]);
   const instance = await app.openPageAsync(url);
   await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(url, title)]);
-  return { page: instance, profileKey: PROFILE_KEY };
+  return { page: instance, profileKey: TestApp.PROFILE_KEY };
 }
 
 async function snapshotAsync(app: TestApp, bindings: JsonObject, input: JsonObject = {}): Promise<JsonValue> {
@@ -142,7 +130,7 @@ test.describe("a snapshot of closed shadow roots", () => {
 
     expect(linesOf(result).map(t => t.replace(/ \[e\d+\]$/u, ""))).toEqual([
       "- RootWebArea \"Wide\"", "  - group \"Card\"", "  - button \"After\"", "    - StaticText \"After\""]);
-    expect(textsOf(result)).toContain(UNSEARCHED_NOTE);
+    expect(ToolReply.textsOf(result)).toContain(UNSEARCHED_NOTE);
   });
 
   test("reads a closed root within the snapshot's limit, cuts one past it with its line, and adds the cut note", async ({ app, servers }) => {
@@ -154,6 +142,6 @@ test.describe("a snapshot of closed shadow roots", () => {
 
     expect(lines.slice(0, 3).map(t => t.replace(/ \[e\d+\]$/u, ""))).toEqual(["- RootWebArea \"Capped\"", "  - generic", "    - button \"first button\""]);
     expect(lines.join("\n")).not.toContain("last button");
-    expect(textsOf(result)).toContain(CUT_NOTE);
+    expect(ToolReply.textsOf(result)).toContain(CUT_NOTE);
   });
 });

@@ -8,13 +8,14 @@
 
 import path from "node:path";
 
+import "@noldova/context.core";
+
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
 import { ProtocolHandlers, ViewPage, ViewSession } from "../fixtures/view-pages.ts";
 
 const PAGE_TITLE = "Isolation";
-const PROFILE_KEY = "e2e";
 const OTHER_KEY = "other";
 const MODULE_ID = "browser";
 const PARTITIONS_FOLDER = "Partitions";
@@ -85,7 +86,7 @@ async function startAsync(app: TestApp, servers: FixtureServers): Promise<Fixtur
   return allowed;
 }
 
-async function openAsync(app: TestApp, url: string, profileKey: string = PROFILE_KEY): Promise<void> {
+async function openAsync(app: TestApp, url: string, profileKey: string = TestApp.PROFILE_KEY): Promise<void> {
   await app.openPageAsync(url, profileKey);
   await expect.poll(() => app.viewPages.listAsync(), { message: `The view never showed ${url}.` }).toContainEqual(new ViewPage(url, PAGE_TITLE));
 }
@@ -162,11 +163,11 @@ test.describe("isolation", () => {
     await openAsync(app, allowed.url("/"));
     await openAsync(app, allowed.url("/other"), OTHER_KEY);
 
-    const sessions = (await app.viewPages.sessionsAsync()).map(t => new ViewSession(t.url, t.storagePath === null ? null : path.basename(path.dirname(t.storagePath)) + "/" + path.basename(t.storagePath),
+    const sessions = (await app.viewPages.sessionsAsync()).map(t => new ViewSession(t.url, Object.isNull(t.storagePath) ? null : path.basename(path.dirname(t.storagePath)) + "/" + path.basename(t.storagePath),
       t.isDefault, t.isWindows));
 
     expect(sessions).toEqual(expect.arrayContaining([
-      new ViewSession(allowed.url("/"), `${PARTITIONS_FOLDER}/${MODULE_ID}.${PROFILE_KEY}`, false, false),
+      new ViewSession(allowed.url("/"), `${PARTITIONS_FOLDER}/${MODULE_ID}.${TestApp.PROFILE_KEY}`, false, false),
       new ViewSession(allowed.url("/other"), `${PARTITIONS_FOLDER}/${MODULE_ID}.${OTHER_KEY}`, false, false)
     ]));
   });

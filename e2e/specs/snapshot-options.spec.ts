@@ -9,10 +9,10 @@
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 
 import { expect, test } from "../fixtures/app-test.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
-const PROFILE_KEY = "e2e";
 // The options of the page's closed select, which the engine's tree lists and the snapshot leaves out, as the security model says.
 const CLOSED_OPTIONS = new Set(["option \"Small\"", "option \"Large\""]);
 const ACTIONABLE = new Set(["button", "checkbox", "combobox", "link", "listbox", "menuitem", "menuitemcheckbox", "menuitemradio", "option", "radio", "scrollbar",
@@ -68,26 +68,14 @@ const AROUND = `<!doctype html><title>Around</title>
 const NESTED = `<!doctype html><title>Nested</title><h1>Shop</h1><p>Welcome back</p>
 <nav aria-label="Menu"><ul><li><a href="#d">Deep link</a></li></ul></nav><button id="pay">Pay</button>`;
 
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function textsOf(result: JsonValue): string[] {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  });
-}
-
 function linesOf(result: JsonValue): string[] {
-  const snapshot = textsOf(result).find(t => t.startsWith("URL: ")) ?? "";
+  const snapshot = ToolReply.textsOf(result).find(t => t.startsWith("URL: ")) ?? "";
   expect(snapshot, `No text holds the snapshot: ${JSON.stringify(result).slice(0, 2_000)}`).not.toBe("");
   return snapshot.split("\n").slice(3);
 }
 
 function referenceOf(lines: readonly string[], line: RegExp): string {
-  const reference = lines.map(t => line.exec(t)?.[1]).find(t => t !== undefined) ?? "";
+  const reference = lines.map(t => line.exec(t)?.[1]).find(t => !Object.isUndefined(t)) ?? "";
   expect(reference, `No line matches ${String(line)}: ${lines.join("\n")}`).not.toBe("");
   return reference;
 }
@@ -96,7 +84,7 @@ async function openAsync(app: TestApp, url: string, title: string): Promise<Json
   await app.allowLocalSitesAsync([new URL(url).origin]);
   const instance = await app.openPageAsync(url);
   await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(url, title)]);
-  return { page: instance, profileKey: PROFILE_KEY };
+  return { page: instance, profileKey: TestApp.PROFILE_KEY };
 }
 
 async function snapshotAsync(app: TestApp, bindings: JsonObject, input: JsonObject = {}): Promise<JsonValue> {
@@ -112,7 +100,7 @@ test.describe("the snapshot's options", () => {
     const engine = await app.viewPages.accessibilityNodesAsync(docs.url("/"));
 
     const ours = linesOf(result).map(t => /^ *- (\S+)(?: "((?:[^"\\]|\\.)*)")?/u.exec(t))
-      .filter((t): t is RegExpExecArray => t !== null && ACTIONABLE.has(t[1] ?? "")).map(t => `${t[1]} "${t[2] ?? ""}"`);
+      .filter((t): t is RegExpExecArray => !Object.isNull(t) && ACTIONABLE.has(t[1] ?? "")).map(t => `${t[1]} "${t[2] ?? ""}"`);
     const theirs = engine.filter(t => ACTIONABLE.has(t.role)).map(t => `${t.role} ${JSON.stringify(t.name.replace(/\s+/gu, " ").trim())}`)
       .filter(t => !CLOSED_OPTIONS.has(t));
     expect(ours.toSorted()).toEqual(theirs.toSorted());
@@ -175,7 +163,7 @@ test.describe("the snapshot's options", () => {
 
     expect(lines.every(t => /^ {0,2}- /u.test(t)), lines.join("\n")).toBe(true);
     expect(lines).not.toContainEqual(expect.stringContaining("Deep link"));
-    expect(textsOf(shallow)).toContain("Lines deeper than 2 levels were left out; read an element's part by its reference with part.");
+    expect(ToolReply.textsOf(shallow)).toContain("Lines deeper than 2 levels were left out; read an element's part by its reference with part.");
     expect(part[0]).toMatch(/^- navigation "Menu"/u);
     expect(part).toContainEqual(expect.stringMatching(/^ +- link "Deep link" \[e\d+\]$/u));
     expect(part).not.toContainEqual(expect.stringContaining("Pay"));

@@ -6,13 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { JsonObject, JsonValue } from "@noldova/context.json";
-
 import { expect, test } from "../fixtures/app-test.ts";
+import { TestApp } from "../fixtures/test-app.ts";
+import { ToolReply } from "../fixtures/tool-reply.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
 const AGENT_BAR = "nol-browser-agent-bar";
-const PROFILE_KEY = "e2e";
 const PRESS_LINE = /button "Press" \[(e\d+)\]/;
 
 // A long page that records each scroll, of the page or of the inner pane, and each click; the button is placed against the view's height once
@@ -23,45 +22,58 @@ const PAGE = "<!doctype html><title>One</title><body style=\"margin:0;height:600
   + "<script>window.seen = []; addEventListener(\"scroll\", t => seen.push(t.target === document ? \"scroll\" : \"pane-scroll\"), true);"
   + "addEventListener(\"click\", () => seen.push(\"click\"), true);</script>";
 
-// Each case's place for the button, from the view's height h, and what it shows before the click: whether the view's top or bottom edge
-// crosses it, and whether its centre is in the view.
-const CASES = [
-  { name: "cut at the view's bottom edge, its centre in view", place: "press.style.top = (1000 + h - 50) + \"px\"; press.style.height = \"60px\"",
-    isTopCut: false, isBottomCut: true, isCentreIn: true, moves: "nothing" },
-  { name: "taller than the view, cut at both edges, its centre in view", place: "press.style.top = (1000 - h / 2) + \"px\"; press.style.height = (2 * h) + \"px\"",
-    isTopCut: true, isBottomCut: true, isCentreIn: true, moves: "nothing" },
-  { name: "below the view", place: "press.style.top = (1000 + 2 * h) + \"px\"",
-    isTopCut: false, isBottomCut: false, isCentreIn: false, moves: "page" },
-  { name: "in an inner pane, out of the pane's view, its centre in the page's view", place: "pane.append(press); press.style.top = \"300px\"",
-    isTopCut: false, isBottomCut: false, isCentreIn: true, moves: "pane" }
-] as const;
+// A case's place for the button, from the view's height h, and what it shows before the click: whether the view's top or bottom edge
+// crosses it, whether its centre is in the view, and what the click moves to it: nothing, the page or the pane.
+class ClickCase {
+  public readonly name: string;
+  public readonly place: string;
+  public readonly isTopCut: boolean;
+  public readonly isBottomCut: boolean;
+  public readonly isCentreIn: boolean;
+  public readonly moves: string;
 
-interface IState {
-  readonly scrollY: number;
-  readonly paneScroll: number;
-  readonly height: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly seen: readonly string[];
+  public constructor(name: string, place: string, isTopCut: boolean, isBottomCut: boolean, isCentreIn: boolean, moves: string) {
+    this.name = name;
+    this.place = place;
+    this.isTopCut = isTopCut;
+    this.isBottomCut = isBottomCut;
+    this.isCentreIn = isCentreIn;
+    this.moves = moves;
+  }
 }
 
-function isObject(value: JsonValue | undefined): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+// The page's and the pane's scroll, the view's height, the button's top and bottom in the view and what the page recorded.
+class PressState {
+  public readonly scrollY: number;
+  public readonly paneScroll: number;
+  public readonly height: number;
+  public readonly top: number;
+  public readonly bottom: number;
+  public readonly seen: readonly string[];
+
+  public constructor(scrollY: number, paneScroll: number, height: number, top: number, bottom: number, seen: readonly string[]) {
+    this.scrollY = scrollY;
+    this.paneScroll = paneScroll;
+    this.height = height;
+    this.top = top;
+    this.bottom = bottom;
+    this.seen = seen;
+  }
 }
 
-function textOf(result: JsonValue): string {
-  const content = isObject(result) ? result["content"] : undefined;
-  return (Array.isArray(content) ? content : []).map((t: JsonValue) => {
-    const text = isObject(t) ? t["text"] : undefined;
-    return typeof text === "string" ? text : "";
-  }).join("\n");
-}
+const CASES: readonly ClickCase[] = [
+  new ClickCase("cut at the view's bottom edge, its centre in view", "press.style.top = (1000 + h - 50) + \"px\"; press.style.height = \"60px\"",
+    false, true, true, "nothing"),
+  new ClickCase("taller than the view, cut at both edges, its centre in view", "press.style.top = (1000 - h / 2) + \"px\"; press.style.height = (2 * h) + \"px\"",
+    true, true, true, "nothing"),
+  new ClickCase("below the view", "press.style.top = (1000 + 2 * h) + \"px\"", false, false, false, "page"),
+  new ClickCase("in an inner pane, out of the pane's view, its centre in the page's view", "pane.append(press); press.style.top = \"300px\"", false, false, true, "pane")
+];
 
-// The page's and the pane's scroll, the view's height, the button's top and bottom in the view and what the page recorded, from the read below.
-function stateOf(text: string): IState {
+// The state from the read below.
+function stateOf(text: string): PressState {
   const [scrollY = "", paneScroll = "", height = "", top = "", bottom = "", seen = ""] = text.split(" ");
-  return { scrollY: Number(scrollY), paneScroll: Number(paneScroll), height: Number(height), top: Number(top), bottom: Number(bottom),
-    seen: seen === "" ? [] : seen.split(",") };
+  return new PressState(Number(scrollY), Number(paneScroll), Number(height), Number(top), Number(bottom), seen === "" ? [] : seen.split(","));
 }
 
 const READ = "(() => { const box = document.getElementById(\"press\").getBoundingClientRect();"
@@ -75,8 +87,8 @@ test.describe("an agent's click on an element in view", () => {
       const instance = await app.openPageAsync(docs.url("/"));
       await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/"), "One")]);
       await app.viewPages.runAtAsync(docs.url("/"), "scrollTo(0, 1000); true");
-      const bindings = { page: instance, profileKey: PROFILE_KEY };
-      const snapshot = textOf(await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings }));
+      const bindings = { page: instance, profileKey: TestApp.PROFILE_KEY };
+      const snapshot = ToolReply.textOf(await app.requestAsync("agent-double.callTool", { name: "browser_snapshot", input: {}, bindings }));
       const reference = PRESS_LINE.exec(snapshot)?.[1] ?? "";
       // Placed once the agent's bar shows and the view has the height left under it, as the bar comes after the call answers; the page's own
       // scroll is recorded before the count starts.
