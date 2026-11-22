@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type { JsonObject } from "@noldova/context.json";
 import { WebViewFailure, WebViewFailureKind, WebViewNavigation, WebViewNavigationKind } from "@noldova/desktop.protocol";
 import { PermissionDecision, ToolAbortReason, ToolFailure, ToolFailureCode, WebViewFailureException } from "@noldova/desktop.runtime";
 import { describe, expect, it } from "vitest";
@@ -46,6 +47,28 @@ const KINDS: readonly ToolAbortReason[] = [
   ToolAbortReason.Stopped, ToolAbortReason.Cancelled, ToolAbortReason.SessionEnded, ToolAbortReason.SwitchedOff, ToolAbortReason.DeadlineReached
 ];
 const MISSING_NODE: WebViewFailure = new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found");
+
+// A protocol failure with no code and no message, which WebViewFailure's own constructor refuses, as a malformed answer gives one.
+class SilentProtocolFailure implements WebViewFailure {
+  public readonly kind: WebViewFailureKind = WebViewFailureKind.Protocol;
+  public readonly code: number | null = null;
+  public readonly message: string | null = null;
+
+  public toJson(): JsonObject {
+    return {};
+  }
+}
+
+// A permission decision that refuses the call, and the reason its failure gives.
+class RefusingDecision {
+  public readonly decision: PermissionDecision;
+  public readonly reason: ToolFailureCode;
+
+  public constructor(decision: PermissionDecision, reason: ToolFailureCode) {
+    this.decision = decision;
+    this.reason = reason;
+  }
+}
 
 function granted(): ActionProgress {
   const progress: ActionProgress = new ActionProgress(() => undefined);
@@ -106,7 +129,7 @@ describe("ToolFailures", () => {
   });
 
   it("maps a missing node to a stale reference only for a call by reference", () => {
-    const silent: WebViewFailure = { kind: WebViewFailureKind.Protocol, code: null, message: null, toJson: () => ({}) };
+    const silent: WebViewFailure = new SilentProtocolFailure();
 
     expect(fromRelay(MISSING_NODE, true).moduleCode).toBe("browser.staleReference");
     expect(fromRelay(MISSING_NODE, false).moduleCode).toBe("browser.protocol");
@@ -120,23 +143,28 @@ describe("ToolFailures", () => {
     expect(ToolFailures.fromRelay(error, false).cause).toBe(error);
   });
 
-  it("lets only the two allowed decisions through, and refuses a taken-over call as denied, with its own code and message", () => {
-    const cases: readonly [PermissionDecision, ToolFailureCode | null][] = [
-      [PermissionDecision.AllowedOnce, null],
-      [PermissionDecision.AllowedAlways, null],
-      [PermissionDecision.Denied, ToolFailureCode.Denied],
-      [PermissionDecision.DeniedAlways, ToolFailureCode.Denied],
-      [PermissionDecision.Expired, ToolFailureCode.Expired],
-      [PermissionDecision.Withdrawn, ToolFailureCode.Withdrawn],
-      [PermissionDecision.TakenOver, ToolFailureCode.Denied]
-    ];
+  it("lets the two allowed decisions through", () => {
+    expect([PermissionDecision.AllowedOnce, PermissionDecision.AllowedAlways].map(t => ToolFailures.fromDecision(t))).toEqual([null, null]);
+  });
+
+  it.each<RefusingDecision>([
+    new RefusingDecision(PermissionDecision.Denied, ToolFailureCode.Denied),
+    new RefusingDecision(PermissionDecision.DeniedAlways, ToolFailureCode.Denied),
+    new RefusingDecision(PermissionDecision.Expired, ToolFailureCode.Expired),
+    new RefusingDecision(PermissionDecision.Withdrawn, ToolFailureCode.Withdrawn),
+    new RefusingDecision(PermissionDecision.TakenOver, ToolFailureCode.Denied)
+  ])("refuses a call the decision $decision answered as $reason", (row: RefusingDecision) => {
+    expect(ToolFailures.fromDecision(row.decision)).toMatchObject({ reason: row.reason });
+  });
+
+  it("gives each refusing decision its own failure, and a taken-over call its own code and message", () => {
     expect([PermissionDecision.Denied, PermissionDecision.DeniedAlways, PermissionDecision.TakenOver, PermissionDecision.Expired, PermissionDecision.Withdrawn]
-      .map(t => ToolFailures.fromDecision(t)?.constructor)).toEqual([PermissionDeniedException, PermissionDeniedException, HandedOverException, PermissionExpiredException,
-      PermissionWithdrawnException]);
-    for (const [decision, reason] of cases)
-      expect(ToolFailures.fromDecision(decision)?.reason ?? null).toBe(reason);
-    expect([ToolFailures.fromDecision(PermissionDecision.TakenOver)?.toFailure(), ToolFailures.fromDecision(PermissionDecision.Denied)?.moduleCode])
-      .toEqual([new ToolFailure(ToolFailureCode.Denied, "The person is doing it themself; the page is theirs, focused on the element.", "browser.handedOver"), null]);
+      .map(t => ToolFailures.fromDecision(t))).toEqual([expect.any(PermissionDeniedException), expect.any(PermissionDeniedException), expect.any(HandedOverException),
+      expect.any(PermissionExpiredException), expect.any(PermissionWithdrawnException)]);
+    expect([ToolFailures.fromDecision(PermissionDecision.TakenOver), ToolFailures.fromDecision(PermissionDecision.Denied)]).toMatchObject([
+      { reason: ToolFailureCode.Denied, message: "The person is doing it themself; the page is theirs, focused on the element.", moduleCode: "browser.handedOver" },
+      { moduleCode: null }
+    ]);
   });
 
   it("maps a navigation outcome", () => {
@@ -145,10 +173,8 @@ describe("ToolFailures", () => {
     expect(refused).toMatchObject({ origin: "https://example.test" });
     expect(ToolFailures.fromNavigation(new WebViewNavigation(WebViewNavigationKind.NoHistory))).toBeInstanceOf(NoHistoryException);
     expect(ToolFailures.fromNavigation(new WebViewNavigation(WebViewNavigationKind.Started))).toBeNull();
-    expect(ToolFailures.fromNavigation(new WebViewNavigation(WebViewNavigationKind.Refused, "https://example.test"))?.toFailure())
-      .toEqual(new ToolFailure(ToolFailureCode.Refused, "Navigation to https://example.test was refused."));
-    expect(ToolFailures.fromNavigation(new WebViewNavigation(WebViewNavigationKind.NoHistory))?.toFailure())
-      .toMatchObject({ code: ToolFailureCode.Refused, moduleCode: "browser.noHistory" });
+    expect(refused).toMatchObject({ reason: ToolFailureCode.Refused, message: "Navigation to https://example.test was refused.", moduleCode: null });
+    expect(ToolFailures.fromNavigation(new WebViewNavigation(WebViewNavigationKind.NoHistory))).toMatchObject({ reason: ToolFailureCode.Refused, moduleCode: "browser.noHistory" });
   });
 
   it("turns any thrown value into a call failure", () => {
@@ -196,7 +222,7 @@ describe("ToolFailures", () => {
   });
 
   it("keeps a lost element or a changed page, not an uncertain outcome, when the action sent only the focus, which the page can answer by replacing the element", () => {
-    const focused = (progress: ActionProgress): ActionProgress => {
+    const focused: (progress: ActionProgress) => ActionProgress = (progress: ActionProgress): ActionProgress => {
       progress.markInputSent(true);
       return progress;
     };
@@ -217,8 +243,8 @@ describe("ToolFailures", () => {
     sent.markInputSent();
     const failures: readonly WebViewFailure[] = [
       ...[
-        WebViewFailureKind.NotOwned, WebViewFailureKind.NotAllowed, WebViewFailureKind.ShortcutRefused, WebViewFailureKind.TimedOut, WebViewFailureKind.TooLarge,
-        WebViewFailureKind.ViewClosed, WebViewFailureKind.Crashed, WebViewFailureKind.ProfileCleared, WebViewFailureKind.Unavailable
+        WebViewFailureKind.NotOwned, WebViewFailureKind.NotAllowed, WebViewFailureKind.TimedOut, WebViewFailureKind.TooLarge, WebViewFailureKind.ViewClosed,
+        WebViewFailureKind.Crashed, WebViewFailureKind.ProfileCleared, WebViewFailureKind.Unavailable
       ].map(t => new WebViewFailure(t)),
       new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node found")
     ];
@@ -229,8 +255,16 @@ describe("ToolFailures", () => {
       expect(before.code, failure.kind).not.toBe(ToolFailureCode.OutcomeUncertain);
       expect(before, failure.kind).toEqual(ToolFailures.toException(relayed(failure), false).toFailure());
       expect(after.code, failure.kind).toBe(ToolFailureCode.OutcomeUncertain);
-      expect(after.message, failure.kind).toContain(`(${before.moduleCode ?? before.code})`);
+      expect(after.message, failure.kind).toContain(`(${Object.isNull(before.moduleCode) ? before.code : before.moduleCode})`);
     }
+  });
+
+  it("keeps a key refused as one of the app's shortcuts refused after the action sent its input, since the page never got it", () => {
+    const sent: ActionProgress = granted();
+    sent.markInputSent();
+
+    expect(ToolFailures.forCall(relayed(new WebViewFailure(WebViewFailureKind.ShortcutRefused)), sent, true))
+      .toEqual(new ToolFailure(ToolFailureCode.Refused, "The key is one of the app's shortcuts, which a page never gets.", "browser.shortcutRefused"));
   });
 
   it("reads a hit test that found nothing as a page that isn't showing, referenced or not, and another missing node as a stale reference", () => {

@@ -6,12 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { type Registration, ToolAbortReason, type ToolCall, ToolContent, type ToolFailure, type ToolResult, type ToolSession } from "@noldova/desktop.runtime";
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { type IToolDescriptor, type Registration, ToolAbortReason, type ToolCall, ToolContent, type ToolFailure, type ToolResult, type ToolSession,
+  WebViewFailureException } from "@noldova/desktop.runtime";
 import { FakeModuleLog, FakeModuleSettings, FakeToolsContext } from "@noldova/desktop.runtime/testing";
 import { describe, expect, it } from "vitest";
 
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
+import { ShortcutRefusedException } from "../../src/exceptions/shortcut-refused.exception.ts";
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import type { IBrowserTool } from "../../src/interfaces/i-browser-tool.ts";
 import type { ActionProgress } from "../../src/models/action-progress.ts";
@@ -24,8 +27,45 @@ import { ToolHost } from "../../src/services/tool-host.ts";
 import { ToolResults } from "../../src/services/tool-results.ts";
 import { answerThroughRegistry } from "../fixtures/desktop-fakes.fixture.ts";
 
+// A tool with the descriptor of a real one, whose call runs the test's own work.
+class ScriptedTool implements IBrowserTool {
+  public readonly descriptor: IToolDescriptor;
+  private readonly work: (call: ToolCall, progress: ActionProgress) => Promise<ToolResult>;
+
+  public constructor(descriptor: IToolDescriptor, work: (call: ToolCall, progress: ActionProgress) => Promise<ToolResult>) {
+    this.descriptor = descriptor;
+    this.work = work;
+  }
+
+  public callAsync(call: ToolCall, progress: ActionProgress): Promise<ToolResult> {
+    return this.work(call, progress);
+  }
+}
+
+// Whether a failing action sent its input, and the code its call ends with.
+class SentCase {
+  public readonly isSent: boolean;
+  public readonly code: string;
+
+  public constructor(isSent: boolean, code: string) {
+    this.isSent = isSent;
+    this.code = code;
+  }
+}
+
+// Whether the one input an action sent before its element was lost was the focus, and the code its call ends with.
+class FocusCase {
+  public readonly isFocus: boolean;
+  public readonly code: string;
+
+  public constructor(isFocus: boolean, code: string) {
+    this.isFocus = isFocus;
+    this.code = code;
+  }
+}
+
 function tool(name: "click" | "snapshot", work: (call: ToolCall, progress: ActionProgress) => Promise<ToolResult>): IBrowserTool {
-  return { descriptor: ToolDescriptors[name], callAsync: work };
+  return new ScriptedTool(ToolDescriptors[name], work);
 }
 
 class HostBench {
@@ -53,23 +93,20 @@ describe("ToolHost", () => {
     toolHost.register(tool("snapshot", async () => ToolResults.text("tree", PAGE)));
 
     expect(session.listTools().map(t => t.name)).toEqual(["browser_snapshot"]);
-    expect(session.listTools()[0]?.risk).toEqual(ToolDescriptors.snapshot.risk);
+    expect(session.listTools().map(t => t.risk)).toEqual([ToolDescriptors.snapshot.risk]);
     expect(await session.callAsync("browser_snapshot", {})).toEqual(ToolResults.text("tree", PAGE));
   });
 
   it("passes the content of a blank tab and a data URL through Noldova Desktop's checks under the module's opaque origin, which the engine's own value fails", async () => {
     const { session, host: toolHost } = new HostBench();
-    const origins: string[] = [PageOrigin.of("://"), PageOrigin.of("null"), "://"];
-    toolHost.register(tool("snapshot", async () => {
-      const origin = origins.shift() ?? "";
-      return ToolResults.page(origin, [ToolContent.fromText("- document", origin)], new ShownPage("about:blank", ""));
-    }));
+    let origin: string = "";
+    toolHost.register(tool("snapshot", async () => ToolResults.page(origin, [ToolContent.fromText("- document", origin)], new ShownPage("about:blank", ""))));
 
-    const outcomes: (ToolResult | ToolFailure)[] = [
-      await session.callAsync("browser_snapshot", {}),
-      await session.callAsync("browser_snapshot", {}),
-      await session.callAsync("browser_snapshot", {})
-    ];
+    const outcomes: (ToolResult | ToolFailure)[] = [];
+    for (const next of [PageOrigin.of("://"), PageOrigin.of("null"), "://"]) {
+      origin = next;
+      outcomes.push(await session.callAsync("browser_snapshot", {}));
+    }
 
     expect(outcomes.map(t => t.isFailure)).toEqual([false, false, true]);
     expect(outcomes[2]).toMatchObject({ code: "Unavailable", moduleCode: "browser.malformedResult" });
@@ -120,19 +157,18 @@ describe("ToolHost", () => {
     expect(await session.callAsync("browser_snapshot", {})).toMatchObject({ isFailure: true, code: "Unavailable", moduleCode: "browser.internal" });
   });
 
-  it("reports an uncertain outcome only for an action stopped after it may have sent its input", async () => {
-    for (const [isSent, code] of [[false, "TimedOut"], [true, "OutcomeUncertain"]] as const) {
+  it.each<SentCase>([new SentCase(false, "TimedOut"), new SentCase(true, "OutcomeUncertain")])(
+    "reports an action stopped with its input sent $isSent as $code, uncertain only once it may have sent it", async (row: SentCase) => {
       const { session, host: toolHost } = new HostBench();
       toolHost.register(tool("click", async (_call: ToolCall, progress: ActionProgress) => {
         progress.markGranted();
-        if (isSent)
+        if (row.isSent)
           progress.markInputSent();
         throw new PageAnswerTimedOutException();
       }));
 
-      expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code });
-    }
-  });
+      expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: row.code });
+    });
 
   it("reports a reference lost after the grant as stale", async () => {
     const { session, host: toolHost } = new HostBench();
@@ -144,17 +180,27 @@ describe("ToolHost", () => {
     expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: "Stale" });
   });
 
-  it("reports an element gone right after the action's focus as stale, not uncertain, and one gone after other input as uncertain", async () => {
-    for (const [isFocus, code] of [[true, "Stale"], [false, "OutcomeUncertain"]] as const) {
+  it.each<FocusCase>([new FocusCase(true, "Stale"), new FocusCase(false, "OutcomeUncertain")])(
+    "reports an element gone right after input that was only the focus $isFocus as $code, stale after the focus and uncertain after other input", async (row: FocusCase) => {
       const { session, host: toolHost } = new HostBench();
       toolHost.register(tool("click", async (_call: ToolCall, progress: ActionProgress) => {
         progress.markGranted();
-        progress.markInputSent(isFocus);
+        progress.markInputSent(row.isFocus);
         throw new StaleReferenceException();
       }));
 
-      expect(await session.callAsync("browser_click", { reference: "e1" }), String(isFocus)).toMatchObject({ isFailure: true, code });
-    }
+      expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: row.code });
+    });
+
+  it("reports a key Noldova Desktop refused as one of the app's shortcuts as refused, not uncertain, since the page never got it", async () => {
+    const { session, host: toolHost } = new HostBench();
+    toolHost.register(tool("click", async (_call: ToolCall, progress: ActionProgress) => {
+      progress.markGranted();
+      progress.markInputSent();
+      throw new ShortcutRefusedException(new WebViewFailureException(new WebViewFailure(WebViewFailureKind.ShortcutRefused)));
+    }));
+
+    expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: "Refused", moduleCode: "browser.shortcutRefused" });
   });
 
   it("never reports an uncertain outcome for a reading tool", async () => {

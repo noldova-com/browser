@@ -542,7 +542,7 @@ A tool that fails rejects with Noldova Desktop's `ToolFailureException`, whose `
 | `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop teammate or Take over |
 | `Stale` | The page changed after the grant, so nothing ran; a snapshot's page went to another document during each of its two reads; or a screenshot's page went to another document during its capture; take a new snapshot or screenshot |
 | `TimedOut` | The call's time limit passed before its point of no return |
-| `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus; the message keeps the reason it ended with |
+| `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus, and a key refused as one of the app's shortcuts, which the page never got; the message keeps the reason it ended with |
 | `TooLarge` | The page's answer or the result is over its limit, even cut |
 | `Unavailable` | The pane can't answer, or the module was switched off, with the module code `browser.viewClosed`, `browser.pageCrashed` or `browser.profileCleared` when the pane is gone, or a fault in the module, with its module code |
 
@@ -585,7 +585,9 @@ A non-resumable tool's point of no return is its first call that can run the pag
 The emulation calls of a click aren't among them: they can fire only the window focus and blur, visibility and resize events a page also gets whenever the person changes tabs or windows, none of which acts for the person, so a retry after them repeats nothing, and `browser.pageNotShowing` before any scroll is a clean `Refused`.
 The tool reports it to the registry just before that call.
 Any failure after it ends the tool with `OutcomeUncertain`, since the action may have happened; the agent then reads the page again with `browser_snapshot`.
-One case keeps its own failure: when the only call sent was `DOM.focus` and the element is then gone, or the page changed, as when a page replaces a search field as it takes the focus, none of the tool's own input reached the page, so the call fails as `Stale` after a grant, or `Refused` with `browser.staleReference` before one, and the tool tells the registry with `markNothingSent()` ([desktop#291](https://github.com/noldova-com/desktop/issues/291)).
+Two cases keep their own failure, and the tool tells the registry with `markNothingSent()` ([desktop#291](https://github.com/noldova-com/desktop/issues/291)), since none of the tool's own input reached the page.
+A key that Noldova Desktop refuses as one of the app's shortcuts never reaches the page, so the call fails as `Refused` with `browser.shortcutRefused`.
+When the only call sent was `DOM.focus` and the element is then gone, or the page changed, as when a page replaces a search field as it takes the focus, the call fails as `Stale` after a grant, or `Refused` with `browser.staleReference` before one.
 Before it, while the tool classifies, waits for permission or reads nodes, the call ends as any call would, with `TimedOut`, `Withdrawn`, `Cancelled`, `Stopped` or `Unavailable`, since nothing changed yet.
 A read-only tool never reports `OutcomeUncertain`; at its time limit, `browser_console` and `browser_wait_for` return what they have so far.
 
