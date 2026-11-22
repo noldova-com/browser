@@ -596,7 +596,9 @@ export declare class ViewNewWindowEvent extends ViewEvent {
 
   /**
    * Whether the engine asked for a background tab, its disposition `background-tab`, as for a middle or Ctrl click on a link, or Cmd
-   * click on macOS; false for a script's `window.open`, a link's `target="_blank"` and an event without a disposition.
+   * click on macOS, and for a script's `window.open` that runs in such a click's events, which takes the click's disposition; false for
+   * a link's `target="_blank"`, a script's `window.open` in other input and an event without a disposition. So it doesn't say that the
+   * person chose the address.
    */
   public readonly isBackgroundTab: boolean;
 

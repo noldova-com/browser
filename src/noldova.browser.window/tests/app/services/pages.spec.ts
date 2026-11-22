@@ -1265,6 +1265,7 @@ describe("Pages", () => {
 
     expect(context.opened.map(t => [t.title, t.activate])).toEqual([["New tab", undefined], ["https://docs.example.com/a", false], ["https://docs.example.com/b", false]]);
     expect([second, tab.controller.status.popup]).toStrictEqual([new PopupOffer("https://ads.example.com/second", null), new PopupOffer("https://ads.example.com/", null)]);
+    expect(requestsOf(BrowserMethods.allowTypedAddress), "A press's background tab asked to allow its site.").toEqual([]);
   });
 
   it("opens every new window a page on a site allowed pop-ups asks for, its subdomains' too, with no press, and blocks a page's on another site", async () => {
