@@ -10,7 +10,7 @@ import { type Signal, computed } from "@angular/core";
 import type { JsonObject, JsonValue } from "@noldova/context.json";
 import { BrowserEvents, BrowserMethods, PageRecord, PageRequest, TypedAddressRequest, TypedRedirectRequest } from "@noldova/browser.protocol";
 import type { WebViewNavigation } from "@noldova/desktop.protocol";
-import { DocumentTone, type IDocumentUpdate, type StatusBarItemState } from "@noldova/desktop.window";
+import { DocumentTone, type StatusBarItemState } from "@noldova/desktop.window";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AddressRefusal } from "../../../src/app/enums/address-refusal.ts";
@@ -38,17 +38,7 @@ import { PageAnswers } from "../../../src/app/services/page-answers.ts";
 import { Pages } from "../../../src/app/services/pages.ts";
 import { FakeWebView, type FakeWebViews, WebViewValues } from "../../fixtures/fake-web-views.fixture.ts";
 import { MissingPartError } from "../../fixtures/missing-part.error.ts";
-import { WindowContext } from "../../fixtures/window-context.fixture.ts";
-
-class TitleUpdate {
-  public readonly instance: string;
-  public readonly update: IDocumentUpdate;
-
-  public constructor(instance: string, update: IDocumentUpdate) {
-    this.instance = instance;
-    this.update = update;
-  }
-}
+import { OpenedDocument, TitleUpdate, WindowContext, WindowRequest } from "../../fixtures/window-context.fixture.ts";
 
 describe("Pages", () => {
   const UUID: RegExp = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -260,7 +250,7 @@ describe("Pages", () => {
     expect(isRead).toBe(true);
     expect([...pages.activities().entries()].map(t => [t[0], t[1].activity, t[1].state])).toEqual([["page-4", "call-8", "Asking"], ["page-2", "call-5", "Acting"]]);
     expect(underlines()).toEqual([]);
-    expect(context.requests.filter(t => t.method === BrowserMethods.readActivities)).toEqual([{ method: BrowserMethods.readActivities, parameters: null }]);
+    expect(context.requests.filter(t => t.method === BrowserMethods.readActivities)).toEqual([new WindowRequest(BrowserMethods.readActivities, null)]);
   });
 
   it("shows only the calls that start after the runtime started again when it can't read them, or reads no array, and says so", async () => {
@@ -499,8 +489,8 @@ describe("Pages", () => {
     const second: string = pages.open("workspace-2", null);
 
     expect(context.opened).toEqual([
-      { name: "browser.page", instance: first, title: "https://docs.example.com/pricing", after: null, marker: null, imageGlyph: "public" },
-      { name: "browser.page", instance: second, title: "New tab", after: null, marker: null, imageGlyph: "public" }
+      new OpenedDocument("browser.page", first, "https://docs.example.com/pricing", null, null, undefined, "public"),
+      new OpenedDocument("browser.page", second, "New tab", null, null, undefined, "public")
     ]);
     expect([UUID.test(first), UUID.test(second), first === second]).toEqual([true, true, false]);
   });
