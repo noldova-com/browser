@@ -813,11 +813,28 @@ describe("Pages", () => {
     loading(viewOf(heard), "about:blank", false, "about:blank");
     for (const tab of [heard, unheard])
       loading(viewOf(tab), "https://docs.example.com/", true);
+    for (const tab of [heard, unheard])
+      loading(viewOf(tab), "https://docs.example.com/", false);
 
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([heard, unheard, heard, unheard]
       .map((t, i) => ({ instance: t.id, profileKey: "workspace-1", url: i < 2 ? "" : "https://docs.example.com/" })));
     expect(context.titles.filter(t => t.update.title !== undefined).map(t => [t.instance, t.update.title]))
-      .toEqual([[heard.id, "New tab"], [heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
+      .toEqual([[heard.id, "https://docs.example.com/"], [unheard.id, "https://docs.example.com/"]]);
+  });
+
+  it("keeps the title a tab opened with while its page loads without a title of its own, and names it by its address only once that load ends", async () => {
+    const tab = await openAsync();
+    const view = viewOf(tab);
+
+    loading(view, "about:blank", false, "about:blank");
+    loading(view, "https://docs.example.com/", true);
+    loading(view, "https://docs.example.com/", true, "docs.example.com");
+    const whileLoading: number = context.titles.length;
+    loading(view, "https://docs.example.com/", false);
+    loading(view, "https://docs.example.com/next", true);
+    loading(view, "https://docs.example.com/next", true, "Next steps");
+
+    expect([whileLoading, context.titles.filter(t => t.update.title !== undefined).map(t => t.update.title)]).toEqual([0, ["https://docs.example.com/", "Next steps"]]);
   });
 
   it("opens a restored page in the workspace its record keeps, at the address it last showed", async () => {
@@ -1001,7 +1018,7 @@ describe("Pages", () => {
     loading(view, "https://docs.example.com/", false, "Plans and pricing");
 
     expect(context.working).toEqual([]);
-    expect(context.titles).toEqual([{ instance: tab.id, update: { title: "https://docs.example.com/" } }, { instance: tab.id, update: { title: "Plans and pricing" } }]);
+    expect(context.titles).toEqual([{ instance: tab.id, update: { title: "Plans and pricing" } }]);
     expect(requestsOf(BrowserMethods.rememberPage)).toEqual([
       { instance: tab.id, profileKey: "workspace-1", url: "" }, { instance: tab.id, profileKey: "workspace-1", url: "https://docs.example.com/" }
     ]);
@@ -1317,7 +1334,7 @@ describe("Pages", () => {
   it("closes a released tab's view and stops following it, and forgets its record once, as the person's close says", async () => {
     const tab = await openAsync();
     const other = await openAsync(null, "workspace-2");
-    loading(viewOf(tab), "https://docs.example.com/", true);
+    loading(viewOf(tab), "https://docs.example.com/", true, "Docs");
 
     pages.release(tab);
     pages.release(tab);

@@ -41,6 +41,36 @@ describe("PaneTab", () => {
     expect(titles).toEqual(["New tab", "New tab", "https://example.test/", "https://example.test/"]);
   });
 
+  it("has no settled title before its first page or while a load has no page title, and its title otherwise", () => {
+    const view = new FakeWebViews().open("workspace-1");
+    const tab = new PaneTab("5", view);
+    const titles: (string | null)[] = [tab.settledTitle];
+
+    for (const state of [new ViewStateEvent("https://example.test/", "", true, false, false), new ViewStateEvent("https://example.test/", "", false, false, false),
+      new ViewStateEvent("https://example.test/next", "", true, false, false), new ViewStateEvent("https://example.test/next", "Next", true, false, false)]) {
+      view.emit(state);
+      titles.push(tab.settledTitle);
+    }
+
+    expect(titles).toEqual([null, null, "https://example.test/", null, "Next"]);
+  });
+
+  it("takes the engine's address title for no title while a load is under way, and as the title once the load ends", () => {
+    const view = new FakeWebViews().open("workspace-1");
+    const tab = new PaneTab("6", view);
+    const titles: (string | null)[] = [];
+
+    for (const state of [new ViewStateEvent("http://127.0.0.1:43443/three", "127.0.0.1:43443/three", true, false, false),
+      new ViewStateEvent("https://example.test/", "example.test", true, false, false), new ViewStateEvent("https://example.test/", "https://example.test/", true, false, false),
+      new ViewStateEvent("https://example.test/", "https://example.test", true, false, false),
+      new ViewStateEvent("https://example.test/", "example.test/news", true, false, false), new ViewStateEvent("https://example.test/", "example.test", false, false, false)]) {
+      view.emit(state);
+      titles.push(tab.settledTitle);
+    }
+
+    expect(titles).toEqual([null, null, null, null, "example.test/news", "example.test"]);
+  });
+
   it("shows its page while it loads or has loaded, and a message in every other state", () => {
     const view = new FakeWebViews().open("workspace-1");
     const tab = new PaneTab("3", view);

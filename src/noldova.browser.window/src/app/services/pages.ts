@@ -700,8 +700,9 @@ export class Pages {
         clearWorking();
         clearWorking = null;
       }
-      if (tab.title !== title) {
-        title = tab.title;
+      const settled: string | null = tab.settledTitle;
+      if (!Object.isNull(settled) && settled !== title) {
+        title = settled;
         this.context.updateDocument(Resources.pageDocument, tab.id, { title });
       }
       showStatus(status);
