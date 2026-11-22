@@ -16,14 +16,45 @@ import { vi } from "vitest";
 import { Resources } from "../../src/resources.ts";
 import { FakeWebViews } from "./fake-web-views.fixture.ts";
 
-interface IOpenedDocument {
-  readonly name: string;
-  readonly instance: string;
-  readonly title: string;
-  readonly after: string | null;
-  readonly marker: IDocumentMarker | null;
-  readonly activate: boolean | undefined;
-  readonly imageGlyph: string | undefined;
+export class OpenedDocument {
+  public readonly name: string;
+  public readonly instance: string;
+  public readonly title: string;
+  public readonly after: string | null;
+  public readonly marker: IDocumentMarker | null;
+  public readonly activate: boolean | undefined;
+  public readonly imageGlyph: string | undefined;
+
+  public constructor(name: string, instance: string, title: string, after: string | null, marker: IDocumentMarker | null, activate: boolean | undefined,
+    imageGlyph: string | undefined) {
+    this.name = name;
+    this.instance = instance;
+    this.title = title;
+    this.after = after;
+    this.marker = marker;
+    this.activate = activate;
+    this.imageGlyph = imageGlyph;
+  }
+}
+
+export class TitleUpdate {
+  public readonly instance: string;
+  public readonly update: IDocumentUpdate;
+
+  public constructor(instance: string, update: IDocumentUpdate) {
+    this.instance = instance;
+    this.update = update;
+  }
+}
+
+export class WindowRequest {
+  public readonly method: string;
+  public readonly parameters: JsonValue;
+
+  public constructor(method: string, parameters: JsonValue) {
+    this.method = method;
+    this.parameters = parameters;
+  }
 }
 
 export class WindowContext extends FakeWindowPartContext {
@@ -64,10 +95,10 @@ export class WindowContext extends FakeWindowPartContext {
   public readonly documents: DocumentContribution[] = [];
   public readonly commands: CommandContribution[] = [];
   public readonly statusBarItems: StatusBarItem[] = [];
-  public readonly opened: IOpenedDocument[] = [];
+  public readonly opened: OpenedDocument[] = [];
   public readonly closed: string[] = [];
-  public readonly titles: { readonly instance: string; readonly update: IDocumentUpdate }[] = [];
-  public readonly requests: { readonly method: string; readonly parameters: JsonValue }[] = [];
+  public readonly titles: TitleUpdate[] = [];
+  public readonly requests: WindowRequest[] = [];
   public readonly logs: string[] = [];
   public readonly links: string[] = [];
   public readonly linkPlaces: (LinkPlace | undefined)[] = [];
@@ -101,10 +132,10 @@ export class WindowContext extends FakeWindowPartContext {
       return item;
     });
     this.answer("openDocument", (name, instance, title, options) =>
-      void this.opened.push({ name, instance, title, after: options?.after ?? null, marker: options?.marker ?? null,
-        activate: options?.activate, imageGlyph: options?.imageGlyph }));
+      void this.opened.push(new OpenedDocument(name, instance, title, options?.after ?? null, options?.marker ?? null, options?.activate,
+        options?.imageGlyph)));
     this.answer("closeDocument", (_name, instance) => void this.closed.push(instance));
-    this.answer("updateDocument", (_name, instance, update) => void this.titles.push({ instance, update }));
+    this.answer("updateDocument", (_name, instance, update) => void this.titles.push(new TitleUpdate(instance, update)));
     this.answer("listOpenDocumentsAsync", () => this.openDocuments instanceof Error ? Promise.reject(this.openDocuments) : Promise.resolve(this.openDocuments));
     this.answer("log", t => void this.logs.push(t));
     this.answer("openLinkAsync", (t, options) => {
@@ -113,7 +144,7 @@ export class WindowContext extends FakeWindowPartContext {
       return Promise.resolve();
     });
     this.answer("requestAsync", (method, parameters) => {
-      this.requests.push({ method, parameters });
+      this.requests.push(new WindowRequest(method, parameters));
       return WindowContext.declaredMethods.has(method) ? this.answerRequest(method, parameters) : Promise.reject(new UnansweredCallException(method));
     });
     this.answer("readSetting", t => {
@@ -154,7 +185,7 @@ export class WindowContext extends FakeWindowPartContext {
   }
 
   public get row(): string[] {
-    const row: { readonly instance: string; readonly title: string }[] = [];
+    const row: OpenedDocument[] = [];
     for (const opened of this.opened.filter((t, i) => this.opened.findIndex(u => u.instance === t.instance) === i)) {
       const index: number = row.findIndex(t => t.instance === opened.after);
       row.splice(index < 0 ? row.length : index + 1, 0, opened);
@@ -186,7 +217,8 @@ export class WindowContext extends FakeWindowPartContext {
     this.raiseEvent(name, payload);
   }
 
-  private static requireDeclared(name: string, declared: ReadonlySet<string>, registered: readonly { readonly name: string }[]): void {
+  private static requireDeclared(name: string, declared: ReadonlySet<string>,
+    registered: readonly (DocumentContribution | CommandContribution | StatusBarItem)[]): void {
     if (!declared.has(name) || registered.some(t => t.name === name))
       throw new UnansweredCallException(name);
   }
