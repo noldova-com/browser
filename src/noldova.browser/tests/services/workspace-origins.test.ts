@@ -152,6 +152,20 @@ describe("WorkspaceOrigins", () => {
       .toEqual([{ kind: "Allowed", origin: "http://127.0.0.1:4173" }, { kind: "Refused", reason: "Local" }, false]);
   });
 
+  it("refuses and keeps no local origin whose setting was removed while its typed address waited for the workspace's turn", async () => {
+    const held: HeldApplies = new HeldApplies(surface);
+    const first: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://one.example/"));
+    const local: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "http://localhost:3000/"));
+    await held.reached;
+
+    const changing: Promise<void> = origins.changeSettingsAsync(["https://docs.example"]);
+    held.release();
+
+    expect(await local).toEqual({ kind: "Refused", reason: "Local" });
+    await Promise.all([first, changing]);
+    expect([keptOrigins("workspace-1"), await origins.isAllowedAsync("workspace-1", "http://localhost:3000")]).toEqual([["https://one.example"], false]);
+  });
+
   it("gives no closed view the origins", async () => {
     surface.close("view-2");
 
