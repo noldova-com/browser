@@ -164,6 +164,27 @@ describe("ClosedRootReader", () => {
     expect(surface.calls).toEqual([]);
   });
 
+  it("reads each node below a name once, when a reply names the node as its own descendant", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay now", ["21"])] }).root;
+    children({ 20: [node("21", "group", "", ["20"])], 21: [node("20", "LabelText", "Pay now", ["21"])] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect(name).toBe("Pay now");
+    expect(surface.calls.filter(t => t.method === "Accessibility.getChildAXNodes").map(t => t.params)).toEqual([{ id: "20" }, { id: "21" }]);
+  });
+
+  it("masks a name whole once the step's time is nearly over, since a value below it may be unread", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 500, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay with 1234", ["13"])] }).root;
+    children({ 20: [CODE] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect([name, surface.calls.at(-1)?.method]).toEqual(["••••••", "Accessibility.disable"]);
+  });
+
   it("stops, cut, once the step's time is nearly over", async () => {
     const read: ClosedRead | null = await readAsync(true, 0, false, null, 10_000, Date.now() + 500);
 

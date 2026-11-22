@@ -9,6 +9,7 @@
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { AccessibilityNode } from "../models/accessibility-node.ts";
 import { AccessibilityTree } from "../models/accessibility-tree.ts";
+import { MaskedName } from "../models/masked-name.ts";
 import { Resources } from "../resources.ts";
 import type { JsonObject, JsonValue } from "../types/json-value.ts";
 import { JsonShapes } from "./json-shapes.ts";
@@ -19,7 +20,7 @@ export class AccessibilitySnapshot {
     if (!JsonShapes.isArray(nodes))
       throw new MalformedReplyException();
     const [root, ...rest]: readonly JsonValue[] = nodes;
-    if (root === undefined)
+    if (Object.isUndefined(root))
       throw new MalformedReplyException();
     return new AccessibilityTree(AccessibilitySnapshot.readNode(root), rest.map(t => AccessibilitySnapshot.readNode(t)));
   }
@@ -33,22 +34,21 @@ export class AccessibilitySnapshot {
 
   // Each node, in the tree's order, with its name, in which every field value of the node and of the nodes below it is masked: the engine
   // builds a label's or a container's name from the fields inside it, and hides only a password's value.
-  public static readMaskedNames(tree: AccessibilityTree): readonly (readonly [AccessibilityNode, string])[] {
-    const masked: [AccessibilityNode, string][] = tree.nodes.map(t => [t, t.name]);
-    const byId: Map<string, [AccessibilityNode, string]> = new Map<string, [AccessibilityNode, string]>(masked.map(t => [t[0].id, t]));
-    const parents: Map<string, [AccessibilityNode, string]> = new Map<string, [AccessibilityNode, string]>();
-    for (const entry of masked)
-      for (const child of entry[0].childIds)
-        parents.set(child, entry);
+  public static readMaskedNames(tree: AccessibilityTree): readonly MaskedName[] {
+    const names: Map<string, string> = new Map<string, string>();
+    const parents: Map<string, AccessibilityNode> = new Map<string, AccessibilityNode>();
+    for (const node of tree.nodes)
+      for (const child of node.childIds)
+        parents.set(child, node);
     for (const node of tree.nodes.filter(t => t.value !== "")) {
       // A page's tree has no cycle, but a reply that names a node as its own ancestor must not loop.
       const seen: Set<string> = new Set<string>();
-      for (let at: [AccessibilityNode, string] | undefined = byId.get(node.id); at !== undefined && !seen.has(at[0].id); at = parents.get(at[0].id)) {
-        seen.add(at[0].id);
-        at[1] = at[1].replaceAll(node.value, Resources.maskedValue);
+      for (let at: AccessibilityNode | undefined = node; !Object.isUndefined(at) && !seen.has(at.id); at = parents.get(at.id)) {
+        seen.add(at.id);
+        names.set(at.id, (names.get(at.id) ?? at.name).replaceAll(node.value, Resources.maskedValue));
       }
     }
-    return masked;
+    return tree.nodes.map(t => new MaskedName(t, names.get(t.id) ?? t.name));
   }
 
   public static readTitle(tree: AccessibilityTree): string {
@@ -56,7 +56,7 @@ export class AccessibilitySnapshot {
   }
 
   public static findFocused(nodes: readonly AccessibilityNode[]): AccessibilityNode | null {
-    return nodes.findLast(t => t.isFocused && t.backendNodeId !== null) ?? null;
+    return nodes.findLast(t => t.isFocused && !Object.isNull(t.backendNodeId)) ?? null;
   }
 
   private static readNode(value: JsonValue): AccessibilityNode {
@@ -65,7 +65,7 @@ export class AccessibilitySnapshot {
     const id: JsonValue | undefined = value[Resources.nodeIdField];
     const isIgnored: JsonValue = value[Resources.ignoredField] ?? false;
     const backendNodeId: JsonValue = value[Resources.backendDOMNodeIdField] ?? null;
-    if (typeof id !== "string" || typeof isIgnored !== "boolean" || (backendNodeId !== null && typeof backendNodeId !== "number"))
+    if (!Object.isString(id) || !Object.isBoolean(isIgnored) || (!Object.isNull(backendNodeId) && !Object.isNumber(backendNodeId)))
       throw new MalformedReplyException();
     return new AccessibilityNode(
       id,
@@ -90,7 +90,7 @@ export class AccessibilitySnapshot {
       throw new MalformedReplyException();
     const ids: string[] = [];
     for (const id of value) {
-      if (typeof id !== "string")
+      if (!Object.isString(id))
         throw new MalformedReplyException();
       ids.push(id);
     }
@@ -101,8 +101,8 @@ export class AccessibilitySnapshot {
     if (!JsonShapes.isObject(value))
       return "";
     const text: JsonValue | undefined = value[Resources.valueField];
-    if (typeof text === "string")
+    if (Object.isString(text))
       return text;
-    return typeof text === "number" || typeof text === "boolean" ? String(text) : "";
+    return Object.isNumber(text) || Object.isBoolean(text) ? String(text) : "";
   }
 }

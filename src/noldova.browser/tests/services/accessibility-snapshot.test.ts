@@ -73,13 +73,14 @@ describe("AccessibilitySnapshot", () => {
   it("masks every field value in the names of its node and of the nodes above it, by the tree's parentage, and in no other node's name", () => {
     const tree: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
       { nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Pay 4111" }, childIds: ["2", "5"] },
-      { nodeId: "2", role: { value: "LabelText" }, name: { value: "Card number 4111 4111" }, childIds: ["3"] },
+      { nodeId: "2", role: { value: "LabelText" }, name: { value: "Card number 4111 4111, expires 07" }, childIds: ["3", "4"] },
       { nodeId: "3", role: { value: "textbox" }, name: { value: "" }, value: { value: "4111" }, childIds: [] },
+      { nodeId: "4", role: { value: "textbox" }, name: { value: "" }, value: { value: "07" }, childIds: [] },
       { nodeId: "5", role: { value: "paragraph" }, name: { value: "Ends in 4111" }, childIds: [] }
     ] });
 
-    expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => [t[0].id, t[1]])).toEqual([
-      ["1", "Pay ••••••"], ["2", "Card number •••••• ••••••"], ["3", ""], ["5", "Ends in 4111"]
+    expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => [t.node.id, t.name])).toEqual([
+      ["1", "Pay ••••••"], ["2", "Card number •••••• ••••••, expires ••••••"], ["3", ""], ["4", ""], ["5", "Ends in 4111"]
     ]);
   });
 
@@ -89,7 +90,7 @@ describe("AccessibilitySnapshot", () => {
       { nodeId: "2", role: { value: "group" }, name: { value: "Code 12" }, childIds: ["1"], value: { value: "12" } }
     ] });
 
-    expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => t[1])).toEqual(["Code ••••••", "Code ••••••"]);
+    expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => t.name)).toEqual(["Code ••••••", "Code ••••••"]);
   });
 
   it("reads the page's title from the root's name", () => {
