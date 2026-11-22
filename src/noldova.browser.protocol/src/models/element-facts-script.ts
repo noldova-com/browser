@@ -27,14 +27,24 @@ export class ElementFactsScript {
     }
     return found;
   };
-  const path = [];
-  for (let node = this; node !== null; node = node instanceof ShadowRoot ? node.host : node.parentNode)
-    path.unshift(node);
+  const pathOf = start => {
+    const nodes = [];
+    for (let node = start; node !== null; node = node instanceof ShadowRoot ? node.host : node.parentNode)
+      nodes.unshift(node);
+    return nodes;
+  };
+  const isNamed = (node, name) => node.nodeType === 1 && node.nodeName.toUpperCase() === name;
+  const isInteractive = node => ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].some(name => isNamed(node, name)) || isNamed(node, "A") && node.hasAttribute("href");
+  const above = pathOf(this).reverse();
+  const label = above.findIndex(t => isNamed(t, "LABEL"));
+  const control = label === -1 || above.slice(0, label).some(isInteractive) ? null : above[label].control;
+  const element = control ?? this;
+  const path = pathOf(element);
   const isInDocument = path[0] === document;
   const everything = isInDocument ? all(document, true) : [];
-  const named = this.nodeType === 1 ? this.getAttribute("form") : null;
-  const owner = this.nodeType === 1 && !isFormElement(this) && "form" in this ? this.form : undefined;
-  const byId = !isInDocument || named === null || owner !== undefined ? null : this.getRootNode().getElementById(named);
+  const named = element.nodeType === 1 ? element.getAttribute("form") : null;
+  const owner = element.nodeType === 1 && !isFormElement(element) && "form" in element ? element.form : undefined;
+  const byId = !isInDocument || named === null || owner !== undefined ? null : element.getRootNode().getElementById(named);
   const form = !isInDocument ? undefined
     : owner instanceof HTMLFormElement ? owner
     : byId !== null && isFormElement(byId) ? byId

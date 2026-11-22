@@ -107,6 +107,28 @@ describe("ElementFactsScript", () => {
     expect([read(other), read(lost)]).toMatchObject([{ linked: [] }, { linked: [] }]);
   });
 
+  it("gives a label's facts, and those of what it holds but interactive content, as its control's, which a click on them activates", () => {
+    root.innerHTML = "<form aria-label=\"Sign in\"><input type=\"password\"><label id=\"wrapped\"><span>Log in</span> <input type=\"submit\"></label>"
+      + "<input id=\"go\" type=\"submit\" hidden></form><label id=\"named\" for=\"go\" role=\"button\">Go</label>"
+      + "<label id=\"terms\"><a href=\"/terms\">Terms</a><button>Read</button><input type=\"checkbox\"></label><label id=\"loose\">Note</label>";
+    const form: Element = PagePartsFixture.find(root, "form");
+    const above: readonly unknown[] = [["#document", []], ["HTML", HARNESS_ATTRIBUTES], ["BODY", []], ["DIV", []]];
+    const inForm: readonly unknown[] = [...above, ["FORM", ["aria-label", "Sign in"]]];
+    const readAt: (selector: string) => unknown = (selector: string): unknown => read(PagePartsFixture.find(root, selector));
+
+    expect([readAt("#wrapped"), readAt("#wrapped span"), readAt("#named")]).toMatchObject([
+      { path: [...inForm, ["LABEL", ["id", "wrapped"]], ["INPUT", ["type", "submit"]]], formName: "Sign in" },
+      { path: [...inForm, ["LABEL", ["id", "wrapped"]], ["INPUT", ["type", "submit"]]], formName: "Sign in" },
+      { path: [...inForm, ["INPUT", ["id", "go", "type", "submit", "hidden", ""]]], formName: "Sign in" }
+    ]);
+    expect([formOf(PagePartsFixture.find(root, "#wrapped span")), formOf(PagePartsFixture.find(root, "#named"))]).toEqual([form, form]);
+    expect([readAt("#terms a"), readAt("#terms button"), readAt("#loose")]).toMatchObject([
+      { path: [...above, ["LABEL", ["id", "terms"]], ["A", ["href", "/terms"]]] },
+      { path: [...above, ["LABEL", ["id", "terms"]], ["BUTTON", []]] },
+      { path: [...above, ["LABEL", ["id", "loose"]]], formName: "" }
+    ]);
+  });
+
   it("lists the elements that name the element's form by its id, never a field's typed value", () => {
     root.innerHTML = "<form id=\"checkout\"><button>Pay</button></form><input form=\"checkout\" type=\"password\" name=\"pin\" value=\"preset\"><input form=\"elsewhere\">";
     const button: Element = PagePartsFixture.find(root, "button");
