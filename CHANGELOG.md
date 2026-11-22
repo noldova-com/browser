@@ -4,6 +4,11 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.6
+
+- `browser.openPage` takes `profileKey` as optional: without one, the page opens in the person's own browsing, the workspace `links`, at `url` when given, for a command the person runs for themselves, such as an app's Open browser; its address goes through the origin check of `links` and isn't allowed first, as a link's is. An `instance` without a `profileKey` is refused as invalid arguments, so no agent session binds to the person's own browsing, and `links` given by name stays refused (#279).
+- A form whose `aria-labelledby` id another tree of the page also uses is named from its own tree's element, as the browser resolves it, no longer from the first element of that id in the page (#273).
+
 ## 0.0.5
 
 - `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.13 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and `@noldova/browser.window` takes Noldova Desktop's protocol and window packages as peers at `>=0.0.13 <0.1.0` (#159, #189, #196, #254, #258) and `@noldova/ui.components.angular` at `>=0.0.26 <0.1.0` (#161, #172, #186, #198, #202, #211, #217, #240, #256).
