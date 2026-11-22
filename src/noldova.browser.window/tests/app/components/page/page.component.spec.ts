@@ -1319,6 +1319,63 @@ describe("PageComponent", () => {
     expect([pressed.defaultPrevented, document.querySelector("nol-browser-find-bar")]).toEqual([true, null]);
   });
 
+  for (const name of [PaneState.Failed, PaneState.Refused, PaneState.Crashed]) {
+    it(`opens no find bar for the find key on a ${name} page, whose Find on page under More is unavailable`, async () => {
+      await stateAsync(name);
+
+      const pressed: KeyboardEvent = press(button("Back"), withMod("f", "KeyF"));
+      await stableAsync();
+      button("More").click();
+      await stableAsync();
+
+      expect([pressed.defaultPrevented, document.querySelector("nol-browser-find-bar"), menuItem("Find on page")?.getAttribute("aria-disabled"), errors])
+        .toEqual([true, null, "true", []]);
+    });
+  }
+
+  for (const isCrash of [true, false]) {
+    it(`closes the find bar when its page ${isCrash ? "crashes, giving its focus to Reload" : "loses its view, leaving a focus outside it alone"}`, async () => {
+      const view: FakeWebView = await placeAsync();
+      view.findAnswer = () => Promise.resolve(FakeWebView.found(1, 2));
+      press(button("Back"), withMod("f", "KeyF"));
+      await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+      await userEvent.keyboard("a");
+      await stableAsync();
+      const focused: HTMLButtonElement = isCrash ? button("Reload", "Stop") : button("Back");
+      if (!isCrash)
+        focused.focus();
+
+      if (isCrash)
+        view.crash();
+      else
+        view.closeFromHost();
+      await stableAsync();
+
+      expect([document.querySelector("nol-browser-find-bar"), document.activeElement === focused, errors]).toEqual([null, true, []]);
+    });
+  }
+
+  it("doesn't open the find bar again, or take the focus, when its page comes back from another window", async () => {
+    const instance: string = pages.open("workspace-1", "https://one.example/");
+    const record = { instance, profileKey: "workspace-1", url: "https://one.example/" };
+    await showAsync(instance);
+    press(button("Back"), withMod("f", "KeyF"));
+    await vi.waitFor(() => expect(document.activeElement).toBe(findField()));
+    context.openDocuments = [instance];
+    answerWith(BrowserMethods.holdPages, () => ({ agents: [], refused: [instance] }));
+    await pages.reportOpenAsync();
+    await stableAsync();
+    answerWith(BrowserMethods.claimPage, () => ({ agentName: null, isClaimed: true, isHere: false, record }));
+    answerWith(BrowserMethods.readPage, () => record);
+
+    await pages.openAsync("workspace-1", null, instance);
+    await vi.waitFor(() => expect(element.querySelector("nol-browser-toolbar")).not.toBeNull());
+    await vi.waitFor(() => expect(surface().views.at(-1)?.isShown).toBe(true));
+    await stableAsync();
+
+    expect([document.querySelector("nol-browser-find-bar"), errors]).toEqual([null, []]);
+  });
+
   it("leaves alone an input method's key, a held key's repeats, a press already handled, another key, and a key it doesn't take", async () => {
     const view: FakeWebView = await placeAsync();
     button("Back").addEventListener("keydown", t => t.preventDefault(), { once: true });

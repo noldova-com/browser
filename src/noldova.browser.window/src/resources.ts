@@ -200,6 +200,10 @@ export class Resources {
   public static readonly stateHeadingId: string = "-state-heading";
   public static readonly pageStateSelector: string = "nol-browser-page-state";
   public static readonly agentBarSelector: string = "nol-browser-agent-bar";
+  public static readonly findBarSelector: string = "nol-browser-find-bar";
+  public static readonly inputSelector: string = "input";
+  // A page in another state shows no document of its own to find on, or no view at all.
+  public static readonly findableStates: readonly PaneState[] = [PaneState.Loading, PaneState.Loaded];
   public static readonly pageSelector: string = ".nol-browser-page";
   public static readonly pageInstanceAttribute: string = "data-instance";
   public static readonly schemePattern: RegExp = /^[a-z][a-z\d+.-]*$/iu;

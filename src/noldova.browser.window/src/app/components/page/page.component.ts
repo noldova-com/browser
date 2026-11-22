@@ -133,6 +133,7 @@ export class PageComponent {
       untracked(() => {
         if (isElsewhere) {
           const hadFocus: boolean = this.host.contains(this.host.ownerDocument.activeElement);
+          this.isFinding.set(false);
           this.tab.set(null);
           if (hadFocus)
             afterNextRender(() => this.pageState()?.focusClose(), { injector: this.injector });
@@ -147,6 +148,12 @@ export class PageComponent {
       const tab = this.tab();
       if (!Object.isNull(tab))
         onCleanup(tab.controller.onChange(() => this.version.update(t => t + 1)));
+    });
+    effect(() => {
+      const tab = this.tab();
+      this.version();
+      if (!Object.isNull(tab) && !Resources.findableStates.includes(tab.controller.status.state) && this.isFinding())
+        untracked(() => this.dropFind());
     });
     effect(onCleanup => {
       const tab = this.tab();
@@ -212,7 +219,7 @@ export class PageComponent {
       event.preventDefault();
       this.runKey(tab, name);
     }
-    else if (event.key === Resources.escapeKey && !(event.target instanceof HTMLInputElement) && this.toolbar()?.stopPage() === true)
+    else if (event.key === Resources.escapeKey && ![...this.host.querySelectorAll(Resources.inputSelector)].some(t => t === event.target) && this.toolbar()?.stopPage() === true)
       event.preventDefault();
   }
 
@@ -221,8 +228,7 @@ export class PageComponent {
   }
 
   protected openFind(tab: PaneTab): void {
-    const state: PaneState = tab.controller.status.state;
-    if (state === PaneState.Empty || state === PaneState.Unavailable)
+    if (!Resources.findableStates.includes(tab.controller.status.state))
       return;
     const bar: FindBarComponent | undefined = this.findBar();
     if (Object.isUndefined(bar))
@@ -234,6 +240,14 @@ export class PageComponent {
   protected closeFind(): void {
     this.isFinding.set(false);
     this.focusToolbar();
+  }
+
+  // The bar goes once its page no longer has a document to find on, and gives Reload the focus it held.
+  private dropFind(): void {
+    const hadFocus: boolean = this.host.querySelector(Resources.findBarSelector)?.contains(this.host.ownerDocument.activeElement) === true;
+    this.isFinding.set(false);
+    if (hadFocus)
+      this.focusToolbar();
   }
 
   protected goTo(tab: PaneTab, text: string): void {

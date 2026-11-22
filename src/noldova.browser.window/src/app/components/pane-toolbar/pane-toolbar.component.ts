@@ -76,14 +76,15 @@ export class PaneToolbarComponent {
   protected readonly status: Signal<PaneStatus> = this.current.asReadonly();
   protected readonly isLoading: Signal<boolean> = computed(() => this.status().state === PaneState.Loading);
   protected readonly hasPage: Signal<boolean> = computed(() => this.status().state !== PaneState.Empty && this.status().state !== PaneState.Unavailable);
+  protected readonly isFindable: Signal<boolean> = computed(() => Resources.findableStates.includes(this.status().state));
   protected readonly isAvailable: Signal<boolean> = computed(() => this.status().state !== PaneState.Unavailable);
   protected readonly shown: Signal<string> = computed(() => this.shownAddress() ?? this.status().url);
   protected readonly shownHost: Signal<string | null> = computed(() => {
     const url: string = this.shown();
-    if (this.draft() !== null || !URL.canParse(url))
+    if (!Object.isNull(this.draft()) || !URL.canParse(url))
       return null;
     const host: string = new URL(url).host;
-    return host === "" ? null : host;
+    return String.isNullOrEmpty(host) ? null : host;
   });
   protected readonly address: Signal<string> = computed(() => this.draft() ?? this.shown());
   private readonly shownPage: Signal<string> = computed(() => this.address() === this.status().url ? this.address() : "");
@@ -92,25 +93,25 @@ export class PaneToolbarComponent {
   // An entered address that Noldova Desktop refused shows as the refused page, whose heading says why, so the field names that heading
   // while the pane shows that refusal.
   private readonly isAnswerRefused: WritableSignal<boolean> = signal(false);
-  private readonly isEnteredRefused: Signal<boolean> = computed(() => this.draft() !== null && this.isAnswerRefused() && this.status().refusedAddress === null
+  private readonly isEnteredRefused: Signal<boolean> = computed(() => !Object.isNull(this.draft()) && this.isAnswerRefused() && Object.isNull(this.status().refusedAddress)
     && this.status().state === PaneState.Refused);
-  protected readonly isRefused: Signal<boolean> = computed(() => this.draft() !== null && this.status().refusedAddress !== null || this.isEnteredRefused());
+  protected readonly isRefused: Signal<boolean> = computed(() => !Object.isNull(this.draft()) && !Object.isNull(this.status().refusedAddress) || this.isEnteredRefused());
   protected readonly describedBy: Signal<string | null> = computed(() => {
     const ids: string[] = [];
     const notice: string | null = this.noticeId();
     if (this.isInsecure())
       ids.push(this.securityId);
     const refusal: string | null = this.refusalId();
-    if (this.isEnteredRefused() && refusal !== null)
+    if (this.isEnteredRefused() && !Object.isNull(refusal))
       ids.push(refusal);
-    else if (this.isRefused() && notice !== null)
+    else if (this.isRefused() && !Object.isNull(notice))
       ids.push(notice);
     return ids.length === 0 ? null : ids.join(Resources.idListSeparator);
   });
-  protected readonly addressLabel: Signal<string> = computed(() => this.shown() === "" ? Resources.address : this.shown());
+  protected readonly addressLabel: Signal<string> = computed(() => String.isNullOrEmpty(this.shown()) ? Resources.address : this.shown());
   protected readonly canOpenExternal: Signal<boolean> = computed(() => {
     const url = this.status().url;
-    return this.openLink() !== null && this.hasPage() && (url.startsWith(Resources.insecureScheme) || url.startsWith(Resources.secureScheme));
+    return !Object.isNull(this.openLink()) && this.hasPage() && (url.startsWith(Resources.insecureScheme) || url.startsWith(Resources.secureScheme));
   });
 
   public readonly controller = input.required<PaneController>();
@@ -282,7 +283,7 @@ export class PaneToolbarComponent {
 
   private enter(): void {
     const text: string = this.field().nativeElement.value;
-    if (text.trim() === "")
+    if (String.isNullOrEmpty(text.trim()))
       return;
     this.isEntered = true;
     this.isAnswerRefused.set(false);
@@ -303,7 +304,7 @@ export class PaneToolbarComponent {
   }
 
   private announcePopup(was: PaneStatus, status: PaneStatus): void {
-    if (status.popup !== null && status.popup.address !== was.popup?.address)
+    if (!Object.isNull(status.popup) && status.popup.address !== was.popup?.address)
       this.announcer.announce(Resources.formatPopupBlocked(Resources.hostOf(status.url)), AnnouncementPoliteness.Polite);
   }
 
@@ -312,7 +313,7 @@ export class PaneToolbarComponent {
       this.standingStop = null;
       this.announcer.announce(Resources.loadStarted, AnnouncementPoliteness.Polite, { group: this.loadGroup });
     } else if (status.state === PaneState.Loaded && was.state === PaneState.Loading) {
-      const message: string = this.standingStop !== null ? Resources.loadStopped : Resources.formatLoaded(status.title === "" ? status.url : status.title);
+      const message: string = !Object.isNull(this.standingStop) ? Resources.loadStopped : Resources.formatLoaded(String.isNullOrEmpty(status.title) ? status.url : status.title);
       this.standingStop = null;
       this.announcer.announce(message, AnnouncementPoliteness.Polite, { group: this.loadGroup });
     }
@@ -323,7 +324,7 @@ export class PaneToolbarComponent {
     const words: HTMLElement | undefined = this.words()?.nativeElement;
     const place: number = this.place().nativeElement.getBoundingClientRect().width;
     this.isNarrow.set(this.host.getBoundingClientRect().width < Resources.narrowToolbarWidth * rem);
-    this.isCompact.set(words !== undefined && (this.isCompact() ? place - words.scrollWidth - Resources.securityGap * rem : place) < Resources.minimumFieldWidth * rem);
+    this.isCompact.set(!Object.isUndefined(words) && (this.isCompact() ? place - words.scrollWidth - Resources.securityGap * rem : place) < Resources.minimumFieldWidth * rem);
   }
 
   private selectAddress(): void {
