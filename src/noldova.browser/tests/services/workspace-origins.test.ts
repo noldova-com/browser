@@ -249,7 +249,63 @@ describe("WorkspaceOrigins", () => {
     surface.allowedOrigins.clear();
     await origins.endPassingAsync("page-1");
     await origins.stopPassingAsync("view-1", "workspace-1");
-    expect([surface.allowedOrigins.size, await pass("https://www.example.com/")]).toEqual([0, { kind: "Allowed", origin: "https://www.example.com" }]);
+    expect(surface.allowedOrigins.size).toBe(0);
+  });
+
+  it("follows none of a typed load's redirects once an agent's call started before the first one, until the person types an address in that page again", async () => {
+    surface.instances.set("view-1", "page-1");
+    surface.instances.set("view-2", "page-2");
+    const pass = (): Promise<unknown> => origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"));
+
+    origins.stopRedirects("view-1");
+
+    await expect(pass()).rejects.toThrow(TypedRedirectAfterAgentException);
+    expect([surface.allowedOrigins.get("view-1"), origins.isPassing("view-1")]).toEqual([undefined, false]);
+    await origins.allowTypedAsync(new TypedAddressRequest("workspace-2", "https://example.com/", "page-2"));
+    await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://192.168.1.2/", "page-1"));
+    await expect(pass()).rejects.toThrow(TypedRedirectAfterAgentException);
+    await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://example.com/", "page-1"));
+    expect(await pass()).toEqual({ kind: "Allowed", origin: "https://www.example.com" });
+  });
+
+  it("keeps a page's redirects stopped when the address the person typed there is left before its turn keeps it", async () => {
+    surface.instances.set("view-1", "page-1");
+    origins.stopRedirects("view-1");
+
+    const answer: unknown = await origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://example.com/", "page-1"), () => true);
+
+    expect(answer).toEqual({ kind: "Left" });
+    await expect(origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toThrow(TypedRedirectAfterAgentException);
+  });
+
+  it("keeps a page's redirects stopped when an agent's call starts there while the turn of the address the person typed waits", async () => {
+    surface.instances.set("view-1", "page-1");
+    const held: HeldApplies = new HeldApplies(surface);
+
+    const first: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://one.example/"));
+    const typed: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://example.com/", "page-1"));
+    await held.reached;
+    origins.stopRedirects("view-1");
+    held.release();
+
+    expect(await Promise.all([first, typed])).toEqual([{ kind: "Allowed", origin: "https://one.example" }, { kind: "Allowed", origin: "https://example.com" }]);
+    await expect(origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toThrow(TypedRedirectAfterAgentException);
+  });
+
+  it("keeps a page's redirects stopped when the address the person typed there is refused in its turn, as the settings no longer name it", async () => {
+    surface.instances.set("view-1", "page-1");
+    origins.stopRedirects("view-1");
+    const held: HeldApplies = new HeldApplies(surface);
+    const first: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://one.example/"));
+    const local: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "http://localhost:3000/", "page-1"));
+    await held.reached;
+
+    const changing: Promise<void> = origins.changeSettingsAsync(["https://docs.example"]);
+    held.release();
+
+    expect(await local).toEqual({ kind: "Refused", reason: "Local" });
+    await Promise.all([first, changing]);
+    await expect(origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toThrow(TypedRedirectAfterAgentException);
   });
 
   it("refuses a redirect the policy refuses, fails one for a page that isn't open in its workspace, and gives nothing", async () => {
