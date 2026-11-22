@@ -196,7 +196,7 @@ The fixtures below only give those fakes their answers, as Desktop's main proces
 
 ## The fixture host app
 
-**Not yet:** of the serial tests, `keys.spec.ts` exists; the others, the slow runs and the checks on a real desktop that use the fixture host app are the design they follow, and none of those is built.
+**Not yet:** of the serial tests, `keys.spec.ts` and `agent-input-focus.spec.ts` exist; the others, the slow runs and the checks on a real desktop that use the fixture host app are the design they follow, and none of those is built.
 
 The end-to-end workflows run in a fixture host app in this repository: an app built on Noldova Desktop's published packages, with this module's package in its `desktop.modules`, as Noldova Desktop's MODULES.md says under "Modules from packages".
 - **Its template** is `e2e/app`: its `package.json` pins Noldova Desktop's published packages and names the module's package and two modules of its own, the agent double and the relay double, in its `desktop.modules`.
@@ -251,7 +251,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts`, `denials.spec.ts`, `isolation.spec.ts`, `new-page.spec.ts`, `find-on-page.spec.ts`, `page-keys.spec.ts`, `long-snapshot.spec.ts`, `snapshot-options.spec.ts`, `closed-roots.spec.ts`, `long-page.spec.ts`, `agent-bar.spec.ts`, `hidden-press.spec.ts`, `agent-tools.spec.ts`, `crash.spec.ts`, `link-tabs.spec.ts`, `permissions.spec.ts`, `screenshot-scale.spec.ts` and `keys.spec.ts` exist, `page.spec.ts` with all its row but two parts, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
+**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts`, `denials.spec.ts`, `isolation.spec.ts`, `new-page.spec.ts`, `find-on-page.spec.ts`, `page-keys.spec.ts`, `long-snapshot.spec.ts`, `snapshot-options.spec.ts`, `closed-roots.spec.ts`, `long-page.spec.ts`, `agent-bar.spec.ts`, `hidden-press.spec.ts`, `agent-tools.spec.ts`, `crash.spec.ts`, `link-tabs.spec.ts`, `permissions.spec.ts`, `screenshot-scale.spec.ts`, `keys.spec.ts` and `agent-input-focus.spec.ts` exist, `page.spec.ts` with all its row but two parts, `navigation.spec.ts` with its test that an allowed origin loads, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
 `page.spec.ts` leaves out the moves between windows, since Noldova Desktop opens one window today and its window "never opens another window" (Noldova Desktop's `WINDOW.md`; [#107](https://github.com/noldova-com/browser/issues/107)), and a page the base gave no view, which needs a fixture-only double that makes `webViews.openAsync` fail, in its own pull request.
 Its moves between groups go through the tab's menu, opened with Shift+F10, since Noldova Desktop gives its window commands no default keys, and it waits until the page has committed a typed field's value before each move, since Noldova Desktop restores a moved view's new page from what the page last committed to its history, about a second after a change.
 Each blocked-origin test asserts that the view stays at its last allowed address, done loading, with no navigation committed in the view or in a subframe, that the main process's record shows no request for the target that the base didn't refuse, since the base refuses a page's own navigation before its request and a redirect at its request, and that no fixture server received a request for another host; for a top-level start other than going back, it also asserts that the page started the navigation, by the page's own `navigate` event, and that the pane shows the refusal naming the refused origin, which Noldova Desktop reports since 0.0.3 ([desktop#122](https://github.com/noldova-com/desktop/pull/122)).
@@ -398,7 +398,7 @@ Each test asserts that the view refuses with no prompt and no file left behind; 
 
 ## Serial tests
 
-**Not yet:** of these, `keys.spec.ts` exists; it runs in the run's one worker, so one test at a time, though not last; the others come in their own pull requests.
+**Not yet:** of these, `keys.spec.ts` and `agent-input-focus.spec.ts` exist; they run in the run's one worker, so one test at a time, though not last; the others come in their own pull requests.
 
 These tests need the operating system's foreground focus, which a platform can't isolate per process, so they run last and one at a time, as the organization's standard allows:
 - `focus.spec.ts`: focus moving between the page and the window;
