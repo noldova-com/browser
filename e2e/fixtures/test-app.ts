@@ -48,7 +48,7 @@ class AppRun {
 }
 
 export class TestApp {
-  private static readonly PROFILE_KEY: string = "e2e";
+  public static readonly PROFILE_KEY: string = "e2e";
   private static readonly DISCONNECTED: string = "Disconnected";
   private static readonly FOLDER_PREFIX: string = "browser-e2e-";
   private static readonly DOWNLOADS_FOLDER: string = "downloads";
