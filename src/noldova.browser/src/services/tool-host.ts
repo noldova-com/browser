@@ -46,9 +46,9 @@ export class ToolHost {
       return await tool.callAsync(call, progress);
     }
     catch (error) {
-      // Noldova Desktop ends a call that failed past its point of no return as uncertain, so it is told when the one input sent was a focus
-      // that the page answered by replacing the element.
-      if (ToolFailures.isGoneOnFocus(error, progress))
+      // Noldova Desktop ends a call that failed past its point of no return as uncertain, so it is told when none of the action's own input
+      // reached the page.
+      if (ToolFailures.isNothingSent(error, progress))
         call.markNothingSent();
       throw new ToolFailureException(ToolFailures.forCall(error, progress, tool.descriptor.isResumable !== true));
     }

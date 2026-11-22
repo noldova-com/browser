@@ -127,19 +127,18 @@ export class ToolFailures {
     return new InternalFailureException(cause);
   }
 
-  // Whether the call failed because its element or page changed when it had sent only the focus: a page can replace an element as it takes
-  // the focus, as some search fields do, and the action's own input never reached the page then.
-  public static isGoneOnFocus(cause: unknown, progress: ActionProgress): boolean {
+  // Whether the call failed with none of the action's own input reaching the page: Noldova Desktop refuses a key that is one of the app's
+  // shortcuts before the page gets it, and a page can replace an element as it takes the focus, as some search fields do, so an element or
+  // page that changed when only the focus was sent got nothing either.
+  public static isNothingSent(cause: unknown, progress: ActionProgress): boolean {
     const plain: CallFailureException = ToolFailures.toException(cause, false);
-    return progress.isOnlyFocusSent && (plain instanceof StaleReferenceException || plain instanceof PageChangedAfterGrantException);
+    return plain instanceof ShortcutRefusedException
+      || (progress.isOnlyFocusSent && (plain instanceof StaleReferenceException || plain instanceof PageChangedAfterGrantException));
   }
 
   public static forCall(cause: unknown, progress: ActionProgress, isNonResumable: boolean): ToolFailure {
     const plain: CallFailureException = ToolFailures.toException(cause, false);
-    // The base refuses a key that is one of the app's shortcuts before the page gets it, so the refusal stands past the point of no return.
-    if (plain instanceof ShortcutRefusedException)
-      return plain.toFailure();
-    if (isNonResumable && progress.isInputSent && !ToolFailures.isGoneOnFocus(cause, progress))
+    if (isNonResumable && progress.isInputSent && !ToolFailures.isNothingSent(cause, progress))
       return new OutcomeUncertainException(plain.moduleCode ?? plain.reason, cause).toFailure();
     if (progress.isGranted && plain instanceof StaleReferenceException)
       return new PageChangedAfterGrantException(cause).toFailure();

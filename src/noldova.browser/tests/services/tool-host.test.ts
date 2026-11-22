@@ -6,12 +6,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { type Registration, ToolAbortReason, type ToolCall, ToolContent, type ToolFailure, type ToolResult, type ToolSession } from "@noldova/desktop.runtime";
+import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
+import { type Registration, ToolAbortReason, type ToolCall, ToolContent, type ToolFailure, type ToolResult, type ToolSession,
+  WebViewFailureException } from "@noldova/desktop.runtime";
 import { FakeModuleLog, FakeModuleSettings, FakeToolsContext } from "@noldova/desktop.runtime/testing";
 import { describe, expect, it } from "vitest";
 
 import { PageAnswerTimedOutException } from "../../src/exceptions/page-answer-timed-out.exception.ts";
 import { PageChangedAfterGrantException } from "../../src/exceptions/page-changed-after-grant.exception.ts";
+import { ShortcutRefusedException } from "../../src/exceptions/shortcut-refused.exception.ts";
 import { StaleReferenceException } from "../../src/exceptions/stale-reference.exception.ts";
 import type { IBrowserTool } from "../../src/interfaces/i-browser-tool.ts";
 import type { ActionProgress } from "../../src/models/action-progress.ts";
@@ -155,6 +158,17 @@ describe("ToolHost", () => {
 
       expect(await session.callAsync("browser_click", { reference: "e1" }), String(isFocus)).toMatchObject({ isFailure: true, code });
     }
+  });
+
+  it("reports a key Noldova Desktop refused as one of the app's shortcuts as refused, not uncertain, since the page never got it", async () => {
+    const { session, host: toolHost } = new HostBench();
+    toolHost.register(tool("click", async (_call: ToolCall, progress: ActionProgress) => {
+      progress.markGranted();
+      progress.markInputSent();
+      throw new ShortcutRefusedException(new WebViewFailureException(new WebViewFailure(WebViewFailureKind.ShortcutRefused)));
+    }));
+
+    expect(await session.callAsync("browser_click", { reference: "e1" })).toMatchObject({ isFailure: true, code: "Refused", moduleCode: "browser.shortcutRefused" });
   });
 
   it("never reports an uncertain outcome for a reading tool", async () => {
