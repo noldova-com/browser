@@ -16,9 +16,10 @@ import { ViewPage } from "../fixtures/view-pages.ts";
 const TITLE = "Docs";
 const VIEW = ".nol-browser-page-view";
 const ADDRESS_FIELD = "input.nol-browser-toolbar-field";
-// A page with a field at its top left, and a text that paints, that records the field's focus.
+// A page with a field at its top left, and a text that paints, that records the field's focus and blur.
 const PAGE = `<!doctype html><title>${TITLE}</title><body style="margin:0"><input id="field" style="display:block;width:200px;height:30px;margin:0;box-sizing:border-box"><p>${TITLE}</p>`
-  + "<script>window.seen = []; document.getElementById(\"field\").addEventListener(\"focus\", () => seen.push(\"field focus\"));</script>";
+  + "<script>window.seen = []; const field = document.getElementById(\"field\");"
+  + " for (const name of [\"focus\", \"blur\"]) field.addEventListener(name, () => seen.push(`field ${name}`));</script>";
 
 // One of the pane's own controls the person clicks, what the person's typing then leaves in it, and whether it is unavailable; the address
 // field's accessible name is the address it shows, so it is found by its class.
@@ -52,10 +53,27 @@ async function openAsync(app: TestApp, docs: FixtureServer): Promise<void> {
   // The engine keeps keys from a page until its first contentful paint (Noldova Desktop's documents/WEB-VIEWS.md, "Keys from a view").
   await expect.poll(() => app.viewPages.runAtAsync(docs.url("/"), "String(performance.getEntriesByName(\"first-contentful-paint\").length)"),
     { message: "The page never painted its content." }).toBe("1");
+  // Playwright turns on focus emulation in every page it attaches to, the view's page too, so the page would read itself as focused and its
+  // field would get no blur; it is turned off so the page's own focus state is the engine's.
+  await expect.poll(() => guestAsync(app, docs), { message: "Playwright never attached to the view's page." }).not.toBeNull();
+  const guest = await guestAsync(app, docs);
+  if (Object.isNull(guest))
+    throw new Error("The view's page is gone.");
+  const session = await app.application.context().newCDPSession(guest);
+  await session.send("Emulation.setFocusEmulationEnabled", { enabled: false });
+}
+
+async function guestAsync(app: TestApp, docs: FixtureServer): Promise<Page | null> {
+  return app.application.context().pages().find(t => t.url() === docs.url("/")) ?? null;
 }
 
 async function windowFocusAsync(app: TestApp): Promise<string> {
   return app.window.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? "");
+}
+
+// Whether the page reads itself as focused, and the field's focus and blur it saw.
+async function pageFocusAsync(app: TestApp, docs: FixtureServer): Promise<string> {
+  return app.viewPages.runAtAsync(docs.url("/"), "`${String(document.hasFocus())} ${seen.join()}`");
 }
 
 async function fieldAsync(app: TestApp, docs: FixtureServer): Promise<string> {
@@ -96,7 +114,7 @@ test.describe("focus between the page and the pane", () => {
     await clickFieldAsync(app);
 
     await expectTypingInPageAsync(app, docs, "ab", "on a click in the page");
-    expect(await app.viewPages.runAtAsync(docs.url("/"), "seen.join()"), "The page's field didn't take the focus once.").toBe("field focus");
+    expect(await pageFocusAsync(app, docs), "The page didn't take the focus, or its field didn't take it once.").toBe("true field focus");
   });
 
   for (const control of CONTROLS)
@@ -119,9 +137,12 @@ test.describe("focus between the page and the pane", () => {
         await expect(target, `The person's typing didn't reach ${control.name}.`).toHaveValue(control.typed);
       await expect(target, `${control.name} lost the focus to the person's typing.`).toBeFocused();
       expect(await fieldAsync(app, docs), `The person's typing after a click on ${control.name} reached the page.`).toBe("");
+      await expect.poll(() => pageFocusAsync(app, docs), { message: `The page kept the focus, or its field got no blur, after a click on ${control.name}.` })
+        .toBe("false field focus,field blur");
 
       await clickFieldAsync(app);
 
       await expectTypingInPageAsync(app, docs, "ef", `on a second click in the page, after ${control.name}`);
+      expect(await pageFocusAsync(app, docs), `The page or its field didn't take the focus back after ${control.name}.`).toBe("true field focus,field blur,field focus");
     });
 });
