@@ -161,6 +161,7 @@ export class Resources {
   public static readonly consoleDescription: string = "Returns the page's console entries after a cursor, with the next cursor. At the deadline it returns the entries it has read so far.";
   public static readonly screenshotReferenceOrFullPage: string = "Give a reference or fullPage, not both.";
   public static readonly screenshotNotVisible: string = "The area has no size on the page, so nothing was captured; take a new snapshot.";
+  public static readonly screenshotChanged: string = "The page went to another document while it was captured, so no image was kept; take a new screenshot.";
   public static readonly consoleCursorRefused: string = "This session wasn't given that cursor; read without one to go on from where this session stopped.";
   public static readonly consoleCursorCode: string = "browser.staleCursor";
   public static readonly consoleNavigationSource: string = "navigated to";

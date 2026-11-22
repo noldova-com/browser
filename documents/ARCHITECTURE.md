@@ -444,6 +444,7 @@ A non-resumable tool changes the page, and its interruption is reported as [Erro
   `browser_click`, `browser_type`, `browser_press_key` and `browser_navigate` wait until 2 seconds before the call's deadline, and a navigation still pending then fails the call as `Unavailable` with `browser.pageLoading` before any input; `browser_navigate` sends no `Page.enable` while one is pending.
   A navigation that started before the module's first read of the view isn't followed, so a call then waits for the next document as the page holds it.
 - **Screenshots:** a screenshot captures the visible page where it is scrolled, the whole page from its top, or an element's box, without scrolling the page.
+  It reads the frame before the capture and again after it; when the two name different documents, it fails as `Stale` and keeps no image, so an image never carries another document's origin.
   It is scaled so its longer side in device pixels is at most 1,600, and never scaled up.
   It goes as a PNG; a PNG over 1 MB, or one the engine's answer can't carry, goes as a JPEG at quality 80, then 50, then 20, and one still over fails as `TooLarge`.
   An element with no box, or an area with no size, is refused with `browser.notVisible`.
@@ -534,7 +535,7 @@ A tool that fails rejects with Noldova Desktop's `ToolFailureException`, whose `
 | `Withdrawn` | The call was aborted while its permission request waited, for any reason: cancelled, its session ended, stopped, timed out or switched off |
 | `Cancelled` | The call was cancelled, or its session ended, before its point of no return and outside the permission wait |
 | `Stopped` | The person stopped the call before its point of no return and outside the permission wait, with the app's stop or the page's Stop teammate or Take over |
-| `Stale` | The page changed after the grant, so nothing ran; or a snapshot's page went to another document during each of its two reads; take a new snapshot |
+| `Stale` | The page changed after the grant, so nothing ran; a snapshot's page went to another document during each of its two reads; or a screenshot's page went to another document during its capture; take a new snapshot or screenshot |
 | `TimedOut` | The call's time limit passed before its point of no return |
 | `OutcomeUncertain` | A non-resumable tool ended after its point of no return, for any reason, since its input may have reached the page, except an element or page that changed when the only call sent was a focus; the message keeps the reason it ended with |
 | `TooLarge` | The page's answer or the result is over its limit, even cut |

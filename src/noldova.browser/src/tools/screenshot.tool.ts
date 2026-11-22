@@ -12,6 +12,7 @@ import { type IToolDescriptor, type ToolCall, ToolContent, ToolResult } from "@n
 import { CallTooLargeException } from "../exceptions/call-too-large.exception.ts";
 import { MalformedReplyException } from "../exceptions/malformed-reply.exception.ts";
 import { ResultTooLargeException } from "../exceptions/result-too-large.exception.ts";
+import { ScreenshotChangedException } from "../exceptions/screenshot-changed.exception.ts";
 import { ScreenshotNotVisibleException } from "../exceptions/screenshot-not-visible.exception.ts";
 import { ScreenshotTargetException } from "../exceptions/screenshot-target.exception.ts";
 import type { IBrowserTool } from "../interfaces/i-browser-tool.ts";
@@ -72,6 +73,8 @@ export class ScreenshotTool implements IBrowserTool {
         throw new ScreenshotNotVisibleException();
       return this.captureAsync(viewId, planned, laidOut, !Object.isNull(reference) || isFullPage, options);
     });
+    if ((await this.kit.readFrameAsync(viewId, options)).documentId !== frame.documentId)
+      throw new ScreenshotChangedException();
     const content: ToolContent[] = [ToolContent.fromImage(capture.data, capture.mimeType, frame.origin)];
     if (capture.area.isCut)
       content.push(ToolContent.fromText(Resources.formatScreenshotCut(Resources.maximumClipLength), null));
