@@ -216,18 +216,19 @@ export class Pages {
   private async showOnceAsync(instance: string, showing: PageShowing): Promise<PaneTab | null> {
     const opened: PagePlace | undefined = this.pending.get(instance);
     this.pending.delete(instance);
-    if (opened !== undefined)
+    if (!Object.isUndefined(opened))
       return await this.openViewAsync(instance, opened, showing);
     const claim: PageClaim = PageAnswers.readClaim(await this.context.requestAsync(BrowserMethods.claimPage, new PageRequest(instance).toJson()));
     if (showing.isClosedMeanwhile)
       return null;
     if (claim.isClaimed) {
       this.agentPages.openTabs([instance]);
-      if (claim.agentName !== null)
+      if (!Object.isNull(claim.agentName))
         this.agentPages.noteAgent(instance, claim.agentName);
       return await this.openViewAsync(instance, Pages.placeOf(claim.record), showing);
     }
-    if (await this.readAsync(instance) !== null && !showing.isClosedMeanwhile)
+    // A run here may claim the page while its record is read, and then this window holds it.
+    if (!Object.isNull(await this.readAsync(instance)) && !showing.isClosedMeanwhile && !this.holds(instance))
       this.markElsewhere(instance, true);
     return null;
   }

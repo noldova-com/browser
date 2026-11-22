@@ -654,6 +654,24 @@ describe("Pages", () => {
     expect([requestsOf(BrowserMethods.claimPage), context.opened, [...pages.elsewhere()]]).toEqual([[{ instance: claimed }, { instance: gone }, { instance: claimed }], [], [claimed]]);
   });
 
+  it("doesn't hold apart as elsewhere a page a run here claims while the tab's record is read", async () => {
+    const instance: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
+    const record = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
+    const read = Promise.withResolvers<JsonValue>();
+    let isFree: boolean = false;
+    context.answerRequest = (method, parameters) => method === BrowserMethods.claimPage
+      ? Promise.resolve({ agentName: null, isClaimed: isFree, isHere: false, record: isFree ? record : null })
+      : method === BrowserMethods.readPage ? read.promise : declared(method, parameters);
+    const showing: Promise<PaneTab | null> = pages.showAsync(instance);
+    await vi.waitFor(() => expect(requestsOf(BrowserMethods.readPage)).toEqual([{ instance }]));
+
+    isFree = true;
+    await pages.openAsync("workspace-1", null, instance);
+    read.resolve(record);
+
+    expect([await showing, [...pages.elsewhere()], context.opened.map(t => [t.instance, t.title])]).toEqual([null, [], [[instance, "https://docs.example.com/"]]]);
+  });
+
   it("gives a tab whose page another window had a view once this window claims the page on an open", async () => {
     const instance: string = "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d";
     const record = { instance, profileKey: "workspace-1", url: "https://docs.example.com/" };
