@@ -478,7 +478,8 @@ export class Resources {
   public static readonly activatingKeys: readonly string[] = ["Enter", " "];
   public static readonly nonSubmittingButtons: readonly string[] = ["button", "reset"];
   public static readonly submittingInputs: readonly string[] = ["submit", "image"];
-  public static readonly nonTextInputs: readonly string[] = ["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"];
+  public static readonly enterClickedInputs: readonly string[] = ["button", "reset"];
+  public static readonly enterSubmittingControls: readonly string[] = ["SELECT", "FIELDSET", "OBJECT", "OUTPUT"];
   public static readonly inputElement: string = "INPUT";
   public static readonly buttonElement: string = "BUTTON";
   public static readonly anchorElement: string = "A";
