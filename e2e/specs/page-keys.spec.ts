@@ -15,8 +15,8 @@ const TITLE = "Docs";
 const VIEW = ".nol-browser-page-view";
 const FIELD = "input.nol-browser-toolbar-field";
 const MODIFIER = process.platform === "darwin" ? "meta" : "control";
-const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:600px">`
-  + "<script>window.escapes = 0; window.shifts = 0; addEventListener(\"keydown\", t => { if (t.key === \"Escape\") window.escapes++; if (t.key === \"Shift\") window.shifts++; });</script>";
+const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:600px"><p>${title}</p>`
+  + "<script>window.escapes = 0; addEventListener(\"keydown\", t => { if (t.key === \"Escape\") window.escapes++; });</script>";
 
 async function openAsync(app: TestApp, docs: FixtureServer): Promise<void> {
   await app.allowLocalSitesAsync([docs.origin]);
@@ -24,11 +24,9 @@ async function openAsync(app: TestApp, docs: FixtureServer): Promise<void> {
   await expect.poll(() => app.viewPages.listAsync(), { message: "The view never showed the docs page." }).toEqual([new ViewPage(docs.url("/"), TITLE)]);
   await app.window.locator(VIEW).filter({ visible: true }).click();
   await expect.poll(() => app.window.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? ""), { message: "A click in the page didn't focus its view." }).toBe("webview");
-  // Noldova Desktop loses the first key sent to a view soon after it takes the focus (desktop#514), so Shift goes to the page until one reaches it.
-  await expect.poll(async () => {
-    await app.viewPages.pressAtAsync(docs.url("/"), "Shift", []);
-    return app.viewPages.runAtAsync(docs.url("/"), "String(window.shifts > 0)");
-  }, { message: "No key ever reached the focused page." }).toBe("true");
+  // The engine keeps keys from a page until its first contentful paint (Noldova Desktop's documents/WEB-VIEWS.md, "Keys from a view").
+  await expect.poll(() => app.viewPages.runAtAsync(docs.url("/"), "String(performance.getEntriesByName(\"first-contentful-paint\").length)"),
+    { message: "The page never painted its content." }).toBe("1");
 }
 
 test.describe("the pane's keys from its page", () => {
