@@ -12,7 +12,7 @@ import { MalformedReplyException } from "../../src/exceptions/malformed-reply.ex
 import { AccessibilityNode } from "../../src/models/accessibility-node.ts";
 import type { AccessibilityTree } from "../../src/models/accessibility-tree.ts";
 import { AccessibilitySnapshot } from "../../src/services/accessibility-snapshot.ts";
-import type { JsonObject } from "../../src/types/json-value.ts";
+import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 
 function node(id: string, role: string, changes: JsonObject = {}): JsonObject {
   return { nodeId: id, ignored: false, role: { type: "role", value: role }, ...changes };
@@ -20,6 +20,13 @@ function node(id: string, role: string, changes: JsonObject = {}): JsonObject {
 
 function text(value: string | number | boolean): JsonObject {
   return { type: "string", value };
+}
+
+// A name the engine built from the elements `aria-labelledby` names.
+function labelledName(value: string, ...elements: readonly number[]): JsonObject {
+  return { type: "computedString", value, sources: [
+    { type: "relatedElement", attribute: "aria-labelledby", attributeValue: { type: "idrefList", value: "x", relatedNodes: elements.map(t => ({ backendDOMNodeId: t })) } }
+  ] };
 }
 
 const PAGE: JsonObject = { nodes: [
@@ -37,9 +44,9 @@ describe("AccessibilitySnapshot", () => {
     const tree: AccessibilityTree = AccessibilitySnapshot.readNodes(PAGE);
 
     expect(tree.nodes).toStrictEqual([
-      new AccessibilityNode("1", false, "RootWebArea", "Sign in", "", ["2", "3"], 1, false),
-      new AccessibilityNode("2", false, "heading", "Welcome back", "", [], 2, false),
-      new AccessibilityNode("3", false, "textbox", "Password", "hunter2", [], 3, false)
+      new AccessibilityNode("1", false, "RootWebArea", "Sign in", "", ["2", "3"], 1, false, []),
+      new AccessibilityNode("2", false, "heading", "Welcome back", "", [], 2, false, []),
+      new AccessibilityNode("3", false, "textbox", "Password", "hunter2", [], 3, false, [])
     ]);
     expect(tree.root).toBe(tree.nodes[0]);
   });
@@ -52,9 +59,9 @@ describe("AccessibilitySnapshot", () => {
     ] });
 
     expect(tree.nodes).toStrictEqual([
-      new AccessibilityNode("1", true, "none", "40", "true", [], null, false),
-      new AccessibilityNode("2", false, "group", "", "", [], null, false),
-      new AccessibilityNode("3", false, "", "", "", [], null, false)
+      new AccessibilityNode("1", true, "none", "40", "true", [], null, false, []),
+      new AccessibilityNode("2", false, "group", "", "", [], null, false, []),
+      new AccessibilityNode("3", false, "", "", "", [], null, false, [])
     ]);
   });
 
@@ -84,13 +91,39 @@ describe("AccessibilitySnapshot", () => {
     ]);
   });
 
-  it("masks a value in each name once and stops, when a reply names a node as its own ancestor", () => {
+  it("masks in a name every field value of the elements it is built from through aria-labelledby, wherever they are, and of the nodes below them", () => {
     const tree: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
-      { nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Code 12" }, childIds: ["2"] },
-      { nodeId: "2", role: { value: "group" }, name: { value: "Code 12" }, childIds: ["1"], value: { value: "12" } }
+      node("1", "RootWebArea", { name: text("Shop"), childIds: ["2", "5"], backendDOMNodeId: 1 }),
+      node("2", "group", { name: text("Send 555 now"), childIds: ["3"], backendDOMNodeId: 2 }),
+      node("3", "button", { name: labelledName("Send 555 now", 6, 99), backendDOMNodeId: 3 }),
+      node("5", "generic", { childIds: ["7", "8"], backendDOMNodeId: 6 }),
+      node("7", "textbox", { name: text("Code"), value: text("555"), backendDOMNodeId: 7 })
+    ] });
+
+    expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => [t.node.id, t.name])).toEqual([
+      ["1", "Shop"], ["2", "Send •••••• now"], ["3", "Send •••••• now"], ["5", ""], ["7", "Code"]
+    ]);
+  });
+
+  it("masks a value in each name once and stops, when a reply names a node as its own ancestor or descendant", () => {
+    const tree: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
+      { nodeId: "1", role: { value: "RootWebArea" }, name: { value: "Code 12" }, childIds: ["2"], backendDOMNodeId: 1 },
+      { nodeId: "2", role: { value: "group" }, name: labelledName("Code 12", 1), childIds: ["1"], value: { value: "12" } }
     ] });
 
     expect(AccessibilitySnapshot.readMaskedNames(tree).map(t => t.name)).toEqual(["Code ••••••", "Code ••••••"]);
+  });
+
+  it("reads the elements a name is built from through aria-labelledby, and none from a source that doesn't give one", () => {
+    const sources: JsonValue = [5, { attribute: "title" }, { attribute: "aria-labelledby" }, { attribute: "aria-labelledby", attributeValue: { type: "idrefList" } },
+      { attribute: "aria-labelledby", attributeValue: { relatedNodes: [7, {}, { backendDOMNodeId: 31 }, { backendDOMNodeId: 32 }] } }];
+    const tree: AccessibilityTree = AccessibilitySnapshot.readNodes({ nodes: [
+      node("1", "button", { name: { type: "computedString", value: "Send", sources } }),
+      node("2", "button", { name: { value: "Pay", sources: "x" } }),
+      node("3", "button")
+    ] });
+
+    expect(tree.nodes.map(t => t.labelledBy)).toEqual([[31, 32], [], []]);
   });
 
   it("reads the page's title from the root's name", () => {

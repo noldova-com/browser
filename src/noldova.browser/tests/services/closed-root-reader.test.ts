@@ -8,7 +8,7 @@
 
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import { FakeModuleLog } from "@noldova/desktop.runtime/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
@@ -27,6 +27,13 @@ function node(id: string, role: string, name: string, childIds: readonly string[
     nodeId: id, ignored: isIgnored, role: { type: "role", value: role }, name: { type: "computedString", value: name }, value: { type: "string", value },
     childIds: [...childIds], backendDOMNodeId: Number(id)
   };
+}
+
+// A node whose name the engine built from the elements `aria-labelledby` names.
+function labelled(id: string, role: string, name: string, elements: readonly number[], childIds: readonly string[] = []): JsonObject {
+  return { ...node(id, role, name, childIds), name: { type: "computedString", value: name, sources: [
+    { type: "relatedElement", attribute: "aria-labelledby", attributeValue: { type: "idrefList", value: "x", relatedNodes: elements.map(t => ({ backendDOMNodeId: t })) } }
+  ] } };
 }
 
 const HOST: JsonObject = node("10", "generic", "", ["11", "12", "13", "16"]);
@@ -153,6 +160,71 @@ describe("ClosedRootReader", () => {
       ["Accessibility.getChildAXNodes", { id: "14" }],
       ["Accessibility.disable", {}]
     ]);
+  });
+
+  it("masks in a name every field value of the elements it is built from through aria-labelledby, wherever they are, and of the nodes below them", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555 to a@b.test", [30, 31, 32])] }).root;
+    const referenced: Readonly<Record<string, readonly JsonObject[]>> = { 30: [node("30", "textbox", "Code", [], "555")], 31: [node("31", "group", "", ["33"])] };
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [...referenced[String(t["backendNodeId"])] ?? []] }));
+    children({ 31: [node("33", "textbox", "Email", [], "a@b.test")] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options);
+
+    expect(name).toBe("Send •••••• to ••••••");
+    expect(surface.calls.filter(t => t.method === "Accessibility.getPartialAXTree").map(t => t.params)).toEqual([
+      { backendNodeId: 30, fetchRelatives: false }, { backendNodeId: 31, fetchRelatives: false }, { backendNodeId: 32, fetchRelatives: false }
+    ]);
+    expect(surface.calls.map(t => t.method)).not.toContain("DOM.describeNode");
+  });
+
+  it("keeps a name whole when the page removed the elements it is built from through aria-labelledby", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30])] }).root;
+    surface.fail("Accessibility.getPartialAXTree", new WebViewFailure(WebViewFailureKind.Protocol, -32000, "No node with given id found"));
+
+    expect(await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options)).toBe("Send 555");
+  });
+
+  it("masks a name whole once the step's time is nearly over while it reads the elements the name is built from", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 500, 1_000, false, new ActionProgress(() => undefined));
+    const button: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [labelled("21", "button", "Send 555", [30])] }).root;
+    surface.answer("Accessibility.getPartialAXTree", { nodes: [node("30", "textbox", "Code", [], "555")] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", button, options);
+
+    expect([name, surface.calls.map(t => t.method)]).toEqual(["••••••", ["Accessibility.enable", "Accessibility.getPartialAXTree", "Accessibility.disable"]]);
+  });
+
+  it("masks in a line's name and its ancestors' names every field value of the elements it is built from through aria-labelledby", async () => {
+    const parts: Readonly<Record<string, readonly JsonObject[]>> = { 10: [node("10", "generic", "", ["40"])], 30: [node("30", "textbox", "Code", [], "555")] };
+    surface.answerWith("Accessibility.getPartialAXTree", t => ({ nodes: [...parts[String(t["backendNodeId"])] ?? []] }));
+    children({ 10: [node("40", "group", "Send 555", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    const read: ClosedRead | null = await readAsync();
+
+    expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Send ••••••", "", false, null], [4, "button", "Send ••••••", "", false, 21]], false]);
+  });
+
+  it("stops, cut, once the step's time is nearly over while it reads the elements a line's name is built from", async () => {
+    const now: number = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+    surface.answerWith("Accessibility.getPartialAXTree", t => {
+      if (t["backendNodeId"] !== 30)
+        return { nodes: [node("10", "generic", "", ["40"])] };
+      clock.mockReturnValue(now + 60_000);
+      return { nodes: [node("30", "textbox", "Code", [], "555")] };
+    });
+    children({ 10: [node("40", "group", "Send 555", ["21"])], 40: [labelled("21", "button", "Send 555", [30])] });
+
+    try {
+      const read: ClosedRead | null = await readAsync();
+
+      expect([rows(read), read?.isCut]).toEqual([[[3, "group", "Send 555", "", false, null]], true]);
+    }
+    finally {
+      clock.mockRestore();
+    }
   });
 
   it("gives a name with nothing below it, or no name, as it is, reading nothing", async () => {

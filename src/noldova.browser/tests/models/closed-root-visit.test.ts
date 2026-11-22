@@ -13,7 +13,7 @@ import { ClosedRootVisit } from "../../src/models/closed-root-visit.ts";
 
 describe("ClosedRootVisit", () => {
   it("keeps its fields", () => {
-    const node: AccessibilityNode = new AccessibilityNode("2", false, "group", "", "", [], 12, false);
+    const node: AccessibilityNode = new AccessibilityNode("2", false, "group", "", "", [], 12, false, []);
     const visit: ClosedRootVisit = new ClosedRootVisit(node, 3, [0, 2]);
 
     expect([visit.node, visit.depth, visit.ancestors]).toEqual([node, 3, [0, 2]]);

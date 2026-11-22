@@ -15,8 +15,11 @@ export class AccessibilityNode {
   public readonly childIds: readonly string[];
   public readonly backendNodeId: number | null;
   public readonly isFocused: boolean;
+  // The elements the node's name is built from through `aria-labelledby`, by their element ids, wherever they are in the page.
+  public readonly labelledBy: readonly number[];
 
-  public constructor(id: string, isIgnored: boolean, role: string, name: string, value: string, childIds: readonly string[], backendNodeId: number | null, isFocused: boolean) {
+  public constructor(id: string, isIgnored: boolean, role: string, name: string, value: string, childIds: readonly string[], backendNodeId: number | null, isFocused: boolean,
+    labelledBy: readonly number[]) {
     this.id = id;
     this.isIgnored = isIgnored;
     this.role = role;
@@ -25,5 +28,6 @@ export class AccessibilityNode {
     this.childIds = childIds;
     this.backendNodeId = backendNodeId;
     this.isFocused = isFocused;
+    this.labelledBy = labelledBy;
   }
 }

@@ -32,20 +32,30 @@ export class AccessibilitySnapshot {
     return nodes.map(t => AccessibilitySnapshot.readNode(t));
   }
 
-  // Each node, in the tree's order, with its name, in which every field value of the node and of the nodes below it is masked: the engine
-  // builds a label's or a container's name from the fields inside it, and hides only a password's value.
+  // Each node, in the tree's order, with its name, in which every field value of the node and of the nodes below it is masked, and every
+  // field value of the elements its name is built from through `aria-labelledby` and of the nodes below them, wherever they are: the engine
+  // builds a label's, a container's or a labelled element's name from the fields in it, and hides only a password's value.
   public static readMaskedNames(tree: AccessibilityTree): readonly MaskedName[] {
-    const names: Map<string, string> = new Map<string, string>();
+    const byId: ReadonlyMap<string, AccessibilityNode> = new Map<string, AccessibilityNode>(tree.nodes.map(t => [t.id, t]));
+    const byElement: Map<number, AccessibilityNode> = new Map<number, AccessibilityNode>();
     const parents: Map<string, AccessibilityNode> = new Map<string, AccessibilityNode>();
-    for (const node of tree.nodes)
+    for (const node of tree.nodes) {
+      if (!Object.isNull(node.backendNodeId))
+        byElement.set(node.backendNodeId, node);
       for (const child of node.childIds)
         parents.set(child, node);
-    for (const node of tree.nodes.filter(t => t.value !== "")) {
+    }
+    const names: Map<string, string> = new Map<string, string>();
+    for (const node of tree.nodes) {
+      const referenced: readonly AccessibilityNode[] = AccessibilitySnapshot.readBelow(node.labelledBy.flatMap(t => byElement.get(t) ?? []), byId);
+      const values: readonly string[] = [node, ...referenced].map(t => t.value).filter(t => t !== "");
+      if (values.length === 0)
+        continue;
       // A page's tree has no cycle, but a reply that names a node as its own ancestor must not loop.
       const seen: Set<string> = new Set<string>();
       for (let at: AccessibilityNode | undefined = node; !Object.isUndefined(at) && !seen.has(at.id); at = parents.get(at.id)) {
         seen.add(at.id);
-        names.set(at.id, (names.get(at.id) ?? at.name).replaceAll(node.value, Resources.maskedValue));
+        names.set(at.id, values.reduce((name, t) => name.replaceAll(t, Resources.maskedValue), names.get(at.id) ?? at.name));
       }
     }
     return tree.nodes.map(t => new MaskedName(t, names.get(t.id) ?? t.name));
@@ -75,8 +85,40 @@ export class AccessibilitySnapshot {
       AccessibilitySnapshot.readText(value[Resources.valueField]),
       AccessibilitySnapshot.readIds(value[Resources.childIdsField] ?? []),
       backendNodeId,
-      AccessibilitySnapshot.readFocused(value[Resources.propertiesField] ?? [])
+      AccessibilitySnapshot.readFocused(value[Resources.propertiesField] ?? []),
+      AccessibilitySnapshot.readLabelledBy(value[Resources.nameField])
     );
+  }
+
+  // The elements a name's `aria-labelledby` source gives, by their element ids; none where the name has no such source.
+  private static readLabelledBy(name: JsonValue | undefined): readonly number[] {
+    const sources: JsonValue | undefined = JsonShapes.isObject(name) ? name[Resources.sourcesField] : undefined;
+    if (!JsonShapes.isArray(sources))
+      return [];
+    return sources.flatMap(source => {
+      const value: JsonValue | undefined = JsonShapes.isObject(source) && source[Resources.attributeField] === Resources.ariaLabelledByAttribute
+        ? source[Resources.attributeValueField] : undefined;
+      const related: JsonValue | undefined = JsonShapes.isObject(value) ? value[Resources.relatedNodesField] : undefined;
+      return JsonShapes.isArray(related) ? related.flatMap(t => {
+        const element: JsonValue | undefined = JsonShapes.isObject(t) ? t[Resources.backendDOMNodeIdField] : undefined;
+        return Object.isNumber(element) ? [element] : [];
+      }) : [];
+    });
+  }
+
+  // The nodes and every node below them. A page's tree has no cycle, but a reply that names a node as its own descendant must not loop.
+  private static readBelow(nodes: readonly AccessibilityNode[], byId: ReadonlyMap<string, AccessibilityNode>): readonly AccessibilityNode[] {
+    const below: AccessibilityNode[] = [];
+    const seen: Set<string> = new Set<string>();
+    const pending: AccessibilityNode[] = [...nodes];
+    for (let at: AccessibilityNode | undefined = pending.pop(); !Object.isUndefined(at); at = pending.pop()) {
+      if (seen.has(at.id))
+        continue;
+      seen.add(at.id);
+      below.push(at);
+      pending.push(...at.childIds.flatMap(t => byId.get(t) ?? []));
+    }
+    return below;
   }
 
   private static readFocused(value: JsonValue): boolean {

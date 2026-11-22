@@ -13,7 +13,7 @@ import { MaskedName } from "../../src/models/masked-name.ts";
 
 describe("MaskedName", () => {
   it("keeps its fields", () => {
-    const node: AccessibilityNode = new AccessibilityNode("2", false, "LabelText", "Card 4111", "", ["3"], 12, false);
+    const node: AccessibilityNode = new AccessibilityNode("2", false, "LabelText", "Card 4111", "", ["3"], 12, false, []);
     const masked: MaskedName = new MaskedName(node, "Card ••••••");
 
     expect([masked.node, masked.name]).toEqual([node, "Card ••••••"]);
