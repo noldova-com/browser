@@ -44,8 +44,8 @@ export class ElementFactsScript {
   const id = form === undefined ? null : form.getAttribute("id");
   const linked = id === null ? [] : everything.filter(t => t.nodeType === 1 && t.getAttribute("form") === id && t.getRootNode() === form.getRootNode());
   const labels = form === undefined ? "" : (form.getAttribute("aria-labelledby") ?? "").split(/\\s+/).filter(t => t !== "")
-    .map(label => everything.find(t => t.nodeType === 1 && t.getAttribute("id") === label))
-    .map(t => t === undefined ? "" : t.textContent)
+    .map(label => form.getRootNode().getElementById(label))
+    .map(t => t === null ? "" : t.textContent)
     .join(" ");
   const names = form === undefined ? [] : [labels, form.getAttribute("aria-label") ?? "", form.getAttribute("title") ?? ""].map(collapse);
   const title = all(document, false).find(t => t.nodeName === "TITLE");

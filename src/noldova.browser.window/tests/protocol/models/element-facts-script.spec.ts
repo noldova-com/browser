@@ -137,6 +137,16 @@ describe("ElementFactsScript", () => {
     ]).toMatchObject(["Create your Team account today", "Sign up", "Join", "", ""].map(formName => ({ formName })));
   });
 
+  it("reads a form's name from the elements that label it in its own tree only, when another tree holds the same ids", () => {
+    root.innerHTML = "<h2 id=\"heading\">Billing</h2><form aria-labelledby=\"note\" aria-label=\"Pay\"><button>Pay</button></form><div id=\"host\"></div>";
+    const pay: Element = PagePartsFixture.find(root, "button");
+    const shadow: ShadowRoot = PagePartsFixture.find(root, "#host").attachShadow({ mode: "open" });
+    shadow.innerHTML = "<h2 id=\"heading\">Shipping</h2><p id=\"note\">today</p><form aria-labelledby=\"heading note\"><button>Go</button></form>";
+    const go: Element = PagePartsFixture.find(shadow, "button");
+
+    expect([read(go), read(pay)]).toMatchObject([{ formName: "Shipping today" }, { formName: "Pay" }]);
+  });
+
   it("reads the page's title from its first HTML title element on one line, never an SVG title, and the document's base URL", () => {
     document.title = " Plans\n and pricing ";
     root.innerHTML = "<svg><title>Chart</title></svg><button>Go</button>";
