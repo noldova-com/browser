@@ -36,10 +36,6 @@ export class WorkspaceOrigins {
     const answer: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
-    // An address the person types in a page starts a typed load there, whose redirects pass again until an agent's call starts on it.
-    if (!Object.isNull(request.instance))
-      for (const view of this.viewsOf(request.instance))
-        this.stopped.delete(view.id);
     return this.inTurnAsync(request.profileKey, async () => {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
       if (isLeft())
@@ -49,6 +45,11 @@ export class WorkspaceOrigins {
         await this.store.writeAsync(request.profileKey, [...next]);
         this.kept.set(request.profileKey, Promise.resolve(next));
       }
+      // A kept address the person typed in a page starts a typed load there, whose redirects pass again until an agent's call starts on it;
+      // one left or refused starts none, so the mark stays.
+      if (!Object.isNull(request.instance))
+        for (const view of this.viewsOf(request.instance))
+          this.stopped.delete(view.id);
       await this.applyToWorkspaceAsync(request.profileKey);
       return answer;
     });
@@ -59,7 +60,7 @@ export class WorkspaceOrigins {
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     const view: WebViewInfo | undefined = this.viewsOf(request.instance).find(t => t.profileKey === request.profileKey);
-    if (view === undefined)
+    if (Object.isUndefined(view))
       throw new TypedRedirectPageNotOpenException(request.instance, request.profileKey);
     if (this.stopped.has(view.id))
       throw new TypedRedirectAfterAgentException(request.instance);
@@ -81,7 +82,6 @@ export class WorkspaceOrigins {
     }));
   }
 
-  /** An agent's call on the page stops its typed load's redirects, whether or not one passed yet, until the window ends the load. */
   public stopRedirects(viewId: string): void {
     this.stopped.add(viewId);
   }
@@ -151,7 +151,7 @@ export class WorkspaceOrigins {
 
   private readAsync(profileKey: string): Promise<ReadonlySet<string>> {
     let origins: Promise<ReadonlySet<string>> | undefined = this.kept.get(profileKey);
-    if (origins === undefined) {
+    if (Object.isUndefined(origins)) {
       origins = this.store.readAsync(profileKey).then(t => new Set(t), error => {
         this.kept.delete(profileKey);
         throw error;
