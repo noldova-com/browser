@@ -24,6 +24,7 @@ import { TakenOverException } from "../exceptions/taken-over.exception.ts";
 import { Resources } from "../resources.ts";
 import { AccessibilitySnapshot } from "../services/accessibility-snapshot.ts";
 import { AimFollower } from "../services/aim-follower.ts";
+import { ClosedRootReader } from "../services/closed-root-reader.ts";
 import { ConsoleBuffers } from "../services/console-buffers.ts";
 import { ContentQuads } from "../services/content-quads.ts";
 import { FrameTreeReader } from "../services/frame-tree.reader.ts";
@@ -70,6 +71,7 @@ export class ToolKit {
   private static readonly HIGH_OPTIONS: readonly PermissionOption[] = [PermissionOption.AllowOnce, PermissionOption.Deny];
   private static readonly SENT_BACK: unique symbol = Symbol("sent back");
   private readonly recordAgent: (page: SessionPage) => void;
+  private readonly names: ClosedRootReader;
   public readonly webViews: IRuntimeWebViews;
   public readonly sessions: SessionStates;
   public readonly origins: WorkspaceOrigins;
@@ -102,6 +104,7 @@ export class ToolKit {
     this.consoles = new ConsoleBuffers(webViews.relay);
     this.domains = new RuntimeDomains(webViews.relay, this.consoles);
     this.changes = new PageChanges(webViews.relay, this.calls, this.domains, log);
+    this.names = new ClosedRootReader(this.calls, log);
     this.navigations = new PendingNavigations(webViews);
   }
 
@@ -332,7 +335,12 @@ export class ToolKit {
     if (Object.isUndefined(node))
       throw new MalformedReplyException();
     const target: NodeFacts | undefined = facts.path?.at(-1);
-    return new ShownElement(node.role, node.name, Object.isUndefined(target) || RiskClassifier.isSecret(target));
+    return new ShownElement(node.role, await this.readNameAsync(viewId, node, options), Object.isUndefined(target) || RiskClassifier.isSecret(target));
+  }
+
+  // The node's name with each secret field's value below it masked, which the engine builds into a label's or a container's name.
+  public readNameAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<string> {
+    return this.names.readNameAsync(viewId, node, options);
   }
 
   // Sends the input `send` gives and reports the call done. An input that makes the page navigate its main frame in place, as a link's click

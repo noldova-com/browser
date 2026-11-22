@@ -52,6 +52,28 @@ export class ClosedRootReader {
     }
   }
 
+  // The node's name with each secret field's value below it masked, as the snapshot masks it in the names of the lines around the field:
+  // the engine builds a label's or a container's name from the fields inside it, and hides only a password's value.
+  public async readNameAsync(viewId: string, node: AccessibilityNode, options: CallOptions): Promise<string> {
+    if (node.name === "" || node.childIds.length === 0)
+      return node.name;
+    await this.calls.sendAsync(viewId, Resources.accessibilityEnableMethod, {}, options);
+    try {
+      const reading: CallOptions = options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes);
+      let name: string = node.name;
+      const pending: AccessibilityNode[] = [...await this.readChildrenAsync(viewId, node, reading)];
+      for (let below: AccessibilityNode | undefined = pending.pop(); below !== undefined; below = pending.pop()) {
+        if (await this.isMaskedAsync(viewId, below, reading))
+          name = name.replaceAll(below.value, Resources.maskedValue);
+        pending.push(...await this.readChildrenAsync(viewId, below, reading));
+      }
+      return name;
+    }
+    finally {
+      await this.disableAsync(viewId, options);
+    }
+  }
+
   private async walkAsync(viewId: string, host: number, isHostShown: boolean, depth: number, isInteractive: boolean, mostDepth: number,
     maximumBytes: number, options: CallOptions): Promise<ClosedRead | null> {
     const nodes: readonly AccessibilityNode[] | null = await ClosedRootReader.readNodesAsync(

@@ -170,6 +170,19 @@ describe("ClickTool", () => {
     expect(bench.sendingMarks).toBe(1);
   });
 
+  it("masks a secret field's value that the engine built into the clicked element's name, on the card and in the result", async () => {
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getPartialAXTree", { nodes: [{ nodeId: "ax-7", role: { value: "link" }, name: { value: "Help 4111" }, childIds: ["ax-9"], backendDOMNodeId: 7 }] });
+    bench.surface.answerWith("Accessibility.getChildAXNodes", (params: JsonObject) => ({ nodes: params["id"] === "ax-7"
+      ? [{ nodeId: "ax-9", role: { value: "textbox" }, name: { value: "PIN" }, value: { value: "4111" }, childIds: [], backendDOMNodeId: ShopPage.PASSWORD }]
+      : [] }));
+
+    const result: ToolResult = await bench.runAsync(tool, bench.call({ reference: reference(ShopPage.LINK) }));
+
+    expect([bench.permissions.requests[0]?.title, result.structured?.["element"]]).toEqual(["Click \"Help ••••••\" on shop.test", { role: "link", name: "Help ••••••", isSecret: false }]);
+    expect(JSON.stringify([bench.permissions.requests, result])).not.toContain("4111");
+  });
+
   it("asks the person to allow a form's submit button once or for the chat, or deny it, and clicks it when the hit is inside it", async () => {
     ShopPage.serve(bench, ShopPage.BUTTON_LABEL);
 

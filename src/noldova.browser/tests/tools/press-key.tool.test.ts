@@ -72,6 +72,20 @@ describe("PressKeyTool", () => {
     expect(bench.sendingMarks).toBe(1);
   });
 
+  it("masks a secret field's value that the engine built into the focused element's name on the card", async () => {
+    const focused: JsonObject = { name: "focused", value: { type: "booleanOrUndefined", value: true } };
+    bench.surface.answer("Accessibility.getFullAXTree", { nodes: [
+      { nodeId: "1", role: { value: "RootWebArea" }, childIds: ["2"] },
+      { nodeId: "2", role: { value: "textbox" }, name: { value: "Search 4111" }, properties: [focused], childIds: ["3"], backendDOMNodeId: ShopPage.SEARCH }
+    ] });
+    bench.surface.acknowledge("Accessibility.enable", "Accessibility.disable");
+    bench.surface.answer("Accessibility.getChildAXNodes", { nodes: [{ nodeId: "3", role: { value: "textbox" }, value: { value: "4111" }, backendDOMNodeId: ShopPage.PASSWORD }] });
+
+    await bench.runAsync(tool, bench.call({ key: "a" }));
+
+    expect(bench.permissions.requests[0]?.details).toContainEqual({ label: "Field", kind: PermissionDetailKind.Text, value: "\"Search ••••••\", textbox" });
+  });
+
   it("names the form an Enter in its field submits, and the fields the form sends", async () => {
     bench.surface.answer("Accessibility.getFullAXTree", focusedTree(ShopPage.COUPON));
 

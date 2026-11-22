@@ -13,7 +13,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { MalformedReplyException } from "../../src/exceptions/malformed-reply.exception.ts";
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
+import type { AccessibilityNode } from "../../src/models/accessibility-node.ts";
 import type { ClosedRead } from "../../src/models/closed-read.ts";
+import { AccessibilitySnapshot } from "../../src/services/accessibility-snapshot.ts";
 import { ClosedRootReader } from "../../src/services/closed-root-reader.ts";
 import { ViewCalls } from "../../src/services/view-calls.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
@@ -130,6 +132,36 @@ describe("ClosedRootReader", () => {
 
     expect([rows(read), read?.isCut]).toEqual([[[1, "heading", "Cart", "", false, null], [2, "StaticText", "Cart", "", false, null]], true]);
     expect(surface.calls.at(-1)?.method).toBe("Accessibility.disable");
+  });
+
+  it("masks in a name each secret field's value below the node, through every level, and keeps the rest of the name and other fields' values", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const label: AccessibilityNode = AccessibilitySnapshot.readNodes({ nodes: [node("20", "LabelText", "Pay with 1234 for a@b.test 1234", ["12", "13"])] }).root;
+    children({ 20: [GROUP, CODE], 12: [EMAIL, BUY] });
+
+    const name: string = await new ClosedRootReader(new ViewCalls(surface.relay), log).readNameAsync("view-1", label, options);
+
+    expect(name).toBe("Pay with •••••• for a@b.test ••••••");
+    expect(surface.calls.map(t => [t.method, t.params])).toEqual([
+      ["Accessibility.enable", {}],
+      ["Accessibility.getChildAXNodes", { id: "20" }],
+      ["DOM.describeNode", { backendNodeId: 13 }],
+      ["Accessibility.getChildAXNodes", { id: "13" }],
+      ["Accessibility.getChildAXNodes", { id: "12" }],
+      ["DOM.describeNode", { backendNodeId: 15 }],
+      ["Accessibility.getChildAXNodes", { id: "15" }],
+      ["Accessibility.getChildAXNodes", { id: "14" }],
+      ["Accessibility.disable", {}]
+    ]);
+  });
+
+  it("gives a name with nothing below it, or no name, as it is, reading nothing", async () => {
+    const options: CallOptions = new CallOptions(new AbortController().signal, Date.now() + 5_000, 1_000, false, new ActionProgress(() => undefined));
+    const nodes: readonly AccessibilityNode[] = AccessibilitySnapshot.readChildren({ nodes: [node("15", "textbox", "Email", [], "a@b.test"), node("12", "generic", "", ["14"])] });
+    const reader: ClosedRootReader = new ClosedRootReader(new ViewCalls(surface.relay), log);
+
+    expect(await Promise.all(nodes.map(t => reader.readNameAsync("view-1", t, options)))).toEqual(["Email", ""]);
+    expect(surface.calls).toEqual([]);
   });
 
   it("stops, cut, once the step's time is nearly over", async () => {

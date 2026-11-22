@@ -31,6 +31,26 @@ export class AccessibilitySnapshot {
     return nodes.map(t => AccessibilitySnapshot.readNode(t));
   }
 
+  // Each node, in the tree's order, with its name, in which every field value of the node and of the nodes below it is masked: the engine
+  // builds a label's or a container's name from the fields inside it, and hides only a password's value.
+  public static readMaskedNames(tree: AccessibilityTree): readonly (readonly [AccessibilityNode, string])[] {
+    const masked: [AccessibilityNode, string][] = tree.nodes.map(t => [t, t.name]);
+    const byId: Map<string, [AccessibilityNode, string]> = new Map<string, [AccessibilityNode, string]>(masked.map(t => [t[0].id, t]));
+    const parents: Map<string, [AccessibilityNode, string]> = new Map<string, [AccessibilityNode, string]>();
+    for (const entry of masked)
+      for (const child of entry[0].childIds)
+        parents.set(child, entry);
+    for (const node of tree.nodes.filter(t => t.value !== "")) {
+      // A page's tree has no cycle, but a reply that names a node as its own ancestor must not loop.
+      const seen: Set<string> = new Set<string>();
+      for (let at: [AccessibilityNode, string] | undefined = byId.get(node.id); at !== undefined && !seen.has(at[0].id); at = parents.get(at[0].id)) {
+        seen.add(at[0].id);
+        at[1] = at[1].replaceAll(node.value, Resources.maskedValue);
+      }
+    }
+    return masked;
+  }
+
   public static readTitle(tree: AccessibilityTree): string {
     return tree.root.name;
   }

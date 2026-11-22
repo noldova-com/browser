@@ -72,7 +72,8 @@ export class PressKeyTool implements IBrowserTool {
         { label: Resources.keyLabel, kind: PermissionDetailKind.Text, value: chord }
       ];
       if (!Object.isNull(node) && !Object.isNull(facts))
-        details.push(...PermissionCards.element(facts, new ShownElement(node.role, node.name, RiskClassifier.isSecretField(facts.path))));
+        details.push(...PermissionCards.element(facts, new ShownElement(node.role, await this.kit.readNameAsync(page.viewId, node, options),
+          RiskClassifier.isSecretField(facts.path))));
       if (!Object.isNull(facts) && RiskClassifier.submitsKey(key, facts.path))
         details.push(...PermissionCards.sends(facts));
       const canTakeOver: boolean = RiskClassifier.isSecretField(facts?.path ?? null) && !RiskClassifier.isSubmittingKey(key);
