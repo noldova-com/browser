@@ -29,12 +29,18 @@ export class OpenPageArguments {
     if (!PageAnswers.isObject(commandArguments))
       return null;
     const { profileKey, url, instance } = commandArguments;
+    if (Object.isUndefined(profileKey))
+      return Object.isUndefined(instance) ? OpenPageArguments.tryReadUrl(Resources.linkProfile, url, null) : null;
     if (!Object.isString(profileKey) || !Resources.profileKeyPattern.test(profileKey) || profileKey === Resources.linkProfile)
       return null;
     if (!Object.isUndefined(instance) && (!Object.isString(instance) || !Resources.instancePattern.test(instance)))
       return null;
+    return OpenPageArguments.tryReadUrl(profileKey, url, instance ?? null);
+  }
+
+  private static tryReadUrl(profileKey: string, url: JsonValue | undefined, instance: string | null): PageOpening | null {
     if (!Object.isUndefined(url) && !Object.isString(url))
       return null;
-    return new PageOpening(profileKey, Object.isUndefined(url) || url.trim() === "" ? null : url, instance ?? null);
+    return new PageOpening(profileKey, Object.isUndefined(url) || url.trim() === "" ? null : url, instance);
   }
 }

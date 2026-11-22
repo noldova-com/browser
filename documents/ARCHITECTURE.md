@@ -85,8 +85,9 @@ The page itself runs in the view's own renderer, isolated as [SECURITY-MODEL.md]
 Each page is a document of the window part, `browser.page`: a tab in Noldova Desktop's document groups, which the person moves, splits and closes like any other document.
 Its look follows the app's design, whose rules this section writes out.
 
-- **Opening:** the app opens a page with the window part's command `browser.openPage`, whose arguments are `{ profileKey, url?, instance? }`: the workspace the page belongs to, never `links`, which the module keeps for the person's links, when given the address it goes to first, through the origin check, and when given the page document's instance, which the app picks to bind an agent session to the page.
-  A key that isn't 1 to 64 lowercase letters, digits and hyphens, starting with a letter or a digit, or is `links`, a `url` that isn't a string, or an `instance` that isn't a lowercase UUID, makes the command unavailable and fails its run.
+- **Opening:** the app opens a page with the window part's command `browser.openPage`, whose arguments are `{ profileKey?, url?, instance? }`: the workspace the page belongs to, never `links` by name, which the module keeps for the person's links, when given the address it goes to first, through the origin check, and when given the page document's instance, which the app picks to bind an agent session to the page.
+  Without a `profileKey`, the page opens in the person's own browsing, the workspace `links`, as a link's page does, for a command the person runs for themselves, such as an app's Open browser; its address, when given, goes through the same origin check, and unlike a link's, isn't allowed first.
+  A key that isn't 1 to 64 lowercase letters, digits and hyphens, starting with a letter or a digit, or is `links`, a `url` that isn't a string, an `instance` that isn't a lowercase UUID, or an `instance` without a `profileKey`, so that no agent session binds to the person's own browsing, makes the command unavailable and fails its run.
   An `instance` already open on the same workspace brings that page forward as it is, without going to the address; one open on another workspace fails the run.
   Noldova Desktop keeps a document's instances to each window, so an `instance` this window doesn't hold is claimed first, with `browser.claimPage`, which checks and holds in one step: of two windows that claim a page at once only one has it, and one that another window has, shown or not, fails the run.
   The runtime part keeps, in memory, the window and connection that has each page: the one that claimed it, kept its record or reported it open, until that window forgets it, closes for good, or its connection goes; a window that shows or closes a page another window has changes neither its record nor who has it.
@@ -268,7 +269,7 @@ The page's components take their sizes from the UI kit's tokens, and define on t
 ### Profiles
 
 - **The profile key** is opaque and comes from the app, for example the identity of the folder or the conversation the pane serves.
-  The module invents only one, `links`, for the pages that links open, as [Links](#links) says.
+  The module invents only one, `links`, the person's own browsing, for the pages that links open and those `browser.openPage` opens with no key, as [Links](#links) says.
 - **One partition per key:** Noldova Desktop builds the persistent partition's name from the module's id and the key; the module never names a partition itself.
 - **Clearing:** Noldova Desktop offers a call that clears a key's partition; a page's Clear browsing data… asks the runtime part to make it for the page's workspace.
 - What the isolation guarantees, and what Noldova Desktop refuses for the page by default, are in [SECURITY-MODEL.md](SECURITY-MODEL.md#isolation) and [its defaults](SECURITY-MODEL.md#denied-by-default).
@@ -328,7 +329,7 @@ The window part is Noldova Desktop's in-app browser: a web link the person opens
 - **Opening:** `openAsync` treats the link as the person's own action, as a [typed address](#typed-addresses) is: the runtime part allows its origin first, through `browser.allowTypedAddress`, then the link opens in a new tab of the document area, as a page on the workspace `links`.
   An address the runtime part refuses, an answer that isn't one, a failed request or a part that deactivated meanwhile rejects, and Noldova Desktop then opens the link in the system's browser.
 - **The links workspace:** every link's page shares one workspace, `links`, the person's own browsing, apart from the workspaces the app opens pages on for its teammates; so sign-ins there aren't shared with an app's workspace's pages, nor theirs with it.
-  The module keeps the key for itself: `browser.openPage` refuses it as invalid arguments, and a tool call whose session the app bound to it fails as `browser.unbound`, so no app's pages or agents share the person's link browsing.
+  The module keeps the key for itself: `browser.openPage` refuses it by name as invalid arguments, and opens a page there only when it names no workspace and no instance, and a tool call whose session the app bound to it fails as `browser.unbound`, so no app's agents act in the person's link browsing.
   The module can't tell which of the app's workspaces a link came from, since Noldova Desktop's path carries none.
 
 ## 7. Agent tools

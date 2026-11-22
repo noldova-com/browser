@@ -27,7 +27,7 @@ The base's web views, as its `WEB-VIEWS.md` sets them, guarantee:
 - The view is sandboxed, with context isolation on, no preload, and none of the app's protocols, credentials or messages to the app.
   A message from the view never counts as one from the app's window.
 - Each workspace has its own persistent partition, which all its pages share, named by the base, never the default session and never another workspace's or module's partition.
-  A workspace is the profile key the app gives `browser.openPage`; nothing from a page or an agent names one.
+  A workspace is the profile key the app gives `browser.openPage`, or the person's own `links` when it gives none; nothing from a page or an agent names one.
 - Clearing a workspace's partition removes its cookies, storage and cache, and ends every pending request.
 - Each view's WebRTC IP handling policy is `disable_non_proxied_udp`, so a page can neither learn local addresses nor send direct UDP.
 - The teammate's mark the window draws lies in the view's layer, an element of the window's page that the page in the view can't read or reach and that takes no pointer.
@@ -157,7 +157,8 @@ A web link the person opens elsewhere in the app, which Noldova Desktop's open-l
 - `openAsync` sends the address to the runtime part's `browser.allowTypedAddress`, so every check of [Typed addresses](#typed-addresses) applies: the runtime part refuses an address with a user name or a password, one over the length limit, a host that holds `*`, a link-local or unspecified host, and a loopback or private one the app's settings don't name exactly.
   A refused address loads nothing in the module, and Noldova Desktop opens it in the system's browser instead, logging only the error's name.
 - A link's page opens on the module's own workspace, `links`: its cookies, storage and sign-ins are apart from every workspace the app opens pages on for its teammates, and an origin a link allowed there is allowed in no other workspace.
-- A teammate acts on a link's page only as on any page, through the tools and their permission requests.
+- An app's `browser.openPage` with no workspace opens its page on `links` too, for a command the person runs for themselves; its address isn't allowed first, as a link's is, but goes through the origin check of `links`, so a site the person hasn't allowed there is refused, and the command refuses an `instance` with no workspace.
+- No teammate acts on a page on `links`: `browser.openPage` refuses the key by name, and a tool call whose session the app bound to it fails as `browser.unbound`, even on a link's page open there.
 - The site list only sends links to the system's browser, never into the module, so a mistaken entry can't load a page the module would otherwise refuse; it matches a host and its subdomains by the URL parser's canonical host, so a lookalike such as `evilgithub.com` never matches `github.com`, and it reads an entry that holds a host, such as an address, as that host, so no entry matches every link.
 - The log names an ignored site entry only by its place in the list, never its text, which may hold an address's path.
 

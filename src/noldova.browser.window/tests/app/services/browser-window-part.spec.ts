@@ -168,6 +168,31 @@ describe("BrowserWindowPart", () => {
     expect(present(context.opened[2], "third page").instance).toBe("3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d");
   });
 
+  it("opens browser.openPage's page in the person's own browsing, links, when it names no workspace, at the address when it gives one", async () => {
+    const context: WindowContext = new WindowContext();
+    await new BrowserWindowPart().activateAsync(context);
+    const pages: Pages = Pages.of(context);
+    const command: CommandContribution = commandAt(context, 0);
+
+    expect(await command.runAsync({})).toBeNull();
+    expect(await command.runAsync({ url: "https://docs.example.com/" })).toBeNull();
+    const empty: PaneTab = present(await pages.showAsync(present(context.opened[0], "empty page").instance), "empty page's tab");
+    present(await pages.showAsync(present(context.opened[1], "docs page").instance), "docs page's tab");
+
+    expect([context.opened.map(t => t.title), empty.controller.status.state, context.views.views.map(t => t.profileKey)])
+      .toEqual([["New tab", "https://docs.example.com/"], PaneState.Empty, ["links", "links"]]);
+  });
+
+  it("refuses browser.openPage with an instance and no workspace, so no agent session binds to the person's own browsing", async () => {
+    const context: WindowContext = new WindowContext();
+    await new BrowserWindowPart().activateAsync(context);
+    const command: CommandContribution = commandAt(context, 0);
+
+    expect(command.isApplicable({ instance: "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d" })).toBe(false);
+    await expect(command.runAsync({ instance: "3f2b8c1e-9a4d-4e7b-8c21-5d6f7a8b9c0d" })).rejects.toThrow(OpenPageArgumentsInvalidException);
+    expect(context.opened).toEqual([]);
+  });
+
   it("applies browser.openPage only to its arguments, and rejects others", async () => {
     const context: WindowContext = new WindowContext();
     await new BrowserWindowPart().activateAsync(context);

@@ -29,11 +29,17 @@ describe("OpenPageArguments", () => {
       .toStrictEqual([new PageOpening("workspace-1", null, null), new PageOpening("workspace-1", null, null)]);
   });
 
-  it("refuses arguments that aren't an object, lack or misspell their fields, or name the person's own links workspace", () => {
-    for (const commandArguments of [null, "workspace-1", ["workspace-1"], {}, { profileKey: 1 }, { profileKey: "Workspace" }, { profileKey: `a${"b".repeat(64)}` }, { profileKey: "links" },
+  it("reads no profile key as the person's own browsing, links, with the address when given", () => {
+    expect([OpenPageArguments.read({}), OpenPageArguments.read({ url: "https://docs.example.com/" }), OpenPageArguments.read({ url: " " })])
+      .toStrictEqual([new PageOpening("links", null, null), new PageOpening("links", "https://docs.example.com/", null), new PageOpening("links", null, null)]);
+  });
+
+  it("refuses arguments that aren't an object, misspell their fields, name the person's own links workspace, or name an instance without a profile key", () => {
+    for (const commandArguments of [null, "workspace-1", ["workspace-1"], { profileKey: null }, { profileKey: "" }, { profileKey: 1 }, { profileKey: "Workspace" }, { profileKey: `a${"b".repeat(64)}` }, { profileKey: "links" },
       { profileKey: "workspace-1", url: 1 }, { profileKey: "workspace-1", url: null },
       { profileKey: "workspace-1", instance: 1 }, { profileKey: "workspace-1", instance: "page-1" }, { profileKey: "workspace-1", instance: INSTANCE.toUpperCase() },
-      { profileKey: "workspace-1", instance: `${INSTANCE}0` }, { profileKey: "workspace-1", instance: null }]) {
+      { profileKey: "workspace-1", instance: `${INSTANCE}0` }, { profileKey: "workspace-1", instance: null },
+      { instance: INSTANCE }, { url: "https://docs.example.com/", instance: INSTANCE }, { url: 1 }]) {
       expect(OpenPageArguments.isValid(commandArguments), JSON.stringify(commandArguments)).toBe(false);
       expect(() => OpenPageArguments.read(commandArguments), JSON.stringify(commandArguments)).toThrow(OpenPageArgumentsInvalidException);
     }

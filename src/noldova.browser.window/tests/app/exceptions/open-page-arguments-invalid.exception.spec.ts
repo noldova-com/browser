@@ -16,6 +16,6 @@ describe("OpenPageArgumentsInvalidException", () => {
     const error: OpenPageArgumentsInvalidException = new OpenPageArgumentsInvalidException();
 
     expect(error).toBeInstanceOf(BrowserWindowException);
-    expect([error.name, error.message]).toEqual(["OpenPageArgumentsInvalidException", "browser.openPage needs { profileKey, url?, instance? }: a profile key of lowercase letters, digits and hyphens other than links, the address as text, and the instance as a lowercase UUID."]);
+    expect([error.name, error.message]).toEqual(["OpenPageArgumentsInvalidException", "browser.openPage needs { profileKey?, url?, instance? }: a profile key of lowercase letters, digits and hyphens other than links, or none for the person's own browsing, the address as text, and the instance as a lowercase UUID, with a profile key."]);
   });
 });
