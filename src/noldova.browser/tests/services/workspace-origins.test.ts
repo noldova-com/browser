@@ -292,6 +292,22 @@ describe("WorkspaceOrigins", () => {
     await expect(origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toThrow(TypedRedirectAfterAgentException);
   });
 
+  it("keeps a page's redirects stopped when the address the person typed there is refused in its turn, as the settings no longer name it", async () => {
+    surface.instances.set("view-1", "page-1");
+    origins.stopRedirects("view-1");
+    const held: HeldApplies = new HeldApplies(surface);
+    const first: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "https://one.example/"));
+    const local: Promise<unknown> = origins.allowTypedAsync(new TypedAddressRequest("workspace-1", "http://localhost:3000/", "page-1"));
+    await held.reached;
+
+    const changing: Promise<void> = origins.changeSettingsAsync(["https://docs.example"]);
+    held.release();
+
+    expect(await local).toEqual({ kind: "Refused", reason: "Local" });
+    await Promise.all([first, changing]);
+    await expect(origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toThrow(TypedRedirectAfterAgentException);
+  });
+
   it("refuses a redirect the policy refuses, fails one for a page that isn't open in its workspace, and gives nothing", async () => {
     surface.instances.set("view-3", "page-3");
 
