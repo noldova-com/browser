@@ -33,12 +33,16 @@ export class ElementFactsScript {
   const isInDocument = path[0] === document;
   const everything = isInDocument ? all(document, true) : [];
   const named = this.nodeType === 1 ? this.getAttribute("form") : null;
+  const owner = this.nodeType === 1 && !isFormElement(this) && "form" in this ? this.form : undefined;
+  const byId = !isInDocument || named === null || owner !== undefined ? null : this.getRootNode().getElementById(named);
   const form = !isInDocument ? undefined
-    : named === null ? path.slice(0, -1).findLast(isFormElement) : everything.find(t => isFormElement(t) && t.getAttribute("id") === named);
+    : owner instanceof HTMLFormElement ? owner
+    : byId !== null && isFormElement(byId) ? byId
+    : named === null ? path.slice(0, -1).findLast(isFormElement) : undefined;
   if (isForm)
     return form ?? null;
   const id = form === undefined ? null : form.getAttribute("id");
-  const linked = id === null ? [] : everything.filter(t => t.nodeType === 1 && t.getAttribute("form") === id);
+  const linked = id === null ? [] : everything.filter(t => t.nodeType === 1 && t.getAttribute("form") === id && t.getRootNode() === form.getRootNode());
   const labels = form === undefined ? "" : (form.getAttribute("aria-labelledby") ?? "").split(/\\s+/).filter(t => t !== "")
     .map(label => everything.find(t => t.nodeType === 1 && t.getAttribute("id") === label))
     .map(t => t === undefined ? "" : t.textContent)
