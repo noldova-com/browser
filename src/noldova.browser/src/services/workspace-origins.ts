@@ -43,8 +43,12 @@ export class WorkspaceOrigins {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
       if (isLeft())
         return new TypedAddressLeft();
-      if (!origins.has(answer.origin) && !this.settingsOrigins.includes(answer.origin)) {
-        const next: ReadonlySet<string> = new Set([...origins, answer.origin]);
+      // The settings may have changed while the address waited for its turn, so a local origin they no longer name is refused, never kept.
+      const judged: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
+      if (judged.kind === TypedAddressAnswerKind.Refused)
+        return judged;
+      if (!origins.has(judged.origin) && !this.settingsOrigins.includes(judged.origin)) {
+        const next: ReadonlySet<string> = new Set([...origins, judged.origin]);
         await this.store.writeAsync(request.profileKey, [...next]);
         this.kept.set(request.profileKey, Promise.resolve(next));
       }
@@ -57,7 +61,7 @@ export class WorkspaceOrigins {
             this.stopped.delete(view.id);
         }
       await this.applyToWorkspaceAsync(request.profileKey);
-      return answer;
+      return judged;
     });
   }
 

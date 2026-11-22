@@ -50,6 +50,8 @@ export class Resources {
   public static readonly unknownReference: string = "No snapshot gave this element reference; take a snapshot and use a reference from it.";
   public static readonly riskRose: string = "The page made this element secret, or gave its form a secret field, after the action was allowed, so it wasn't done; call it again to ask at high risk.";
   public static readonly riskRoseCode: string = "browser.riskRose";
+  public static readonly innerElementRiskier: string = "The click would land on an element inside this one that asks at high risk, such as a submit button of a form with a secret field, so nothing was pressed; click that element's own reference to ask at high risk.";
+  public static readonly innerElementRiskierCode: string = "browser.innerElementRiskier";
   public static readonly landedElsewhere: string = "The page moved between the allow and the navigation, so it may have left or reached a page the request didn't name; check where it is before you act on it.";
   public static readonly landedElsewhereCode: string = "browser.landedElsewhere";
   public static readonly notSubmitted: string = "The text was typed, but the page gave its form a secret field, so it wasn't submitted; call it again with submit to ask at high risk.";
@@ -474,7 +476,8 @@ export class Resources {
   public static readonly activatingKeys: readonly string[] = ["Enter", " "];
   public static readonly nonSubmittingButtons: readonly string[] = ["button", "reset"];
   public static readonly submittingInputs: readonly string[] = ["submit", "image"];
-  public static readonly nonTextInputs: readonly string[] = ["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"];
+  public static readonly enterClickedInputs: readonly string[] = ["button", "reset"];
+  public static readonly enterSubmittingControls: readonly string[] = ["SELECT", "FIELDSET", "OBJECT", "OUTPUT"];
   public static readonly inputElement: string = "INPUT";
   public static readonly buttonElement: string = "BUTTON";
   public static readonly anchorElement: string = "A";
