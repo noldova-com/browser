@@ -1826,6 +1826,7 @@ export declare class LocalSites {
  * Given false, it returns by value the names and attributes of the element and of each node above it to the document, through shadow roots,
  * closed ones too, or no path for an element outside the main frame's document; the elements that name the element's form by its id with
  * their `form` attribute; the form's name; and the document's title and base URL.
+ * A label, or anything inside one but a link, a button or another field, gives these facts of the control it activates instead of its own.
  * Given true, it returns the element's form itself, the nearest form above it or the one its `form` attribute names, or null, so the runtime
  * part can read the form's whole subtree with `DOM.describeNode`, which, unlike the function, enters closed shadow roots.
  * Given anything else, it returns null.
