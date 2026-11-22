@@ -180,6 +180,8 @@ A web link the person opens elsewhere in the app, which Noldova Desktop's open-l
 - Any other request is blocked: the address bar's Pop-up blocked offers its address, and nothing opens until the person chooses Open the pop-up or Always allow.
   A second request from the same press, such as a page's handler calling `window.open` twice, and input an agent relayed, which never gives `fromPress`, are blocked so.
 - A middle or Ctrl click on a link, or Cmd click on macOS, opens its page each time: Noldova Desktop gives such a request the disposition `background-tab`, and `fromPress` as any press's.
+- Such a tab's site joins no allowed origins: the engine gives a page's own `window.open`, run in the handler of the person's middle or Ctrl click, the same disposition and `fromPress`, so neither says the person chose the address, and the page would choose the site that joins.
+  The tab shows the refusal as it loads for a site outside the allowed origins, until Noldova Desktop says which request is a link's own activation ([desktop#195](https://github.com/noldova-com/desktop/issues/195), [#49](https://github.com/noldova-com/browser/issues/49)).
 - Only the person changes `browser.popupSites`, in Settings or with Always allow, the person's own click in the toolbar; no tool, page or agent output writes it, and it keys on the asking page's own host, never the referrer's origin, which a page can leave out.
 - The new page's view is the module's own, with the page's isolation and defaults; the opener keeps no reference to it, so neither page can script the other.
 
