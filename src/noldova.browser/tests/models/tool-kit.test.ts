@@ -181,6 +181,16 @@ describe("ToolKit", () => {
     await expect(bench.kit.origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toBeInstanceOf(TypedRedirectAfterAgentException);
   });
 
+  it("follows none of a typed load's redirects once an agent acted on its page before the first one passed", async () => {
+    using bench: ToolBench = new ToolBench();
+    const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
+
+    await bench.kit.actAsync(bench.call({}), page, PageAction.Reading, async () => null);
+
+    await expect(bench.kit.origins.passTypedAsync(new TypedRedirectRequest("page-1", "workspace-1", "https://www.example.com/"))).rejects.toBeInstanceOf(TypedRedirectAfterAgentException);
+    expect([bench.surface.allowedOrigins.get(ToolBench.VIEW), bench.kit.origins.isPassing(ToolBench.VIEW)]).toEqual([undefined, false]);
+  });
+
   it("stops a call when the person stops the page, or the call is cancelled, while the page's typed redirects stop passing, and starts no control", async () => {
     const page: SessionPage = new SessionPage(ToolBench.VIEW, "page-1", "workspace-1", "Builder");
     const controller: AbortController = new AbortController();

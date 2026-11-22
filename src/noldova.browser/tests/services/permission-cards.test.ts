@@ -57,9 +57,11 @@ describe("PermissionCards", () => {
     ]).toEqual(["Press Enter on docs.example.com", "Press Control+a on docs.example.com", "Submit the form \"Search\" on docs.example.com"]);
   });
 
-  it("says the page by its URL first, then its title on one line, or its URL alone when it has no title", () => {
-    expect([PermissionCards.page("https://docs.example.com/", "Plans\n and pricing"), PermissionCards.page("https://docs.example.com/", " ")]).toEqual([
+  it("says the page by its URL first, then its title on one line, or its URL alone when it has no title or its title wasn't read", () => {
+    expect([PermissionCards.page("https://docs.example.com/", "Plans\n and pricing"), PermissionCards.page("https://docs.example.com/", " "),
+      PermissionCards.page("https://docs.example.com/", null)]).toEqual([
       { label: "Page", kind: PermissionDetailKind.Text, value: "https://docs.example.com/, \"Plans and pricing\"" },
+      { label: "Page", kind: PermissionDetailKind.Text, value: "https://docs.example.com/" },
       { label: "Page", kind: PermissionDetailKind.Text, value: "https://docs.example.com/" }
     ]);
   });

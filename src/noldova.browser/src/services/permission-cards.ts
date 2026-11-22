@@ -31,24 +31,26 @@ export class PermissionCards {
 
   public static keyTitle(facts: ElementFacts | null, key: string, chord: string, origin: string): string {
     const host: string = Resources.formatHost(origin);
-    return facts !== null && RiskClassifier.submitsKey(key, facts.path)
+    return !Object.isNull(facts) && RiskClassifier.submitsKey(key, facts.path)
       ? PermissionCards.submitTitle(facts, host)
       : Resources.formatPressKeyTitle(chord, host);
   }
 
-  public static page(url: string, title: string): IPermissionDetail {
-    return PermissionCards.text(Resources.pageLabel, Resources.formatPage(url, PermissionCards.fromPage(title, Resources.maximumPageTitleLength)));
+  // The page by its URL and its title, or its URL alone when it has no title or its title wasn't read.
+  public static page(url: string, title: string | null): IPermissionDetail {
+    return PermissionCards.text(Resources.pageLabel,
+      Object.isNull(title) ? url : Resources.formatPage(url, PermissionCards.fromPage(title, Resources.maximumPageTitleLength)));
   }
 
   public static element(facts: ElementFacts, shown: ShownElement): readonly IPermissionDetail[] {
     const target: NodeFacts | undefined = facts.path?.at(-1);
-    if (target === undefined)
+    if (Object.isUndefined(target))
       return [PermissionCards.text(Resources.elementLabel, Resources.unknownElement)];
     const name: string = PermissionCards.fromPage(shown.name, Resources.maximumNameLength);
     const details: IPermissionDetail[] = [PermissionCards.text(PermissionCards.labelOf(shown.role), Resources.formatNamed(name, shown.role))];
     const href: string | undefined = target.attributes.get(Resources.hrefAttribute);
-    const destination: URL | null = href === undefined ? null : URL.parse(href, facts.page.baseUrl);
-    if (destination !== null)
+    const destination: URL | null = Object.isUndefined(href) ? null : URL.parse(href, facts.page.baseUrl);
+    if (!Object.isNull(destination))
       details.push(PermissionCards.text(Resources.destinationLabel, destination.href));
     return details;
   }
@@ -62,7 +64,7 @@ export class PermissionCards {
   public static sends(facts: ElementFacts): readonly IPermissionDetail[] {
     const names: readonly string[] = facts.form.flatMap(t => {
       const name: string | undefined = t.attributes.get(Resources.nameAttribute);
-      return name !== undefined && PermissionCards.isSent(t) ? [PermissionCards.fromPage(name, Resources.maximumNameLength)] : [];
+      return !Object.isUndefined(name) && PermissionCards.isSent(t) ? [PermissionCards.fromPage(name, Resources.maximumNameLength)] : [];
     });
     return [PermissionCards.text(Resources.sendsLabel, names.length === 0 ? Resources.noNamedFields : names.join(", "))];
   }

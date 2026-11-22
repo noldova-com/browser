@@ -153,7 +153,7 @@ export class WaitForTool implements IBrowserTool {
         isTooLarge = true;
         return this.kit.changes.hasTextAsync(viewId, text, options);
       }
-      return AccessibilitySnapshot.readNodes(nodes).nodes.some(t => !t.isIgnored && t.name.includes(text));
+      return AccessibilitySnapshot.readMaskedNames(AccessibilitySnapshot.readNodes(nodes)).some(t => !t.node.isIgnored && t.name.includes(text));
     };
   }
 

@@ -78,6 +78,20 @@ describe("WaitForTool", () => {
     expect((await bench.runAsync(tool, bench.call({ text: "placed", timeoutMilliseconds: 1 }))).content[0]?.value).toBe("The wait wasn't met in 1 ms.");
   });
 
+  it("never matches a field's value inside a label's or a container's name, and still matches the rest of that name", async () => {
+    bench.surface.answer("Accessibility.getFullAXTree", { nodes: [
+      { nodeId: "1", role: { value: "RootWebArea" }, name: { value: "" }, childIds: ["2"] },
+      { nodeId: "2", role: { value: "LabelText" }, name: { value: "Card number 4111" }, childIds: ["3"] },
+      { nodeId: "3", role: { value: "textbox" }, name: { value: "" }, value: { value: "4111" }, childIds: [] }
+    ] });
+
+    const texts: unknown[] = [];
+    for (const text of ["41", "Card number"])
+      texts.push((await bench.runAsync(tool, bench.call({ text, timeoutMilliseconds: 1 }))).content[0]?.value);
+
+    expect(texts).toEqual(["The wait wasn't met in 1 ms.", "The wait was met."]);
+  });
+
   it("checks the page's shown text with the pinned function once the page's whole tree is too large for one reply, and only so when the page reports a change", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const shown: boolean[] = [false, true];
