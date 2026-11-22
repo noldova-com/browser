@@ -22,7 +22,7 @@ export class KeyEvents {
 
   public static find(key: string): KeyDefinition | null {
     const named: KeyDefinition | undefined = KeyEvents.NAMED.get(key);
-    if (named !== undefined)
+    if (!Object.isUndefined(named))
       return named;
     // A control character, such as a carriage return, would reach the page as the key it stands for under another name; a named key presses it.
     if ([...key].length !== 1 || Resources.controlKeyPattern.test(key))
