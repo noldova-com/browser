@@ -92,6 +92,10 @@ export class TestApp {
     this.listen(run);
   }
 
+  public get application(): ElectronApplication {
+    return this.run.application;
+  }
+
   public get window(): Page {
     return this.run.window;
   }

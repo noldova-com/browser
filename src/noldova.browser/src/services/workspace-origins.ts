@@ -40,13 +40,17 @@ export class WorkspaceOrigins {
       const origins: ReadonlySet<string> = await this.readAsync(request.profileKey);
       if (isLeft())
         return new TypedAddressLeft();
-      if (!origins.has(answer.origin) && !this.settingsOrigins.includes(answer.origin)) {
-        const next: ReadonlySet<string> = new Set([...origins, answer.origin]);
+      // The settings may have changed while the address waited for its turn, so a local origin they no longer name is refused, never kept.
+      const judged: TypedAddressAllowed | TypedAddressRefused = TypedAddressPolicy.judge(request.url, this.settingsOrigins);
+      if (judged.kind === TypedAddressAnswerKind.Refused)
+        return judged;
+      if (!origins.has(judged.origin) && !this.settingsOrigins.includes(judged.origin)) {
+        const next: ReadonlySet<string> = new Set([...origins, judged.origin]);
         await this.store.writeAsync(request.profileKey, [...next]);
         this.kept.set(request.profileKey, Promise.resolve(next));
       }
       await this.applyToWorkspaceAsync(request.profileKey);
-      return answer;
+      return judged;
     });
   }
 
@@ -55,7 +59,7 @@ export class WorkspaceOrigins {
     if (answer.kind === TypedAddressAnswerKind.Refused)
       return answer;
     const view: WebViewInfo | undefined = this.viewsOf(request.instance).find(t => t.profileKey === request.profileKey);
-    if (view === undefined)
+    if (Object.isUndefined(view))
       throw new TypedRedirectPageNotOpenException(request.instance, request.profileKey);
     if (this.stopped.has(view.id))
       throw new TypedRedirectAfterAgentException(request.instance);
@@ -142,7 +146,7 @@ export class WorkspaceOrigins {
 
   private readAsync(profileKey: string): Promise<ReadonlySet<string>> {
     let origins: Promise<ReadonlySet<string>> | undefined = this.kept.get(profileKey);
-    if (origins === undefined) {
+    if (Object.isUndefined(origins)) {
       origins = this.store.readAsync(profileKey).then(t => new Set(t), error => {
         this.kept.delete(profileKey);
         throw error;
