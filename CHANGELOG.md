@@ -4,6 +4,20 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.7
+
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.14 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and follows each view's navigations from its opening, so a navigation that starts before any tool read the view is still waited on and reported as the page still loading (#259).
+- A page's tab shows the site's favicon as its image, with the `public` glyph in its place while the page has none, while it loads, after it fails and in forced colours (#285).
+- An agent's key that Noldova Desktop refuses as one of the app's shortcuts fails as `Refused` with `browser.shortcutRefused`, no longer as `OutcomeUncertain` (#294).
+- Before each press, `browser_click` rates the element it lands on when that element is inside the referenced one, and when that element rates high and the referenced one didn't, presses nothing and refuses the call with the new code `browser.innerElementRiskier` (#24).
+- A click on a `LABEL`, or on what it holds other than interactive content, is rated as a click on the control it activates; the pinned element-facts function in `webViews.json` changes with it (#25).
+- Enter in a checkbox, a radio button or any other input of a form but a button or a reset button is rated as submitting that form (#26).
+- `browser_press_key` answers a single control character, such as a carriage return or a line feed, as an unknown key and sends nothing; a named key such as `Enter` or `Tab` presses it (#21).
+- A typed address is judged again against the settings' local origins inside its workspace's turn, so an origin Settings removed meanwhile is refused and never stored (#22).
+- An agent's call on a page during a typed load stops that load's later redirects whether or not one has passed yet (#23).
+- A field's value no longer shows in the names that `browser_wait_for` matches or that a confirmation card and a tool's result show (#30).
+- `browser_type` types only into the element that holds the focus after it focused the field: an element outside the field, or none, fails as `Stale` with the new code `browser.focusMoved`, and a focused element inside the field whose risk is above what the person allowed fails with `browser.riskRose`; a new pinned function in `webViews.json` reads the focused element (#29).
+
 ## 0.0.6
 
 - `browser.openPage` takes `profileKey` as optional: without one, the page opens in the person's own browsing, the workspace `links`, at `url` when given, for a command the person runs for themselves, such as an app's Open browser; its address goes through the origin check of `links` and isn't allowed first, as a link's is. An `instance` without a `profileKey` is refused as invalid arguments, so no agent session binds to the person's own browsing, and `links` given by name stays refused (#279).
