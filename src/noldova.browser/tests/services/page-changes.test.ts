@@ -22,6 +22,7 @@ import { PageChangesNotSwitchedException } from "../../src/exceptions/page-chang
 import { ActionProgress } from "../../src/models/action-progress.ts";
 import { CallOptions } from "../../src/models/call-options.ts";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
+import { FocusedElementScript } from "../../src/models/focused-element-script.ts";
 import { MarkedSnapshot } from "../../src/models/marked-snapshot.ts";
 import { PageSnapshotScript } from "../../src/models/page-snapshot-script.ts";
 import { PageTextScript } from "../../src/models/page-text-script.ts";
@@ -223,6 +224,23 @@ describe("PageChanges", () => {
     expect(selected).toEqual([true, false, false, false]);
     expect(surface.calls.map(t => [t.method, t.params])[0]).toEqual(
       ["Runtime.callFunctionOn", { functionDeclaration: FieldSelectScript.functionDeclaration, objectId: "element-5", returnByValue: true, silent: true }]);
+  });
+
+  it("finds the element that holds the focus with the pinned function alone, silent and as an object, describes its whole subtree and releases it, or reads none", async () => {
+    const focused: JsonObject = { node: { backendNodeId: 9, nodeName: "INPUT" } };
+    surface.answer("Runtime.callFunctionOn", { result: { type: "object", subtype: "node", objectId: "focused-9" } });
+    surface.answer("DOM.describeNode", focused);
+    const read: JsonObject | null = await changes.readFocusedAsync("view-1", "element-5", options);
+    surface.answer("Runtime.callFunctionOn", { result: { type: "object", subtype: "null", value: null } });
+    const none: JsonObject | null = await changes.readFocusedAsync("view-1", "element-5", options);
+
+    expect([read, none]).toEqual([focused, null]);
+    expect(surface.calls.map(t => [t.method, t.params])).toEqual([
+      ["Runtime.callFunctionOn", { functionDeclaration: FocusedElementScript.functionDeclaration, objectId: "element-5", returnByValue: false, silent: true }],
+      ["DOM.describeNode", { objectId: "focused-9", depth: -1, pierce: true }],
+      ["Runtime.releaseObject", { objectId: "focused-9" }],
+      ["Runtime.callFunctionOn", { functionDeclaration: FocusedElementScript.functionDeclaration, objectId: "element-5", returnByValue: false, silent: true }]
+    ]);
   });
 
   it("releases the form's object when its description fails, and when the call that read it was stopped", async () => {

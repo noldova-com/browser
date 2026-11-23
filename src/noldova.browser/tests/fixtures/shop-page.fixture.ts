@@ -9,6 +9,7 @@
 import { WebViewFailure, WebViewFailureKind } from "@noldova/desktop.protocol";
 import { WebViewFailureException } from "@noldova/desktop.runtime";
 import { FieldSelectScript } from "../../src/models/field-select-script.ts";
+import { FocusedElementScript } from "../../src/models/focused-element-script.ts";
 import { JsonShapes } from "../../src/services/json-shapes.ts";
 import type { JsonObject, JsonValue } from "../../src/types/json-value.ts";
 import type { ToolBench } from "./tool-bench.fixture.ts";
@@ -25,6 +26,7 @@ class ShownDocument {
 }
 
 export class ShopPage {
+  public static readonly CART_FORM: number = 4;
   public static readonly FORM_BUTTON: number = 5;
   public static readonly BUTTON_LABEL: number = 6;
   public static readonly LINK: number = 7;
@@ -36,6 +38,7 @@ export class ShopPage {
   public static readonly EMAIL: number = 13;
   public static readonly COUPON: number = 14;
   public static readonly CART_PIN: number = 15;
+  public static readonly PIN_HOST: number = 16;
   public static readonly ORIGIN: string = "https://shop.test";
   private static readonly LABELS: ReadonlyMap<number, readonly [string, string]> = new Map<number, readonly [string, string]>([
     [5, ["button", "Pay"]],
@@ -69,6 +72,8 @@ export class ShopPage {
   private static readonly SHOWN: WeakMap<ToolBench, ShownDocument> = new WeakMap<ToolBench, ShownDocument>();
   private static readonly NOT_FIELDS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
   private static readonly FAILING_SELECTIONS: WeakSet<ToolBench> = new WeakSet<ToolBench>();
+  private static readonly FOCUSED: WeakMap<ToolBench, number | null> = new WeakMap<ToolBench, number | null>();
+  private static readonly FOCUSED_ON_SELECT: WeakMap<ToolBench, number> = new WeakMap<ToolBench, number>();
 
   public static frame(documentId: string = "L1"): JsonObject {
     return { frameTree: { frame: { id: "F1", loaderId: documentId, url: "https://shop.test/cart/", securityOrigin: ShopPage.ORIGIN } } };
@@ -98,10 +103,18 @@ export class ShopPage {
       if (typeof objectId !== "string" || shown === undefined)
         return { result: { type: "boolean", value: true } };
       const backendNodeId: number = Number(objectId.slice("node-".length));
+      if (params["functionDeclaration"] === FocusedElementScript.functionDeclaration) {
+        const focused: number | null | undefined = ShopPage.FOCUSED.has(bench) ? ShopPage.FOCUSED.get(bench) : backendNodeId;
+        return { result: typeof focused === "number" ? { type: "object", subtype: "node", objectId: `node-${String(focused)}` } : { type: "object", subtype: "null", value: null } };
+      }
       if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration && ShopPage.FAILING_SELECTIONS.has(bench))
         throw new WebViewFailureException(new WebViewFailure(WebViewFailureKind.Protocol, -32000, "Gone"));
-      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration)
+      if (params["functionDeclaration"] === FieldSelectScript.functionDeclaration) {
+        const moved: number | undefined = ShopPage.FOCUSED_ON_SELECT.get(bench);
+        if (!Object.isUndefined(moved))
+          ShopPage.FOCUSED.set(bench, moved);
         return { result: { type: "boolean", value: !ShopPage.NOT_FIELDS.has(bench) } };
+      }
       if (params["returnByValue"] === true)
         return { result: { type: "object", value: ShopPage.facts(shown, backendNodeId) } };
       const form: JsonObject | undefined = ShopPage.formOf(shown, backendNodeId);
@@ -122,6 +135,16 @@ export class ShopPage {
   // The field selection then answers that no element is a field it can select in.
   public static treatAsNoField(bench: ToolBench): void {
     ShopPage.NOT_FIELDS.add(bench);
+  }
+
+  // The element that holds the focus from then on, as when a focus handler moves it, or none; by default the element the call focused.
+  public static focus(bench: ToolBench, backendNodeId: number | null): void {
+    ShopPage.FOCUSED.set(bench, backendNodeId);
+  }
+
+  // The element that holds the focus once the field is selected, as when the field's select handler moves it.
+  public static focusOnSelect(bench: ToolBench, backendNodeId: number): void {
+    ShopPage.FOCUSED_ON_SELECT.set(bench, backendNodeId);
   }
 
   // The field selection then fails, as when the engine no longer knows the field's object.
@@ -147,10 +170,13 @@ export class ShopPage {
     bench.surface.answerWith("DOM.describeNode", (params: JsonObject) => {
       const objectId: JsonValue | undefined = params["objectId"];
       const document: JsonObject | undefined = ShopPage.SHOWN.get(bench)?.document;
-      if (typeof objectId === "string" && document !== undefined)
-        return { node: ShopPage.pathTo(ShopPage.objectOf(document["root"]), Number(objectId.slice("form-".length)))?.at(-1) ?? {} };
+      if (typeof objectId === "string" && document !== undefined) {
+        const objectOf: number = Number(objectId.slice(objectId.indexOf("-") + 1));
+        return { node: ShopPage.pathTo(ShopPage.objectOf(document["root"]), objectOf)?.at(-1) ?? { backendNodeId: objectOf, nodeName: "DIV" } };
+      }
       const id: number = Number(params["backendNodeId"]);
-      const whole: JsonObject = ShopPage.NODES.get(id) ?? { nodeName: "DIV" };
+      const shown: JsonObject | undefined = document === undefined ? undefined : ShopPage.pathTo(ShopPage.objectOf(document["root"]), id)?.at(-1);
+      const whole: JsonObject = ShopPage.NODES.get(id) ?? shown ?? { nodeName: "DIV" };
       const { children: _children, ...node }: JsonObject = whole;
       const described: JsonObject = params["depth"] === -1 ? whole : node;
       return { node: id === changed ? { ...described, attributes: [...attributes] } : described };

@@ -18,6 +18,7 @@ import { PageLoadingException } from "../exceptions/page-loading.exception.ts";
 import { PageNotControlledException } from "../exceptions/page-not-controlled.exception.ts";
 import { ProtocolFailedException } from "../exceptions/protocol-failed.exception.ts";
 import { PageChangedAfterGrantException } from "../exceptions/page-changed-after-grant.exception.ts";
+import { FocusMovedException } from "../exceptions/focus-moved.exception.ts";
 import { RiskRoseException } from "../exceptions/risk-rose.exception.ts";
 import { StaleReferenceException } from "../exceptions/stale-reference.exception.ts";
 import { TakenOverException } from "../exceptions/taken-over.exception.ts";
@@ -284,6 +285,22 @@ export class ToolKit {
       throw rose();
   }
 
+  // The text goes to the element that holds the focus, which a page's focus handler, or a closed shadow root that takes the focus for its
+  // host, can make another element than the field once it is focused: an element outside the field fails, one inside it is rated as the
+  // field is, and a secret field in a closed shadow root of the focused element, which no function can see into, rates as high.
+  public async confirmFocusAsync(viewId: string, backendNodeId: number, granted: ElementFacts, risk: ToolRisk, classify: (facts: ElementFacts) => ToolRisk,
+    options: CallOptions): Promise<void> {
+    const focused: JsonObject = await this.readFocusedAsync(viewId, backendNodeId, options);
+    const focusedId: number = NodeFactsReader.readBackendNodeId(focused);
+    if (focusedId !== backendNodeId && !NodeFactsReader.holds(await this.calls.sendAsync(viewId, Resources.describeNodeMethod,
+      { backendNodeId, depth: Resources.wholeSubtreeDepth, pierce: true }, options.withMaximumReplyBytes(BrowserLimits.maximumTreeReplyBytes)), focusedId))
+      throw new FocusMovedException();
+    if (risk !== ToolRisk.High && NodeFactsReader.readClosedRoots(focused).some(t => RiskClassifier.isSecret(t)))
+      throw new RiskRoseException();
+    if (focusedId !== backendNodeId)
+      await this.confirmRiskAsync(viewId, focusedId, granted, risk, classify, options);
+  }
+
   // The node of the element a session's reference names: the element the snapshot that gave the reference kept in the page, while it is
   // still there.
   public async findReferencedNodeAsync(session: string, id: string, viewId: string, documentId: string, options: CallOptions): Promise<ElementReference> {
@@ -371,6 +388,22 @@ export class ToolKit {
     }
     const frame: FrameFacts = await this.readFrameAsync(viewId, options);
     return ToolResults.done(message, frame.origin, new ShownPage(frame.url, await this.readTitleOfAsync(viewId, frame.documentId, options)), element, true);
+  }
+
+  // The subtree of the element that holds the focus, read from the field's document.
+  private async readFocusedAsync(viewId: string, backendNodeId: number, options: CallOptions): Promise<JsonObject> {
+    const element: ResolvedElement = await this.changes.resolveElementAsync(viewId, backendNodeId, options);
+    try {
+      const focused: JsonObject | null = await this.changes.readFocusedAsync(viewId, element.objectId, options);
+      if ((await this.readFrameAsync(viewId, options)).documentId !== element.documentId)
+        throw new StaleReferenceException();
+      if (Object.isNull(focused))
+        throw new FocusMovedException();
+      return focused;
+    }
+    finally {
+      await this.changes.releaseAsync(viewId, element.objectId, options);
+    }
   }
 
   // The node of the element a snapshot kept in the page, while it is still there.

@@ -49,6 +49,21 @@ export class NodeFactsReader {
     return all;
   }
 
+  // The described node's backend id.
+  public static readBackendNodeId(reply: JsonObject): number {
+    const id: JsonValue | undefined = NodeFactsReader.readObject(reply[Resources.nodeField])[Resources.backendNodeIdField];
+    if (typeof id !== "number")
+      throw new MalformedReplyException();
+    return id;
+  }
+
+  // Every node inside the described node's own closed shadow roots, through the shadow roots below them.
+  public static readClosedRoots(reply: JsonObject): readonly NodeFacts[] {
+    return NodeFactsReader.readNodes(NodeFactsReader.readObject(reply[Resources.nodeField])[Resources.shadowRootsField])
+      .filter(t => t[Resources.shadowRootTypeField] === Resources.closedRootType)
+      .flatMap(t => NodeFactsReader.readSubtree({ [Resources.nodeField]: t }));
+  }
+
   public static holds(reply: JsonObject, backendNodeId: number): boolean {
     return NodeFactsReader.findNode(NodeFactsReader.readObject(reply[Resources.nodeField]), backendNodeId) !== null;
   }
