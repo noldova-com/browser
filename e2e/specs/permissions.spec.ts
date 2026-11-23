@@ -104,22 +104,20 @@ test.describe("permissions", () => {
     const origins = await Origins.openAsync(app, servers);
     expect(await socketAsync(app, origins), "The start page's WebSocket reached the public origin before it was allowed.").toEqual([]);
 
-    // The bridge's own load resolves the host, and the fixture's `.test` name resolves to loopback, so the base refuses that load whatever the
-    // workspace allows; the page's own navigation and socket, which the base judges by origin alone, show that the workspace kept the origin.
+    // The agent's load shows the person's answer; back at the start page, its socket and its own navigation show that the workspace kept the origin.
     const result = await navigateAsync(app, origins, "allowAlways");
 
-    expect(result, "The agent's own load wasn't refused as the connected-address check refuses it.").toEqual(expect.objectContaining({
-      isFailure: true, code: "OutcomeUncertain", moduleCode: null,
-      message: "The action ended (Refused) after its input may have been sent; take a new snapshot to see the page."
-    }));
+    expect(result, `The agent's load of the allowed public origin failed: ${JSON.stringify(result).slice(0, 1_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
     expect(await questionsAsync(app), "The navigation didn't ask to open the public origin, once.").toEqual([expect.objectContaining(leaving(origins, "AllowedAlways"))]);
-    await expect.poll(() => app.viewPages.listAsync(), { message: "The view didn't stay at the start page, done loading." }).toEqual([new ViewPage(origins.start.url("/"), START_TITLE)]);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The agent's load didn't show the public page." }).toEqual([new ViewPage(origins.public.url("/"), PUBLIC_TITLE)]);
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(origins.start.url("/"))};`);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The page's navigation back to the start page didn't load." }).toEqual([new ViewPage(origins.start.url("/"), START_TITLE)]);
     expect(await socketAsync(app, origins), "The start page's WebSocket didn't reach the allowed public origin.").toEqual(["/ws"]);
     await app.viewPages.runAsync(`location.href = ${JSON.stringify(origins.public.url("/"))};`);
     await expect.poll(() => app.viewPages.listAsync(), { message: "The page's own navigation to the allowed public origin didn't load." })
       .toEqual([new ViewPage(origins.public.url("/"), PUBLIC_TITLE)]);
 
-    expect(origins.public.requests.map(t => t.path), "The public origin's server didn't receive the load and the WebSocket.").toEqual(expect.arrayContaining(["/", "/ws"]));
+    expect(origins.public.requests.map(t => t.path), "The public origin's server didn't receive the loads and the WebSocket.").toEqual(expect.arrayContaining(["/", "/ws"]));
     expect((await app.viewRequests.peekAsync()).filter(t => new URL(t.url).host === `${origins.public.name}:${origins.public.port}` && t.error === REFUSED)
       .map(t => t.url), "The main process refused a request to the allowed public origin.").toEqual([`ws://${origins.public.name}:${origins.public.port}/ws`]);
   });
