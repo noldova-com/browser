@@ -9,7 +9,7 @@
 import "@noldova/context.core";
 
 import { once } from "node:events";
-import { createServer, type IncomingMessage, request, type Server } from "node:http";
+import { createServer, type IncomingMessage, request, type Server, type ServerResponse } from "node:http";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -31,22 +31,22 @@ describe("RecordingProxy", () => {
     server = null;
   });
 
-  // A fixture server that sends its headers and part of its body, then closes the connection, as a closing fixture server does to an answer still in flight.
-  async function startBreakingAsync(): Promise<number> {
-    const started = createServer((_, response) => {
+  // A fixture server that sends its headers, then answers each request as `answer` does.
+  async function startFixtureAsync(answer: (request: IncomingMessage, response: ServerResponse) => void): Promise<number> {
+    const started = createServer((sent, response) => {
       response.writeHead(200, { "content-type": "text/plain" });
-      response.write("part", () => response.socket?.destroy());
+      answer(sent, response);
     });
     server = started;
     started.listen(0, "127.0.0.1");
     await once(started, "listening");
     const address = started.address();
-    if (Object.isNull(address) || typeof address === "string")
-      throw new Error("The breaking server isn't listening on a port.");
+    if (Object.isNull(address) || Object.isString(address))
+      throw new Error("The fixture server isn't listening on a port.");
     return address.port;
   }
 
-  async function sendThroughAsync(started: RecordingProxy, url: string): Promise<IncomingMessage> {
+  function sendThrough(started: RecordingProxy, url: string): Promise<IncomingMessage> {
     const address = new URL(started.address);
     return new Promise<IncomingMessage>((resolve, reject) => {
       const sent = request({ host: address.hostname, port: address.port, path: url }, resolve);
@@ -56,10 +56,11 @@ describe("RecordingProxy", () => {
   }
 
   it("ends the answer it passes on when the fixture server breaks it off", async () => {
-    const port = await startBreakingAsync();
+    // The server sends part of its body, then closes the connection, as a closing fixture server does to an answer still in flight.
+    const port = await startFixtureAsync((_, response) => response.write("part", () => response.socket?.destroy()));
     proxy = await RecordingProxy.startAsync();
 
-    const answer = await sendThroughAsync(proxy, `http://broken.test:${String(port)}/`);
+    const answer = await sendThrough(proxy, `http://broken.test:${String(port)}/`);
     // The client's own answer fails as aborted, which `once` would throw, so the test waits on its close alone.
     const closed = new Promise<void>(resolve => answer.on("close", resolve));
     answer.on("error", () => answer.destroy());
@@ -68,6 +69,27 @@ describe("RecordingProxy", () => {
 
     expect(answer.statusCode, "The proxy didn't pass on the fixture server's status.").toBe(200);
     expect(answer.complete, "The proxy ended the broken answer as if it were whole.").toBe(false);
+    expect(proxy.peek(), "The proxy recorded a request for a fixture server's .test name.").toEqual([]);
+  });
+
+  it("ends its request to the fixture server when the client gives up on a held answer", async () => {
+    // The server sends the start of its body, which carries its headers through the proxy, and holds the rest, as a held path does, so only the client
+    // giving up can end the exchange before the server closes.
+    // The server's unfinished response closes only when its connection does, so its close shows the proxy ended its request.
+    const reached = Promise.withResolvers<ServerResponse>();
+    const port = await startFixtureAsync((_, response) => {
+      response.write("start", () => reached.resolve(response));
+    });
+    proxy = await RecordingProxy.startAsync();
+
+    const answer = await sendThrough(proxy, `http://held.test:${String(port)}/`);
+    const held = await reached.promise;
+    const left = once(held, "close");
+    answer.on("error", () => undefined);
+    answer.destroy();
+    await left;
+
+    expect(answer.statusCode, "The proxy didn't pass on the held answer's headers.").toBe(200);
     expect(proxy.peek(), "The proxy recorded a request for a fixture server's .test name.").toEqual([]);
   });
 });

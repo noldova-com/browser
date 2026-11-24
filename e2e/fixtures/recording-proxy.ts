@@ -59,7 +59,7 @@ export class RecordingProxy {
 
   public get address(): string {
     const address: AddressInfo | string | null = this.server.address();
-    if (address === null || typeof address === "string")
+    if (Object.isNull(address) || Object.isString(address))
       throw new Error("The recording proxy isn't listening on a port.");
     return `http://${RecordingProxy.LOOPBACK}:${address.port}`;
   }
