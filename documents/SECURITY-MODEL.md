@@ -112,6 +112,7 @@ Since an origin joins the allowed origins when the person approves an agent's re
 
 The bridge's navigate, back, forward and reload resolve their host before they load, and are refused when it resolves to a link-local or unspecified address, or to a loopback or private one whose origin isn't a local entry of the allowed origins; a host that resolves to nothing loads, so the engine shows its own error.
 Every response, a redirect's included, is judged by the same rule once its headers arrive, by the address the engine connected to, and is refused before the page reads it; a name whose answer changes after the first check reaches its new address with that one request, whose answer the page never sees.
+The engine gives no address only for a response that no connection carried, which in the pane, with no HTTP cache, no service worker and only `http:` and `https:`, is a redirect the engine makes itself, such as an HSTS upgrade to `https:`; that redirect passes, and the request it starts is judged in turn.
 A response through a proxy the system sets is judged by its name alone, since the address the engine connected to is the proxy's.
 
 A local entry is an allowed origin whose host is an IP address, `localhost` or a name that ends in `.localhost`, which the engine always resolves to loopback and never through DNS, and which the person names in the app's settings.

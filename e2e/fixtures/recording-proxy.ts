@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 import { once } from "node:events";
 import { createServer, request as forward, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, connect, type Socket } from "node:net";
@@ -26,7 +28,7 @@ export class RecordingProxy {
   private constructor() {
     this.server = createServer((request, response) => {
       const target = URL.parse(request.url ?? "");
-      if (target !== null && RecordingProxy.isFixture(target.hostname))
+      if (!Object.isNull(target) && RecordingProxy.isFixture(target.hostname))
         RecordingProxy.pass(request, response, target);
       else {
         this.recorded.push(`${request.method ?? ""} ${request.url ?? ""}`);
@@ -35,7 +37,7 @@ export class RecordingProxy {
     });
     this.server.on("connect", (request, socket) => {
       const target = URL.parse(`http://${request.url ?? ""}`);
-      if (target !== null && RecordingProxy.isFixture(target.hostname))
+      if (!Object.isNull(target) && RecordingProxy.isFixture(target.hostname))
         this.tunnel(socket, Number(target.port));
       else {
         this.recorded.push(`CONNECT ${request.url ?? ""}`);
@@ -87,6 +89,7 @@ export class RecordingProxy {
     const passed = forward({ host: RecordingProxy.LOOPBACK, port: Number(target.port), path: `${target.pathname}${target.search}`, method: request.method, headers: request.headers },
       answer => {
         response.writeHead(answer.statusCode ?? 502, answer.headers);
+        answer.on("error", () => request.socket.destroy());
         answer.pipe(response);
       });
     passed.on("error", () => request.socket.destroy());
