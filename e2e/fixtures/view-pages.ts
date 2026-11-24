@@ -83,7 +83,7 @@ interface IViewPageContents {
   on(event: "render-process-gone", listener: (event: unknown, details: { readonly reason: string }) => void): void;
   on(event: "did-start-navigation", listener: (details: IViewNavigationStart) => void): void;
   on(event: "destroyed", listener: () => void): void;
-  removeListener(event: "destroyed", listener: () => void): void;
+  removeListener(event: "did-start-navigation" | "did-frame-navigate" | "destroyed", listener: (...rest: never[]) => void): void;
   emit(event: "select-bluetooth-device", details: { preventDefault(): void }, devices: readonly IBluetoothDevice[], choose: (deviceId: string) => void): boolean;
 }
 
@@ -367,8 +367,27 @@ export class ViewPages {
   public async frameTextsAsync(url: string): Promise<readonly string[]> {
     return this.application.evaluate(async ({ webContents }, pageUrl: string): Promise<string[]> => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl);
-      const frames: IViewFrame[] = views.flatMap(t => t.mainFrame.framesInSubtree).filter(t => t.parent !== null);
-      return Promise.all(frames.map(async t => String(await t.executeJavaScript("document.body?.innerText ?? \"\"").catch((error: unknown) => `unreadable: ${String(error)}`))));
+      // Electron's executeJavaScript on a frame never answers when the frame's document is replaced during the call, as a click on a link
+      // in the frame replaces it, so a navigation in the view or the view's end makes each read still open unreadable, and a poll reads again.
+      const readAsync = async (view: IViewPageContents, frame: IViewFrame): Promise<string> => new Promise<string>(resolve => {
+        const finish = (text: string): void => {
+          view.removeListener("did-start-navigation", started);
+          view.removeListener("did-frame-navigate", committed);
+          view.removeListener("destroyed", closed);
+          resolve(text);
+        };
+        const started = (details: IViewNavigationStart): void => {
+          if (!details.isSameDocument)
+            finish(`unreadable: the view started ${details.url}`);
+        };
+        const committed = (): void => finish("unreadable: a frame in the view navigated");
+        const closed = (): void => finish("unreadable: the view closed");
+        view.on("did-start-navigation", started);
+        view.on("did-frame-navigate", committed);
+        view.on("destroyed", closed);
+        frame.executeJavaScript("document.body?.innerText ?? \"\"").then(t => finish(String(t)), (error: unknown) => finish(`unreadable: ${String(error)}`));
+      });
+      return Promise.all(views.flatMap(view => view.mainFrame.framesInSubtree.filter(t => t.parent !== null).map(async frame => readAsync(view, frame))));
     }, url);
   }
 
