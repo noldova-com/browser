@@ -89,10 +89,11 @@ export class RecordingProxy {
     const passed = forward({ host: RecordingProxy.LOOPBACK, port: Number(target.port), path: `${target.pathname}${target.search}`, method: request.method, headers: request.headers },
       answer => {
         response.writeHead(answer.statusCode ?? 502, answer.headers);
-        answer.on("error", () => request.socket.destroy());
+        answer.on("error", () => response.destroy());
         answer.pipe(response);
       });
     passed.on("error", () => request.socket.destroy());
+    response.on("close", () => passed.destroy());
     request.pipe(passed);
   }
 
