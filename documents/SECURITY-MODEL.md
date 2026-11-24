@@ -110,8 +110,10 @@ Since an origin joins the allowed origins when the person approves an agent's re
 
 ### Connected addresses
 
-The bridge's navigate, back, forward and reload resolve their host before they load, and are refused when it doesn't resolve, or resolves to a link-local or unspecified address, or to a loopback or private one whose origin isn't a local entry of the allowed origins.
-A redirect whose response carries an address is refused by the same rule, judged by that address.
+The bridge's navigate, back, forward and reload resolve their host before they load, and are refused when it resolves to a link-local or unspecified address, or to a loopback or private one whose origin isn't a local entry of the allowed origins; a host that resolves to nothing loads, so the engine shows its own error.
+Every response, a redirect's included, is judged by the same rule once its headers arrive, by the address the engine connected to, and is refused before the page reads it; a name whose answer changes after the first check reaches its new address with that one request, whose answer the page never sees.
+The engine gives no address only for a response that no connection carried, which in the pane, with no HTTP cache, no service worker and only `http:` and `https:`, is a redirect the engine makes itself, such as an HSTS upgrade to `https:`; that redirect passes, and the request it starts is judged in turn.
+A response through a proxy the system sets is judged by its name alone, since the address the engine connected to is the proxy's.
 
 A local entry is an allowed origin whose host is an IP address, `localhost` or a name that ends in `.localhost`, which the engine always resolves to loopback and never through DNS, and which the person names in the app's settings.
 Only the app's settings mark an entry as local; a permission request's answer, "always" included, never does.
@@ -122,7 +124,7 @@ A service worker answers the page's requests itself, so the base refuses a servi
 
 ### Where the checks run
 
-The base's main process runs the address checks on every request of the pane's partition, of every resource type and redirects included, and judges the bridge's navigations and redirects by the address they resolve to, as [Connected addresses](#connected-addresses) says.
+The base's main process runs the address checks on every request of the pane's partition, of every resource type and redirects included, judges the bridge's navigations by the address they resolve to, and judges every response by the address the engine connected to, as [Connected addresses](#connected-addresses) says.
 Every navigation also passes the navigation checks, whatever starts it:
 
 - **Started by the module:** the bridge's navigate, back, forward and reload are checked before they load, history entries included, since the allowed origins may have changed since the entry was visited.

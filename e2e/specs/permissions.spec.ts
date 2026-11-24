@@ -27,7 +27,7 @@ window.socketAsync = url => new Promise(resolve => {
 });</script>`;
 const PUBLIC = `<!doctype html><title>${PUBLIC_TITLE}</title><p>Public page</p>`;
 
-// The start page is a local site the workspace allows, and the other is a public origin, a `.test` name, that it doesn't.
+// The start page is a local site the workspace allows, and the other is an origin it doesn't: a public one, a `.test` name, unless the test names another.
 class Origins {
   public readonly start: FixtureServer;
   public readonly public: FixtureServer;
@@ -39,9 +39,9 @@ class Origins {
     this.bindings = bindings;
   }
 
-  public static async openAsync(app: TestApp, servers: FixtureServers): Promise<Origins> {
+  public static async openAsync(app: TestApp, servers: FixtureServers, otherName: string = "public.test"): Promise<Origins> {
     const start = await servers.startAsync("start.localhost", { "/": START });
-    const other = await servers.startAsync("public.test", { "/": PUBLIC });
+    const other = await servers.startAsync(otherName, { "/": PUBLIC });
     await app.allowLocalSitesAsync([start.origin]);
     const bindings = { page: await app.openPageAsync(start.url("/")), profileKey: TestApp.PROFILE_KEY };
     await expect.poll(() => app.viewPages.listAsync(), { message: "The view never showed the start page." }).toEqual([new ViewPage(start.url("/"), START_TITLE)]);
@@ -104,24 +104,41 @@ test.describe("permissions", () => {
     const origins = await Origins.openAsync(app, servers);
     expect(await socketAsync(app, origins), "The start page's WebSocket reached the public origin before it was allowed.").toEqual([]);
 
-    // The bridge's own load resolves the host, and the fixture's `.test` name resolves to loopback, so the base refuses that load whatever the
-    // workspace allows; the page's own navigation and socket, which the base judges by origin alone, show that the workspace kept the origin.
+    // The agent's load shows the person's answer; back at the start page, its socket and its own navigation show that the workspace kept the origin.
     const result = await navigateAsync(app, origins, "allowAlways");
 
-    expect(result, "The agent's own load wasn't refused as the connected-address check refuses it.").toEqual(expect.objectContaining({
-      isFailure: true, code: "OutcomeUncertain", moduleCode: null,
-      message: "The action ended (Refused) after its input may have been sent; take a new snapshot to see the page."
-    }));
+    expect(result, `The agent's load of the allowed public origin failed: ${JSON.stringify(result).slice(0, 1_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
     expect(await questionsAsync(app), "The navigation didn't ask to open the public origin, once.").toEqual([expect.objectContaining(leaving(origins, "AllowedAlways"))]);
-    await expect.poll(() => app.viewPages.listAsync(), { message: "The view didn't stay at the start page, done loading." }).toEqual([new ViewPage(origins.start.url("/"), START_TITLE)]);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The agent's load didn't show the public page." }).toEqual([new ViewPage(origins.public.url("/"), PUBLIC_TITLE)]);
+    await app.viewPages.runAsync(`location.href = ${JSON.stringify(origins.start.url("/"))};`);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The page's navigation back to the start page didn't load." }).toEqual([new ViewPage(origins.start.url("/"), START_TITLE)]);
     expect(await socketAsync(app, origins), "The start page's WebSocket didn't reach the allowed public origin.").toEqual(["/ws"]);
     await app.viewPages.runAsync(`location.href = ${JSON.stringify(origins.public.url("/"))};`);
     await expect.poll(() => app.viewPages.listAsync(), { message: "The page's own navigation to the allowed public origin didn't load." })
       .toEqual([new ViewPage(origins.public.url("/"), PUBLIC_TITLE)]);
 
-    expect(origins.public.requests.map(t => t.path), "The public origin's server didn't receive the load and the WebSocket.").toEqual(expect.arrayContaining(["/", "/ws"]));
+    expect(origins.public.requests.map(t => t.path), "The public origin's server didn't receive the loads and the WebSocket.").toEqual(expect.arrayContaining(["/", "/ws"]));
     expect((await app.viewRequests.peekAsync()).filter(t => new URL(t.url).host === `${origins.public.name}:${origins.public.port}` && t.error === REFUSED)
       .map(t => t.url), "The main process refused a request to the allowed public origin.").toEqual([`ws://${origins.public.name}:${origins.public.port}/ws`]);
+  });
+
+  test("A name that isn't local and resolves to loopback stays refused once the person allows its origin", async ({ app, servers }) => {
+    // The launch settings map `loopback.example` to 127.0.0.1 and let it bypass the proxy, so the engine connects to loopback for an origin that isn't a local entry.
+    const origins = await Origins.openAsync(app, servers, "loopback.example");
+
+    const result = await navigateAsync(app, origins, "allowAlways");
+
+    expect(result, "The agent's load wasn't refused as the connected-address check refuses it.").toEqual(expect.objectContaining({
+      isFailure: true, code: "OutcomeUncertain", moduleCode: null,
+      message: "The action ended (Refused) after its input may have been sent; take a new snapshot to see the page."
+    }));
+    expect(await questionsAsync(app), "The navigation didn't ask to open the origin, once.").toEqual([expect.objectContaining(leaving(origins, "AllowedAlways"))]);
+    await expect.poll(() => app.viewPages.listAsync(), { message: "The view didn't stay at the start page, done loading." }).toEqual([new ViewPage(origins.start.url("/"), START_TITLE)]);
+    const fetched = await app.viewPages.runAsync(`fetch(${JSON.stringify(origins.public.url("/"))}, { mode: "no-cors" }).then(() => "loaded", () => "failed")`);
+
+    expect(fetched, "The start page's subresource reached the allowed origin's loopback address.").toBe("failed");
+    expect((await app.viewRequests.peekAsync()).filter(t => t.url === origins.public.url("/")).map(t => t.error), "The main process didn't refuse the page's subresource.")
+      .toContain(REFUSED);
   });
 
   for (const { answer, decision, isKept } of DENIALS)
