@@ -14,7 +14,8 @@
       "agent-double.takeQuestions",
       "agent-double.endSession",
       "agent-double.openPage",
-      "agent-double.listen"
+      "agent-double.listen",
+      "agent-double.openToolEndpoint"
     ],
     "events": [
       "agent-double.pageOpening"

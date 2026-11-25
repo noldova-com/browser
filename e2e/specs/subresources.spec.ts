@@ -6,8 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
+import { OwnEndpoints } from "../fixtures/own-endpoints.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 import { ViewRequest } from "../fixtures/view-requests.ts";
@@ -23,6 +26,12 @@ interface IRefusedRow {
   readonly kinds: readonly ISubresourceKind[];
   readonly localSites: (allowed: FixtureServer, other: FixtureServer) => readonly string[];
   readonly addresses: (allowed: FixtureServer, other: FixtureServer) => readonly string[];
+}
+
+interface IEndpointRow {
+  readonly name: string;
+  readonly skip: string | null;
+  endpointAsync(app: TestApp): Promise<URL>;
 }
 
 const ALLOWED_TITLE = "Allowed";
@@ -127,7 +136,7 @@ async function expectFailedAsync(app: TestApp, url: string): Promise<void> {
   for (const kind of [FETCH, IMAGE, SCRIPT]) {
     const outcome = await requestAsync(app, kind, url);
     expect(outcome, `The page didn't see ${kind.name} to ${url} fail.`).toBe("failed");
-    expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && t.error === null), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
+    expect((await app.viewRequests.peekAsync()).filter(t => t.url === url && Object.isNull(t.error)), `The main process's record shows ${kind.name} to ${url} completed.`).toEqual([]);
   }
 }
 
@@ -190,6 +199,33 @@ test.describe("subresources", () => {
 
     await expectFailedAsync(app, app.window.url());
   });
+
+  // The endpoint's origin is on the list, so only the base's refusal of the app's own ports refuses its requests.
+  const endpoints: readonly IEndpointRow[] = [
+    {
+      name: "Subresource on the base's local endpoint",
+      skip: OwnEndpoints.hasRuntimePort ? null : "The runtime's endpoint is a Unix socket on this system, which no web address names.",
+      endpointAsync: t => OwnEndpoints.runtimeAsync(t)
+    },
+    { name: "Subresource on the app's tool server", skip: null, endpointAsync: t => OwnEndpoints.toolServerAsync(t) }
+  ];
+  for (const endpoint of endpoints)
+    test(endpoint.name, async ({ app, servers }) => {
+      test.skip(Object.isString(endpoint.skip), endpoint.skip ?? "");
+      const { allowed } = await startAsync(servers);
+      const address = await endpoint.endpointAsync(app);
+      await openAllowedAsync(app, allowed, [allowed.origin, address.origin]);
+
+      for (const kind of [...HTTP_KINDS, SOCKET]) {
+        const url = kind.url(address.host);
+        const how = `${kind.name} to ${url}`;
+        const since = (await app.viewRequests.peekAsync()).length;
+        const outcome = await requestAsync(app, kind, url);
+        if (kind.isSeenByPage)
+          expect(outcome, `The page didn't see ${how} fail.`).toBe("failed");
+        await expectRefusedAsync(app, kind, url, how, since, allowed.url(CONTROL_FRAME));
+      }
+    });
 
   test("Subresource on another public origin", async ({ app, servers }) => {
     const { allowed } = await startAsync(servers);

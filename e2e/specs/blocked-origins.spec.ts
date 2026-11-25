@@ -6,9 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
+import { OwnEndpoints } from "../fixtures/own-endpoints.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 import { ViewRequest } from "../fixtures/view-requests.ts";
@@ -20,6 +23,7 @@ interface INavigationStart {
 }
 
 interface ITargetContext {
+  readonly app: TestApp;
   readonly servers: FixtureServers;
   readonly allowed: FixtureServer;
 }
@@ -27,7 +31,9 @@ interface ITargetContext {
 interface IBlockedRow {
   readonly name: string;
   readonly starts: readonly INavigationStart[];
-  readonly localSites?: (context: ITargetContext) => readonly string[];
+  readonly localSites?: (context: ITargetContext, targets: readonly string[]) => readonly string[];
+  // Why the row has no case on this system, or null.
+  readonly skip?: string | null;
   targetsAsync(context: ITargetContext): Promise<readonly string[]>;
 }
 
@@ -239,16 +245,30 @@ const ROWS: readonly IBlockedRow[] = [
     starts: EVERY_START,
     localSites: ({ allowed }) => [allowed.origin, "http://[::ffff:a9fe:a9fe]"],
     targetsAsync: async () => ["http://[::ffff:169.254.169.254]/"]
+  },
+  {
+    name: "The base's local endpoint",
+    starts: EVERY_START,
+    localSites: ({ allowed }, targets) => [allowed.origin, ...targets.map(t => new URL(t).origin)],
+    skip: OwnEndpoints.hasRuntimePort ? null : "The runtime's endpoint is a Unix socket on this system, which no web address names.",
+    targetsAsync: async ({ app }) => [(await OwnEndpoints.runtimeAsync(app)).href]
+  },
+  {
+    name: "The app's tool server",
+    starts: EVERY_START,
+    localSites: ({ allowed }, targets) => [allowed.origin, ...targets.map(t => new URL(t).origin)],
+    targetsAsync: async ({ app }) => [(await OwnEndpoints.toolServerAsync(app)).href]
   }
 ];
 
 test.describe("blocked origins", () => {
   for (const row of ROWS)
     test(row.name, async ({ app, servers }) => {
+      test.skip(Object.isString(row.skip), row.skip ?? "");
       const allowed = await servers.startAsync("allowed.localhost", { "/": page("") });
-      const context: ITargetContext = { servers, allowed };
+      const context: ITargetContext = { app, servers, allowed };
       const targets = await row.targetsAsync(context);
-      await app.allowLocalSitesAsync(row.localSites?.(context) ?? [allowed.origin]);
+      await app.allowLocalSitesAsync(row.localSites?.(context, targets) ?? [allowed.origin]);
       await app.openPageAsync(allowed.url("/"));
       await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
       expect(await app.viewPages.takeCommitsAsync(), "The view never committed the allowed page.").toContain(allowed.url("/"));
