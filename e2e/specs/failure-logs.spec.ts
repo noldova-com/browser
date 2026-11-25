@@ -58,6 +58,6 @@ test.describe("a failed test's logs", () => {
       lines.some(t => new RegExp(`^${TIME} view \\d+ commits ${escaped(logged.url("/"))} 200 in process \\d+$`).test(t)),
       lines.some(t => new RegExp(`^${TIME} view \\d+ fails ${escaped(gone.url("/"))} -102 ERR_CONNECTION_REFUSED in a frame$`).test(t)),
       lines.some(t => ended.test(t))
-    ],`views.log lacks the page's commit, the frame's failed load or the renderer's end: ${JSON.stringify(lines)}`).toEqual([true, true, true]);
+    ], `views.log lacks the page's commit, the frame's failed load or the renderer's end: ${JSON.stringify(lines)}`).toEqual([true, true, true]);
   });
 });
