@@ -17,6 +17,20 @@ const TITLE = "Allowed";
 const PAGE = `<!doctype html><title>${TITLE}</title><p>Allowed fixture page</p>`;
 const REFUSED = { isFailure: true, code: "Refused", moduleCode: "browser.originRefused" };
 
+// One call of the bridge's navigate, the page it lands on, and whether its server must see it: going back or forward may
+// restore the page from the engine's cache, but a reload always asks its server.
+class NavigationMove {
+  public readonly input: JsonObject;
+  public readonly lands: FixtureServer;
+  public readonly isRequested: boolean;
+
+  public constructor(input: JsonObject, lands: FixtureServer, isRequested: boolean) {
+    this.input = input;
+    this.lands = lands;
+    this.isRequested = isRequested;
+  }
+}
+
 async function navigateAsync(app: TestApp, page: string, input: JsonObject): Promise<JsonValue> {
   return app.requestAsync("agent-double.callTool", { name: "browser_navigate", input, bindings: { page, profileKey: TestApp.PROFILE_KEY } });
 }
@@ -74,12 +88,11 @@ test.describe("navigation", () => {
     for (let i = 0; i < 4; i++)
       await app.requestAsync("agent-double.planAnswer", { action: "browser.navigate", answer: "allowOnce" });
 
-    // Going back or forward may restore the page from the engine's cache, but a reload always asks its server.
-    const moves: readonly { readonly input: JsonObject; readonly lands: FixtureServer; readonly isRequested: boolean }[] = [
-      { input: { action: "back" }, lands: first, isRequested: false },
-      { input: { action: "forward" }, lands: second, isRequested: false },
-      { input: { action: "reload" }, lands: second, isRequested: true },
-      { input: { url: first.url("/") }, lands: first, isRequested: false }
+    const moves: readonly NavigationMove[] = [
+      new NavigationMove({ action: "back" }, first, false),
+      new NavigationMove({ action: "forward" }, second, false),
+      new NavigationMove({ action: "reload" }, second, true),
+      new NavigationMove({ url: first.url("/") }, first, false)
     ];
     for (const { input, lands, isRequested } of moves) {
       const before = pagesOf(lands).length;
