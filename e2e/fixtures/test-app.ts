@@ -209,7 +209,8 @@ export class TestApp {
       }
       return "";
     }, size);
-    expect(tooSmall, `The screen's work area has no room for a window whose page is ${String(width)} by ${String(height)}.`).toBe("");
+    if (tooSmall !== "")
+      throw new Error(`The screen's work area, ${tooSmall}, has no room for a window whose page is ${String(width)} by ${String(height)}.`);
     // Above a device scale of 1, as a forced scale on Windows, the window's frame may round its content a device pixel short, which reads as one
     // CSS pixel less; at 1 the page has the size exactly.
     await expect.poll(() => this.window.evaluate((wanted: WindowSize): boolean => {
