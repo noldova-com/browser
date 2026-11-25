@@ -14,6 +14,7 @@ export class Resources {
   public static readonly endSessionMethod: string = "agent-double.endSession";
   public static readonly openPageMethod: string = "agent-double.openPage";
   public static readonly listenMethod: string = "agent-double.listen";
+  public static readonly openToolEndpointMethod: string = "agent-double.openToolEndpoint";
   public static readonly pageOpeningEvent: string = "agent-double.pageOpening";
   public static readonly sessionScope: string = "agent-double.conversation";
   public static readonly nameField: string = "name";
