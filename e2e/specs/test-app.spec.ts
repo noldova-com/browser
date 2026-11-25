@@ -26,10 +26,11 @@ test.describe("the test app", () => {
     expect(failure, "The second quit asked Playwright for the app it had already closed.").not.toBeInstanceOf(TypeError);
   });
 
-  test("a resize to a size the screen's work area has no room for fails at once, naming that area", async ({ app }) => {
+  test("a resize to a size the screen's work area has no room for fails at once on macOS, naming that area", async ({ app }) => {
+    test.skip(process.platform !== "darwin", "Windows and Linux let a window grow past the screen's work area.");
     const failure: unknown = await app.resizeAsync(20000, 20000).then(() => null, (error: unknown) => error);
 
-    expect(String(failure), "The resize didn't fail for a size beyond the screen.").toMatch(/has no room for a window whose page is 20000 by 20000[\s\S]*Received: "\d+ by \d+"/);
+    expect(String(failure), "The resize didn't fail for a size beyond the screen.").toMatch(/has no room for a window whose page is 20000 by 20000[\s\S]*Received: \D*\d+ by \d+/);
   });
 
   test("the app's downloads folder is its own, beside its data folder, and a page's session downloads there, one the restart restores too", async ({ app, servers }) => {

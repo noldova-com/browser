@@ -189,12 +189,13 @@ export class TestApp {
     return instance;
   }
 
-  // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it. A size whose window,
-  // with its frame, doesn't fit the screen's work area fails at once, naming that area, as the system keeps the window inside it.
+  // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it. On macOS, which keeps
+  // a window inside the screen's work area, a size whose window, with its frame, doesn't fit that area fails at once, naming it; Windows and
+  // Linux let a window grow past it.
   public async resizeAsync(width: number, height: number): Promise<void> {
     const size = new WindowSize(width, height);
     const tooSmall = await this.run.application.evaluate(({ BrowserWindow, screen }, wanted: WindowSize): string => {
-      for (const window of BrowserWindow.getAllWindows()) {
+      for (const window of process.platform === "darwin" ? BrowserWindow.getAllWindows() : []) {
         const [outerWidth = 0, outerHeight = 0] = window.getSize();
         const [contentWidth = 0, contentHeight = 0] = window.getContentSize();
         const area = screen.getDisplayMatching(window.getBounds()).workAreaSize;
