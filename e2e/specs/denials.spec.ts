@@ -15,7 +15,7 @@ import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.
 import { FolderChanges } from "../fixtures/folder-changes.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { TestCertificate } from "../fixtures/test-certificate.ts";
-import { type AppSurfaces, ViewPage } from "../fixtures/view-pages.ts";
+import { type AppSurfaces, BluetoothChoice, ViewPage } from "../fixtures/view-pages.ts";
 
 interface IRefusedAsk {
   readonly title: string;
@@ -166,7 +166,7 @@ test.describe("denied by default", () => {
     const before = await beforeAsync(app);
 
     expect(await app.viewPages.runAsync(`window.outcomeAsync(() => ${BLUETOOTH})`), "The page has Web Bluetooth.").toBe("rejected Absent");
-    expect(await app.viewPages.bluetoothChoicesAsync(), "The view didn't cancel a Bluetooth device choice.").toEqual([[allowed.url("/"), true, [""]]]);
+    expect(await app.viewPages.bluetoothChoicesAsync(), "The view didn't cancel a Bluetooth device choice.").toEqual([new BluetoothChoice(allowed.url("/"), true, [""])]);
     await expectNothingOpenedAsync(app, before, "Bluetooth devices");
   });
 
