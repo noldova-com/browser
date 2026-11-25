@@ -43,7 +43,7 @@ export class Resources {
   public static readonly windowFolder: string = "src/noldova.browser.window";
   public static readonly packageFolders: readonly string[] = [Resources.protocolFolder, Resources.windowFolder, Resources.moduleFolder];
   public static readonly archivesFolder: string = "_packages";
-  public static readonly workSegments: readonly string[] = ["_build", "packages"];
+  public static readonly workSegments: readonly string[] = ["_build", "node"];
   public static readonly compiledSegments: readonly string[] = ["_build", "browser"];
   public static readonly gitFolder: string = ".git";
   public static readonly manifestFile: string = "package.json";
