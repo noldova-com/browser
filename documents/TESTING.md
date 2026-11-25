@@ -90,9 +90,11 @@ Every pull request into `main`, draft or ready, runs every test on Linux x64, Wi
 Pull requests skip the other three, which keeps their runners free.
 The workflow's one job, `build-and-test`, named "Build and test", calls the shared workflow, which runs one job per target, named for its target, such as "Linux x64", which GitHub lists as "Build and test / Linux x64", and its "All targets" fails unless every one of them passed.
 
-The [end-to-end workflows](#end-to-end-workflows) run in a job of their own, "Build and test / End-to-end test", on Linux x64 under a virtual display, which the shared workflow runs with `npm run test:e2e:prepare` and then `npm run test:e2e`, and whose report, `_build/e2e`, it keeps when they fail.
+The [end-to-end workflows](#end-to-end-workflows) run on every target the run builds, in two jobs per target, each with half the tests, such as "Build and test / End-to-end test (Windows x64, 1 of 2)".
+The shared workflow runs them with `npm run test:e2e:prepare` and then `npm run test:e2e -- --shard=<part>/2`, on Linux under a virtual display and on Windows and macOS in the runner's own desktop session, and keeps each job's report, `_build/e2e`, when its tests fail.
+A whole run takes about 10 minutes on Linux x64, 23 on Windows x64 and 21 on macOS arm64, so two parts keep each job well within the 20 minutes of `timeout-minutes`.
 
-**Not yet:** the end-to-end workflows on the other targets, and a nightly run that repeats the tests, each come in their own pull request.
+**Not yet:** a nightly run that repeats the tests, [#70](https://github.com/noldova-com/browser/issues/70).
 
 ## Test layers
 
@@ -197,7 +199,7 @@ The fixtures below only give those fakes their answers, as Desktop's main proces
 
 ## The fixture host app
 
-**Not yet:** of the serial tests, `focus.spec.ts`, `keys.spec.ts` and `agent-input-focus.spec.ts` exist; the others, the slow runs and the checks on a real desktop that use the fixture host app are the design they follow, and none of those is built.
+**Not yet:** the [slow runs](#slow-runs), [#71](https://github.com/noldova-com/browser/issues/71), and the [checks on a real desktop](#checks-on-a-real-desktop), [#72](https://github.com/noldova-com/browser/issues/72), which use the fixture host app.
 
 The end-to-end workflows run in a fixture host app in this repository: an app built on Noldova Desktop's published packages, with this module's package in its `desktop.modules`, as Noldova Desktop's MODULES.md says under "Modules from packages".
 - **Its template** is `e2e/app`: its `package.json` pins Noldova Desktop's published packages and names the module's package and two modules of its own, the agent double and the relay double, in its `desktop.modules`.
@@ -254,7 +256,7 @@ The end-to-end workflows run in a fixture host app in this repository: an app bu
 
 ## End-to-end workflows
 
-**Not yet:** of these workflows, `loopback-only.spec.ts`, `schemes.spec.ts`, `relay-refusals.spec.ts`, `denials.spec.ts`, `isolation.spec.ts`, `new-page.spec.ts`, `find-on-page.spec.ts`, `page-keys.spec.ts`, `long-snapshot.spec.ts`, `snapshot-options.spec.ts`, `closed-roots.spec.ts`, `long-page.spec.ts`, `agent-bar.spec.ts`, `hidden-press.spec.ts`, `agent-tools.spec.ts`, `crash.spec.ts`, `link-tabs.spec.ts`, `permissions.spec.ts`, `screenshot-scale.spec.ts`, `focus.spec.ts`, `keys.spec.ts` and `agent-input-focus.spec.ts` exist, `navigation.spec.ts`, `page.spec.ts` with all its row but two parts, and `blocked-origins.spec.ts` with the navigation rows from "Origin not allowed" to "IPv4-mapped link-local", "The base's local endpoint", "The app's tool server" and "History entry no longer allowed", each started from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
+**Not yet:** [#74](https://github.com/noldova-com/browser/issues/74) brings three things. The check that each navigation row of the blocked-origin table has a test. The starts through the bridge's navigate, back and forward, and by going forward in the page. `page.spec.ts`'s page that the base gave no view. `page.spec.ts`'s moves between windows wait on [#107](https://github.com/noldova-com/browser/issues/107), [#73](https://github.com/noldova-com/browser/issues/73). Every other workflow in the table below is built, and `blocked-origins.spec.ts` starts each navigation row from the page itself: a link, a form, the page's script, a meta refresh, a server redirect, a subframe and an allowed subframe's link to the top, or, for the history row, the page's `history.back()` once the view has an entry to go back to.
 It also has the subframe rows "`srcdoc` subframe" and "`data:` or `blob:` subframe", each on a page of its own.
 `page.spec.ts` leaves out the moves between windows, since Noldova Desktop opens one window today and its window "never opens another window" (Noldova Desktop's `WINDOW.md`; [#107](https://github.com/noldova-com/browser/issues/107)), and a page the base gave no view, which needs a fixture-only double that makes `webViews.openAsync` fail, in its own pull request.
 Its moves between groups go through the tab's menu, opened with Shift+F10, since Noldova Desktop gives its window commands no default keys, and it waits until the page has committed a typed field's value before each move, since Noldova Desktop restores a moved view's new page from what the page last committed to its history, about a second after a change.
@@ -271,7 +273,7 @@ A refused endpoint's requests never reach it, so the main process's record prove
 A subframe is refused by the base before its request, as a page's own navigation is, so its test asserts that the view finishes loading with no subframe committed at the address and that the record shows no request for it that wasn't refused; an allowed control frame started beside it must commit and show its load in the record, so those checks can't pass on empty records.
 The subframe rows' frames never leave the page, so the record has no request for them: a `srcdoc` subframe loads, and the page reads its text and its origin, the page's own; a `data:` and a `blob:` subframe are refused, which the test proves by the view committing no subframe at their address while the control frame beside them commits, and, for the `blob:` one, of the page's origin, by the page reading none of its text.
 A `file:` subresource is refused by the engine before it becomes a request, so its test asserts that the page sees it fail and that the main process's record shows no completed request for it; a redirected request has no WebSocket kind, since a WebSocket follows no redirect, and the loading row has no `wss:` kind, since the fixture servers don't answer TLS.
-The bridge's navigate, back and forward come with the agent tools; each other workflow comes in its own pull request.
+The bridge's navigate, back and forward are proved in `navigation.spec.ts`, for an origin off the list and a history entry whose origin left it; the blocked-origin rows' starts through the bridge come in [#74](https://github.com/noldova-com/browser/issues/74).
 The fixture host app's window URL is a `file:` URL, which the engine refuses before a page's navigation to it starts, so `schemes.spec.ts`'s `file:` row covers the navigation row "The app's window URL", and `subresources.spec.ts` its subresource row.
 "WebSocket to an allowed origin" is in `permissions.spec.ts`, since a public origin is allowed only through the permission contract and `browser.localSites` takes only loopback and private origins: an allowed local page's `ws:` socket to a public origin is refused before the person allows that origin for the workspace and reaches its server after; "Local entry on a loopback address" already asserts that a `ws:` socket reaches an allowed local origin.
 `permissions.spec.ts` answers through the agent double, whose answers are planned per action: an agent's navigation to the public origin asks once, naming the origin, and the person's allow loads it for the agent and keeps the origin for the workspace, so back at the start page its socket reaches the origin and its own navigation to it loads; a denial leaves both the agent's and the page's navigation refused, a plain denial asks again on the next navigation and a kept one answers it without asking.
@@ -315,6 +317,7 @@ A public origin, which the bridge asks the person about, is `permissions.spec.ts
 | `keys.spec.ts` | The app's shortcuts reach the window while the page has focus, and every other key reaches the page; an agent's key event that matches an app shortcut is refused as `Refused` with the module code `browser.shortcutRefused`, the person's own press of that shortcut still works, and an agent's inserted text is not checked against shortcuts. |
 | `agent-input-focus.spec.ts` | While the person types in a field of the window, an agent's key events and inserted text reach the page and don't take keyboard focus from that field. |
 | `loopback-only.spec.ts` | The no-request-leaves-loopback guard fails a run. |
+| `frame-read.spec.ts` | A read of a frame whose own server never answers gives way, as unreadable, when the frame is removed during the read, and when a navigation under way in the frame fails or commits during it. |
 
 A request a test makes to the app fails after 65 s without an answer, naming its method: a tool's longest deadline, 60 s, and 5 s for the answer to come back through the test app, so it fits any request the app answers in its own time, and a hang fails well before the test's 2-minute timeout.
 A failed test keeps its trace, `trace.zip` in its results folder, with its steps, fixtures and Playwright calls, which name where it waited; a passed test's trace is deleted.
@@ -411,20 +414,19 @@ Each test asserts that the view refuses with no prompt and no file left behind; 
 
 ## Serial tests
 
-These are end-to-end workflows in [the fixture host app](#the-fixture-host-app), each in its own pull request.
-**Not yet:** of these, `focus.spec.ts`, `keys.spec.ts` and `agent-input-focus.spec.ts` exist; they run in the run's one worker, so one test at a time, though not last; the others are the design they follow.
-
-These tests need the operating system's foreground focus, which a platform can't isolate per process, so they run last and one at a time, as the organization's standard allows:
+These are end-to-end workflows in [the fixture host app](#the-fixture-host-app).
+They need the operating system's foreground focus, which a platform can't isolate per process, so they run one at a time, as the organization's standard allows: each part of the run has one worker, which runs every test in turn, so no other test holds the focus while one of these runs.
+These tests need it:
 - `focus.spec.ts`: focus moving between the page and the window;
 - `keys.spec.ts`: the person's own keys reaching the window or the page;
 - `agent-input-focus.spec.ts`: the person typing in a field of the window while an agent types in the page.
 
-An agent's clicks and keys reach the page through the relay without the operating system's foreground focus, so the tests in `agent-tools.spec.ts` run in parallel.
+An agent's clicks and keys reach the page through the relay without the operating system's foreground focus, so `agent-tools.spec.ts` isn't on the list.
 A test that shows it needs the foreground focus, or the system clipboard, joins this list by name.
 
 ## Slow runs
 
-**Not yet:** these are end-to-end workflows in [the fixture host app](#the-fixture-host-app), each in its own pull request.
+**Not yet:** these are end-to-end workflows in [the fixture host app](#the-fixture-host-app), [#71](https://github.com/noldova-com/browser/issues/71).
 
 A slow run repeats a workflow while busy threads load the machine's CPU, to find timing bugs that only slower runners show.
 These race-prone workflows are each run 30 times without retries, on Windows and on Linux, with the load starting at the first test, before they count as stable and again after a change to the code they race:
@@ -437,7 +439,7 @@ Slow runs are never part of a gate.
 
 ## Checks on a real desktop
 
-**Not yet:** these checks need the end-to-end workflows and a packaged app of [the fixture host app](#the-fixture-host-app), which come in their own pull requests.
+**Not yet:** these checks need a packaged app of [the fixture host app](#the-fixture-host-app), [#72](https://github.com/noldova-com/browser/issues/72).
 
 CI's runners have displays at one device pixel per CSS pixel and no person's desktop session, so these checks run on real machines.
 Each report names the machine's operating system and CPU.

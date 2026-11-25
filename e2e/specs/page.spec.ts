@@ -20,7 +20,7 @@ const PAGE_AREA = ".nol-browser-page-area";
 const STATE_HEADING = ".nol-browser-page-state-heading";
 const STATE_ACTION = ".nol-browser-page-state-action";
 const TAB_MENU = ".cdk-overlay-container nol-menu[data-place='desktop.tab']";
-const SIZES: readonly (readonly [number, number])[] = [[1000, 760], [720, 540]];
+const SIZES: readonly (readonly [number, number])[] = [[960, 640], [720, 540]];
 
 // A page with a field and a counter its own timer moves, so a test sees that the page kept its state and kept running.
 const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:3000px">`
@@ -145,7 +145,7 @@ test.describe("the page's view", () => {
   test("follows its document to a group of its own and back, with its field and scroll kept, while the other page's view follows its own", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/one": PAGE("One"), "/two": PAGE("Two") });
     await app.allowLocalSitesAsync([docs.origin]);
-    await app.resizeAsync(1000, 760);
+    await app.resizeAsync(960, 640);
     await openAsync(app, docs, "/two", "Two");
     const one = await openAsync(app, docs, "/one", "One");
     const full = await expectFollowedAsync(app, [docs.url("/one")], "before the split");

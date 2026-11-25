@@ -189,15 +189,26 @@ export class TestApp {
     return instance;
   }
 
-  // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it.
+  // Gives the window's page the size, as the person's drag of the window's edge does, and waits until the page has it. A size whose window,
+  // with its frame, doesn't fit the screen's work area fails at once, naming that area, as the system keeps the window inside it.
   public async resizeAsync(width: number, height: number): Promise<void> {
     const size = new WindowSize(width, height);
-    await this.run.application.evaluate(({ BrowserWindow }, wanted: WindowSize): void => {
+    const tooSmall = await this.run.application.evaluate(({ BrowserWindow, screen }, wanted: WindowSize): string => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        const [outerWidth = 0, outerHeight = 0] = window.getSize();
+        const [contentWidth = 0, contentHeight = 0] = window.getContentSize();
+        const area = screen.getDisplayMatching(window.getBounds()).workAreaSize;
+        if (wanted.width + outerWidth - contentWidth > area.width || wanted.height + outerHeight - contentHeight > area.height) {
+          return `${String(area.width)} by ${String(area.height)}`;
+        }
+      }
       for (const window of BrowserWindow.getAllWindows()) {
         window.unmaximize();
         window.setContentSize(wanted.width, wanted.height);
       }
+      return "";
     }, size);
+    expect(tooSmall, `The screen's work area has no room for a window whose page is ${String(width)} by ${String(height)}.`).toBe("");
     // Above a device scale of 1, as a forced scale on Windows, the window's frame may round its content a device pixel short, which reads as one
     // CSS pixel less; at 1 the page has the size exactly.
     await expect.poll(() => this.window.evaluate((wanted: WindowSize): boolean => {
