@@ -156,6 +156,32 @@ async function otherAsync(context: ITargetContext): Promise<string> {
   return other.url("/");
 }
 
+// A subframe that never leaves the page, by its scheme, on a page of its own.
+interface IFrameStart {
+  readonly name: string;
+  readonly path: string;
+  readonly body: string;
+}
+
+const INNER_FRAME = "inner";
+const FRAME_TEXT = "Hello";
+
+// The allowed page, open in the view, with its origin the only one allowed.
+async function openAllowedAsync(app: TestApp, servers: FixtureServers): Promise<FixtureServer> {
+  const allowed = await servers.startAsync("allowed.localhost", { "/": page("") });
+  await app.allowLocalSitesAsync([allowed.origin]);
+  await app.openPageAsync(allowed.url("/"));
+  await expectPageAsync(app, allowed.url("/"), ALLOWED_TITLE, "The view never showed the allowed page.");
+  expect(await app.viewPages.takeCommitsAsync(), "The view never committed the allowed page.").toContain(allowed.url("/"));
+  return allowed;
+}
+
+// The inner subframe's origin and text as its parent reads them, or "unreadable" when its document isn't of the parent's
+// origin, as an error page's or a data: document's isn't.
+async function innerFrameAsync(app: TestApp): Promise<string> {
+  return app.viewPages.runAsync(`(() => { const frame = document.getElementById("${INNER_FRAME}"); const inner = frame?.contentDocument ?? null; return inner === null ? "unreadable" : \`\${frame.contentWindow.origin} \${inner.body?.textContent ?? ""}\`; })()`);
+}
+
 const ROWS: readonly IBlockedRow[] = [
   { name: "Origin not allowed", starts: [LINK], targetsAsync: async context => [await otherAsync(context)] },
   { name: "Redirect out of the allowed origins", starts: [REDIRECT], targetsAsync: async context => [await otherAsync(context)] },
@@ -322,5 +348,44 @@ test.describe("blocked origins", () => {
     await expectPageAsync(app, second.url("/"), barrier, "The view didn't stay at the second page, done loading, after going back.");
     expect(await app.viewPages.takeCommitsAsync(), "The view committed the history entry.").toEqual([]);
     expect(first.requests.length, "The first page's server received a request for the history entry.").toBe(firstRequests);
+  });
+
+  test("`srcdoc` subframe", async ({ app, servers }) => {
+    const allowed = await openAllowedAsync(app, servers);
+    const url = await goAsync(app, allowed, "/srcdoc", `<iframe id="${INNER_FRAME}" srcdoc="<p>${FRAME_TEXT}</p>"></iframe>`);
+
+    expect(await innerFrameAsync(app), "The srcdoc subframe didn't load with its parent's origin.").toBe(`${allowed.origin} ${FRAME_TEXT}`);
+    await expect(app.window.locator(PAGE_STATE_HEADING), "The pane showed a refusal for the srcdoc subframe.").toHaveCount(0);
+    await expectPageAsync(app, url, ALLOWED_TITLE, "The view left the page after the srcdoc subframe loaded.");
+    expect(servers.requests.filter(t => t.host !== `${allowed.name}:${allowed.port}`), "A fixture server received a request for the srcdoc subframe.").toEqual([]);
+  });
+
+  test("`data:` or `blob:` subframe", async ({ app, servers }) => {
+    const allowed = await openAllowedAsync(app, servers);
+    const frames: readonly IFrameStart[] = [
+      { name: "data:", path: "/data-frame", body: `<iframe id="${INNER_FRAME}" src="data:text/html,<p>${FRAME_TEXT}</p>"></iframe>` },
+      {
+        name: "blob:",
+        path: "/blob-frame",
+        body: `<iframe id="${INNER_FRAME}"></iframe><script>document.getElementById("${INNER_FRAME}").src = URL.createObjectURL(new Blob(["<p>${FRAME_TEXT}</p>"], { type: "text/html" }));</script>`
+      }
+    ];
+
+    for (const frame of frames) {
+      await app.viewPages.takeFrameCommitsAsync();
+      const url = await goAsync(app, allowed, frame.path, frame.body);
+      const address = await app.viewPages.runAsync(`document.getElementById("${INNER_FRAME}").src`);
+      const barrier = `After the ${frame.name} subframe`;
+      await app.viewPages.runAsync(`document.title = ${JSON.stringify(barrier)};`);
+
+      await expectPageAsync(app, url, barrier, `The view didn't stay at ${url}, done loading, after the ${frame.name} subframe.`);
+      expect(address, `The ${frame.name} subframe has no address of its scheme.`).toMatch(new RegExp(`^${frame.name}`));
+      expect(await app.viewPages.takeCommitsAsync(), `The view committed a navigation for the ${frame.name} subframe.`).toEqual([]);
+      const frameCommits = await app.viewPages.takeFrameCommitsAsync();
+      expect(frameCommits, `The allowed control frame didn't commit beside the ${frame.name} subframe.`).toContain(allowed.url(CONTROL_FRAME));
+      expect(frameCommits, `The ${frame.name} subframe committed.`).not.toContain(address);
+      expect(await innerFrameAsync(app), `The ${frame.name} subframe loaded its document.`).not.toContain(FRAME_TEXT);
+    }
+    expect(servers.requests.filter(t => t.host !== `${allowed.name}:${allowed.port}`), "A fixture server received a request for a subframe.").toEqual([]);
   });
 });
