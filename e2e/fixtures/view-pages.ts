@@ -378,6 +378,11 @@ export class ViewPages {
     return this.application.evaluate(() => globalThis.noldovaViewLog?.splice(0) ?? []);
   }
 
+  // The same lines, left in the log, so a test can wait for one an event writes.
+  public async readLogAsync(): Promise<readonly string[]> {
+    return this.application.evaluate(() => [...globalThis.noldovaViewLog ?? []]);
+  }
+
   public async listAsync(): Promise<readonly ViewPage[]> {
     const records = await this.application.evaluate(({ webContents }): IViewPageRecord[] => {
       const views: IViewPageContents[] = webContents.getAllWebContents().filter((t: IViewPageContents) => t.getType() === "webview");
@@ -656,12 +661,6 @@ export class ViewPages {
         throw new Error(`The view at ${pageUrl} has no renderer process of its own to end: ${pid}.`);
       process.kill(pid, "SIGKILL");
     }, url);
-  }
-
-  // Whether the main process saw the renderer of the views at the URL end; it fires `render-process-gone` in the same step.
-  public async isCrashedAtAsync(url: string): Promise<boolean> {
-    return this.application.evaluate(({ webContents }, pageUrl: string): boolean =>
-      webContents.getAllWebContents().some((t: IViewPageContents) => t.getType() === "webview" && t.getURL() === pageUrl && t.isCrashed()), url);
   }
 
   public async runAsync(script: string): Promise<string> {

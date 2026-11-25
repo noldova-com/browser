@@ -47,14 +47,17 @@ test.describe("a failed test's logs", () => {
     await app.openPageAsync(logged.url("/"));
     await expect.poll(() => app.viewPages.listAsync(), { message: "The view never showed the page." }).toContainEqual(new ViewPage(logged.url("/"), "Logged"));
     await app.viewPages.crashAtAsync(logged.url("/"));
-    await expect.poll(() => app.viewPages.isCrashedAtAsync(logged.url("/")), { message: "The view's renderer never ended." }).toBe(true);
+    // The view can report its renderer crashed before the main process emits `render-process-gone`, which writes the line,
+    // so the test waits for the line itself.
+    const ended = new RegExp(`^${TIME} view \\d+ renderer gone, [a-z-]+$`);
+    await expect.poll(async () => (await app.viewPages.readLogAsync()).some(t => ended.test(t)), { message: "views.log never named the renderer's end." }).toBe(true);
     await app.attachViewLogAsync();
 
     const lines = testInfo.attachments.filter(t => t.name === "views.log").map(t => t.body?.toString("utf8") ?? "").join("").split("\n");
     expect([
       lines.some(t => new RegExp(`^${TIME} view \\d+ commits ${escaped(logged.url("/"))} 200 in process \\d+$`).test(t)),
       lines.some(t => new RegExp(`^${TIME} view \\d+ fails ${escaped(gone.url("/"))} -102 ERR_CONNECTION_REFUSED in a frame$`).test(t)),
-      lines.some(t => new RegExp(`^${TIME} view \\d+ renderer gone, [a-z-]+$`).test(t))
-    ], `views.log lacks the page's commit, the frame's failed load or the renderer's end: ${JSON.stringify(lines)}`).toEqual([true, true, true]);
+      lines.some(t => ended.test(t))
+    ],`views.log lacks the page's commit, the frame's failed load or the renderer's end: ${JSON.stringify(lines)}`).toEqual([true, true, true]);
   });
 });
