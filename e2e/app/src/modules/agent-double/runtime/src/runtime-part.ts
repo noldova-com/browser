@@ -8,6 +8,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import "@noldova/context.core";
 import { type JsonObject, JsonReader, type JsonValue } from "@noldova/context.json";
 import type { IRuntimePart, IRuntimePartContext, IToolEndpoint, IToolsContext, Registration, RequestContext, ToolSession } from "@noldova/desktop.runtime";
 
@@ -89,9 +90,9 @@ export class RuntimePart implements IRuntimePart {
   }
 
   private openSession(tools: IToolsContext, bindings: JsonObject | null): ToolSession {
-    if (bindings !== null && JSON.stringify(bindings) !== this.bindings)
+    if (!Object.isNull(bindings) && JSON.stringify(bindings) !== this.bindings)
       this.endSession();
-    if (this.session === null) {
+    if (Object.isNull(this.session)) {
       this.session = tools.openSession(Resources.sessionScope, bindings ?? {});
       this.bindings = JSON.stringify(bindings ?? {});
     }

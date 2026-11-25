@@ -6,6 +6,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
+
 import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer, FixtureServers } from "../fixtures/fixture-servers.ts";
@@ -262,7 +264,7 @@ const ROWS: readonly IBlockedRow[] = [
 test.describe("blocked origins", () => {
   for (const row of ROWS)
     test(row.name, async ({ app, servers }) => {
-      test.skip(typeof row.skip === "string", row.skip ?? "");
+      test.skip(Object.isString(row.skip), row.skip ?? "");
       const allowed = await servers.startAsync("allowed.localhost", { "/": page("") });
       const context: ITargetContext = { app, servers, allowed };
       const targets = await row.targetsAsync(context);

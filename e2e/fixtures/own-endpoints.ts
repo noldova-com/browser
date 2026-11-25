@@ -9,6 +9,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import "@noldova/context.core";
 import { JsonReader } from "@noldova/context.json";
 
 import type { TestApp } from "./test-app.ts";
@@ -23,7 +24,7 @@ export class OwnEndpoints {
   // main process has blocked its port.
   public static async toolServerAsync(app: TestApp): Promise<URL> {
     const url = await app.requestAsync("agent-double.openToolEndpoint", {});
-    if (typeof url !== "string")
+    if (!Object.isString(url))
       throw new Error(`The agent double's tool endpoint isn't an address: ${JSON.stringify(url)}`);
     return new URL(url);
   }
