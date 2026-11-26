@@ -1,6 +1,6 @@
 {
   "id": "browser",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "displayName": "Browser",
   "description": "Shows web pages as documents in the app's window and lets the app's agents drive them.",
   "parts": ["runtime", "window"],

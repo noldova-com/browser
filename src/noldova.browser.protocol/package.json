@@ -1,6 +1,6 @@
 {
   "name": "@noldova/browser.protocol",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "The browser module's messages that its runtime and window parts exchange, as model classes that read and write their JSON, the tool names, and the rules both read alike: the kind of a URL's host and the sites on this computer or network.",
   "type": "module",
   "license": "MIT",
