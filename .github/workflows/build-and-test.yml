@@ -35,6 +35,6 @@ jobs:
       end-to-end: e2e
       end-to-end-prepare: npm run test:e2e:prepare
       end-to-end-report: _build/e2e
-      end-to-end-shards: 2
+      end-to-end-shards: 4
       unprivileged-user-namespaces: true
-      timeout-minutes: 20
+      timeout-minutes: 30

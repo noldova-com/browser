@@ -90,9 +90,9 @@ Every pull request into `main`, draft or ready, runs every test on Linux x64, Wi
 Pull requests skip the other three, which keeps their runners free.
 The workflow's one job, `build-and-test`, named "Build and test", calls the shared workflow, which runs one job per target, named for its target, such as "Linux x64", which GitHub lists as "Build and test / Linux x64", and its "All targets" fails unless every one of them passed.
 
-The [end-to-end workflows](#end-to-end-workflows) run on every target the run builds, in two jobs per target, each with half the tests, such as "Build and test / End-to-end test (Windows x64, 1 of 2)".
-The shared workflow runs them with `npm run test:e2e:prepare` and then `npm run test:e2e -- --shard=<part>/2`, on Linux under a virtual display and on Windows and macOS in the runner's own desktop session, and keeps each job's report, `_build/e2e`, when its tests fail.
-A whole run takes about 10 minutes on Linux x64, 23 on Windows x64 and 21 on macOS arm64, so two parts keep each job well within the 20 minutes of `timeout-minutes`.
+The [end-to-end workflows](#end-to-end-workflows) run on every target the run builds, in four jobs per target, each with a quarter of the tests, such as "Build and test / End-to-end test (Windows x64, 1 of 4)".
+The shared workflow runs them with `npm run test:e2e:prepare` and then `npm run test:e2e -- --shard=<part>/4`, on Linux under a virtual display and on Windows and macOS in the runner's own desktop session, and keeps each job's report, `_build/e2e`, when its tests fail.
+Every job has the 30 minutes of `timeout-minutes`, and the test stops three minutes before that, so a hung test keeps its report. On Windows arm64, preparing the fixture host app takes about 10 minutes and building about 4, before any test runs, which [desktop#197](https://github.com/noldova-com/desktop/issues/197) shortens; four parts keep that job within the limit, as they keep the others well inside it.
 
 **Not yet:** a nightly run that repeats the tests, [#70](https://github.com/noldova-com/browser/issues/70).
 
