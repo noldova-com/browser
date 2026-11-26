@@ -35,7 +35,7 @@ interface ISessionOwner {
 }
 
 // A size in CSS pixels, sent to the main process and the window's page.
-class WindowSize {
+export class WindowSize {
   public readonly width: number;
   public readonly height: number;
 
@@ -194,7 +194,7 @@ export class TestApp {
   // Linux let a window grow past it.
   public async resizeAsync(width: number, height: number): Promise<void> {
     const size = new WindowSize(width, height);
-    const tooSmall = await this.run.application.evaluate(({ BrowserWindow, screen }, wanted: WindowSize): string => {
+    const tooSmall = await this.run.application.evaluate(({ BrowserWindow, screen }, wanted: WindowSize): string | null => {
       for (const window of process.platform === "darwin" ? BrowserWindow.getAllWindows() : []) {
         const [outerWidth = 0, outerHeight = 0] = window.getSize();
         const [contentWidth = 0, contentHeight = 0] = window.getContentSize();
@@ -207,9 +207,9 @@ export class TestApp {
         window.unmaximize();
         window.setContentSize(wanted.width, wanted.height);
       }
-      return "";
+      return null;
     }, size);
-    if (tooSmall !== "")
+    if (!Object.isNull(tooSmall))
       throw new Error(`The screen's work area, ${tooSmall}, has no room for a window whose page is ${String(width)} by ${String(height)}.`);
     // Above a device scale of 1, as a forced scale on Windows, the window's frame may round its content a device pixel short, which reads as one
     // CSS pixel less; at 1 the page has the size exactly.
