@@ -52,6 +52,7 @@ export class FixtureServer {
   private static logged: number = 0;
   private static readonly HTML: string = "text/html; charset=utf-8";
   private static readonly OK: number = 200;
+  private static readonly FAVICON: string = "/favicon.ico";
 
   public readonly name: string;
   public readonly address: string;
@@ -106,6 +107,11 @@ export class FixtureServer {
 
   public get requests(): readonly FixtureRequest[] {
     return [...this.received];
+  }
+
+  // The paths of the requests it received without the favicon, which a view asks for after a page, at times of its own.
+  public get pagePaths(): readonly string[] {
+    return this.received.map(t => t.path).filter(t => t !== FixtureServer.FAVICON);
   }
 
   // Each request with its time, the client's port and the headers that say what kind of request it is, for a failed test's attachment.

@@ -142,7 +142,7 @@ test.describe("the agent tools on a real page", () => {
 
     expect(texts.join("\n")).toContain(`URL: ${docs.url("/next")}\nTitle: ${NEXT_TITLE}`);
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/next"), NEXT_TITLE)]);
-    expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/", "/next"]);
+    expect(docs.pagePaths).toEqual(["/", "/next"]);
   });
 
   test("navigate answers at once a move back to an entry the page pushed and a move to a fragment, which fire no load", async ({ app, servers }) => {
@@ -159,7 +159,7 @@ test.describe("the agent tools on a real page", () => {
     expect(back.join("\n")).toContain(`URL: ${docs.url("/")}\nTitle: ${START_TITLE}`);
     await expect.poll(() => app.viewPages.listAsync()).toEqual([new ViewPage(docs.url("/#setup"), START_TITLE)]);
     expect([...back, ...fragment].filter(t => t.startsWith("The page is still loading"))).toEqual([]);
-    expect(docs.requests.map(t => t.path).filter(t => t !== "/favicon.ico")).toEqual(["/"]);
+    expect(docs.pagePaths).toEqual(["/"]);
   });
 
   test("a snapshot gives the page's controls with references, and a click and typing by them reach the page", async ({ app, servers }) => {
