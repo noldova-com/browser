@@ -4,6 +4,11 @@
 
 Each version's section is written by the pull request that changes the version, from the pull requests merged since the previous version; other pull requests don't edit this file.
 
+## 0.0.8
+
+- `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.17 <0.1.0`, as `module.json`'s `noldovaDesktop` does, up from `>=0.0.14` (#44, #65).
+- `@noldova/browser.window` depends on Noldova Desktop's protocol and window packages at 0.0.17, up from 0.0.14 (#44, #65), and on the UI kit, `@noldova/ui.components.angular`, at 0.0.33, up from 0.0.28 (#41, #52, #61).
+
 ## 0.0.7
 
 - `@noldova/browser` takes Noldova Desktop's protocol and runtime packages as peers at `>=0.0.14 <0.1.0`, as `module.json`'s `noldovaDesktop` does, and follows each view's navigations from its opening, so a navigation that starts before any tool read the view is still waited on and reported as the page still loading (#259).
