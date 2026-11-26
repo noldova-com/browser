@@ -7,6 +7,7 @@
  */
 
 import { AddressKind, AddressKinds, PageAction, type PageActivity, PageActivityState, TypedAddressRefusal } from "@noldova/browser.protocol";
+import type { IconName } from "@noldova/ui.components.angular";
 
 import { AddressRefusal } from "./app/enums/address-refusal.ts";
 import { PageStateAction } from "./app/enums/page-state-action.ts";
@@ -30,7 +31,7 @@ export class Resources {
   public static readonly agentPagesSeparator: string = ", ";
   public static readonly openPageTitle: string = "Open a page";
   public static readonly newPageTitle: string = "New page";
-  public static readonly newPageGlyph: string = "add";
+  public static readonly newPageGlyph: IconName = "add";
   public static readonly documentArgument: string = "document";
   public static readonly instanceArgument: string = "instance";
   public static readonly linkClickSetting: string = "browser.linkClick";
@@ -58,22 +59,22 @@ export class Resources {
     `A page's view didn't get its workspace's origins within ${Resources.readyPageLimitMilliseconds / 1_000} s, so it goes to its first address anyway.`;
   public static readonly toolbarLabel: string = "Page";
   public static readonly back: string = "Back";
-  public static readonly backGlyph: string = "arrow_back";
+  public static readonly backGlyph: IconName = "arrow_back";
   public static readonly forward: string = "Forward";
-  public static readonly forwardGlyph: string = "arrow_forward";
+  public static readonly forwardGlyph: IconName = "arrow_forward";
   public static readonly reload: string = "Reload";
-  public static readonly reloadGlyph: string = "refresh";
+  public static readonly reloadGlyph: IconName = "refresh";
   public static readonly stop: string = "Stop";
-  public static readonly stopGlyph: string = "close";
+  public static readonly stopGlyph: IconName = "close";
   public static readonly address: string = "Address";
   public static readonly notSecure: string = "Not secure";
   public static readonly insecureScheme: string = "http:";
   public static readonly secureScheme: string = "https:";
   public static readonly more: string = "More";
-  public static readonly moreGlyph: string = "more_horiz";
+  public static readonly moreGlyph: IconName = "more_horiz";
   public static readonly idListSeparator: string = " ";
   public static readonly backwardSelection: "backward" = "backward";
-  public static readonly agentGlyph: string = "smart_toy";
+  public static readonly agentGlyph: IconName = "smart_toy";
   public static readonly agentActing: string = "is using this page";
   public static readonly agentAsking: string = "is waiting for your answer";
   public static readonly unnamedAgent: string = "A teammate";
@@ -84,15 +85,15 @@ export class Resources {
     [PageAction.Navigating]: "navigating", [PageAction.Reading]: "reading", [PageAction.Clicking]: "clicking", [PageAction.Typing]: "typing",
     [PageAction.PressingKey]: "pressing a key", [PageAction.Waiting]: "waiting"
   };
-  public static readonly secureGlyph: string = "lock";
-  public static readonly insecureGlyph: string = "no_encryption";
-  public static readonly copyGlyph: string = "content_copy";
-  public static readonly editGlyph: string = "edit";
+  public static readonly secureGlyph: IconName = "lock";
+  public static readonly insecureGlyph: IconName = "no_encryption";
+  public static readonly copyGlyph: IconName = "content_copy";
+  public static readonly editGlyph: IconName = "edit";
   public static readonly narrowToolbarWidth: number = 16;
   public static readonly minimumFieldWidth: number = 2.5;
   public static readonly securityGap: number = 0.25;
-  public static readonly externalGlyph: string = "open_in_new";
-  public static readonly clearGlyph: string = "delete_sweep";
+  public static readonly externalGlyph: IconName = "open_in_new";
+  public static readonly clearGlyph: IconName = "delete_sweep";
   public static readonly clearBrowsingData: string = "Clear browsing data…";
   public static readonly clearDataTitle: string = "Clear browsing data?";
   public static readonly clearDataDetail: string = "Sites opened in this workspace forget it: their cookies, sign-ins and stored data are removed, and you sign in to them again.";
@@ -105,13 +106,13 @@ export class Resources {
   public static readonly addressNotCopied: string = "The address wasn't copied.";
   public static readonly openExternal: string = "Open in external browser";
   public static readonly zoom: string = "Zoom";
-  public static readonly zoomGlyph: string = "zoom_in";
+  public static readonly zoomGlyph: IconName = "zoom_in";
   public static readonly zoomIn: string = "Zoom in";
-  public static readonly zoomInGlyph: string = "add";
+  public static readonly zoomInGlyph: IconName = "add";
   public static readonly zoomOut: string = "Zoom out";
-  public static readonly zoomOutGlyph: string = "remove";
+  public static readonly zoomOutGlyph: IconName = "remove";
   public static readonly resetZoom: string = "Reset to 100%";
-  public static readonly resetZoomGlyph: string = "fit_screen";
+  public static readonly resetZoomGlyph: IconName = "fit_screen";
   public static readonly zoomKeys: Readonly<Record<ZoomStep, KeyShortcut>> = {
     [ZoomStep.In]: new KeyShortcut("Ctrl+=", "⌘="), [ZoomStep.Out]: new KeyShortcut("Ctrl+-", "⌘-"), [ZoomStep.Reset]: new KeyShortcut("Ctrl+0", "⌘0")
   };
@@ -119,17 +120,17 @@ export class Resources {
   public static readonly greatestZoom: number = 5;
   public static readonly zoomGroup: string = "-zoom";
   public static readonly findOnPage: string = "Find on page";
-  public static readonly findGlyph: string = "find_in_page";
-  public static readonly findFieldGlyph: string = "search";
+  public static readonly findGlyph: IconName = "find_in_page";
+  public static readonly findFieldGlyph: IconName = "search";
   public static readonly findKeys: KeyShortcut = new KeyShortcut("Ctrl+F", "⌘F");
   public static readonly findBarLabel: string = "Find on page";
   public static readonly findField: string = "Find";
   public static readonly previousMatch: string = "Previous match";
-  public static readonly previousMatchGlyph: string = "keyboard_arrow_up";
+  public static readonly previousMatchGlyph: IconName = "keyboard_arrow_up";
   public static readonly nextMatch: string = "Next match";
-  public static readonly nextMatchGlyph: string = "keyboard_arrow_down";
+  public static readonly nextMatchGlyph: IconName = "keyboard_arrow_down";
   public static readonly closeFind: string = "Close find";
-  public static readonly closeFindGlyph: string = "close";
+  public static readonly closeFindGlyph: IconName = "close";
   public static readonly noMatches: string = "No matches";
   public static readonly findTimedOut: string = "The search took too long";
   public static readonly findEnded: string = "The search stopped";
@@ -185,18 +186,18 @@ export class Resources {
     [RefusedRequest.NestedView]: "web_asset_off",
     [RefusedRequest.PopupSites]: "block"
   };
-  public static readonly refusedAddressGlyph: string = "error";
+  public static readonly refusedAddressGlyph: IconName = "error";
   public static readonly popupBlocked: string = "Pop-up blocked";
-  public static readonly popupBlockedGlyph: string = "open_in_new_off";
+  public static readonly popupBlockedGlyph: IconName = "open_in_new_off";
   public static readonly openPopup: string = "Open the pop-up";
-  public static readonly openPopupGlyph: string = "open_in_new";
-  public static readonly allowPopupsGlyph: string = "check_circle";
+  public static readonly openPopupGlyph: IconName = "open_in_new";
+  public static readonly allowPopupsGlyph: IconName = "check_circle";
   public static readonly allowPopupsDescription: string = "Adds the site to Allow pop-ups in Settings, and opens this one";
-  public static readonly openerGlyph: string = "subdirectory_arrow_right";
-  public static readonly pageErrorGlyph: string = "error";
-  public static readonly pageBlockedGlyph: string = "block";
+  public static readonly openerGlyph: IconName = "subdirectory_arrow_right";
+  public static readonly pageErrorGlyph: IconName = "error";
+  public static readonly pageBlockedGlyph: IconName = "block";
   // A page's tab shows its favicon, which Noldova Desktop draws only from a data:image URL, with the web's glyph in its place while it has none.
-  public static readonly pageImageGlyph: string = "public";
+  public static readonly pageImageGlyph: IconName = "public";
   public static readonly pageImagePattern: RegExp = /^data:image\/[a-z0-9.+-]+(;[^,]*)?,/i;
   public static readonly thisBrowser: string = "this browser";
   public static readonly thisBrowserStart: string = "This browser";
