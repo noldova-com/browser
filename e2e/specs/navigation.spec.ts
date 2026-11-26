@@ -42,10 +42,6 @@ async function questionsAsync(app: TestApp): Promise<readonly JsonValue[]> {
   return questions;
 }
 
-function pagesOf(server: FixtureServer): readonly string[] {
-  return server.requests.map(t => t.path).filter(t => t !== "/favicon.ico");
-}
-
 async function expectAtAsync(app: TestApp, server: FixtureServer, message: string): Promise<void> {
   await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(server.url("/"), TITLE)]);
 }
@@ -66,7 +62,7 @@ async function expectRefusedAsync(app: TestApp, result: JsonValue, stays: Fixtur
   expect(await questionsAsync(app), "The refused navigation asked the person.").toEqual([]);
   await expectAtAsync(app, stays, "The view didn't stay at its page after the refused navigation.");
   expect(await app.viewPages.takeCommitsAsync(), "The view committed a navigation after the refusal.").toEqual([]);
-  expect(pagesOf(target), "The refused origin's server received a request.").toEqual(before);
+  expect(target.pagePaths, "The refused origin's server received a request.").toEqual(before);
 }
 
 test.describe("navigation", () => {
@@ -95,14 +91,14 @@ test.describe("navigation", () => {
       new NavigationMove({ url: first.url("/") }, first, false)
     ];
     for (const { input, lands, isRequested } of moves) {
-      const before = pagesOf(lands).length;
+      const before = lands.pagePaths.length;
 
       const result = await navigateAsync(app, page, input);
 
       expect(result, `${JSON.stringify(input)} failed: ${JSON.stringify(result).slice(0, 1_000)}`).toEqual(expect.objectContaining({ isFailure: false }));
       await expectAtAsync(app, lands, `The view didn't show its page after ${JSON.stringify(input)}.`);
       if (isRequested)
-        expect(pagesOf(lands).length, "The reload didn't reach the page's server.").toBe(before + 1);
+        expect(lands.pagePaths.length, "The reload didn't reach the page's server.").toBe(before + 1);
     }
   });
 
@@ -123,7 +119,7 @@ test.describe("navigation", () => {
     const first = await servers.startAsync("first.localhost", { "/": PAGE });
     const second = await servers.startAsync("second.localhost", { "/": PAGE });
     const page = await openBothAsync(app, first, second);
-    const before = pagesOf(first);
+    const before = first.pagePaths;
     await app.allowLocalSitesAsync([second.origin]);
     await app.viewPages.takeCommitsAsync();
 
@@ -138,7 +134,7 @@ test.describe("navigation", () => {
     const page = await openBothAsync(app, first, second);
     await app.viewPages.runAsync("history.back();");
     await expectAtAsync(app, first, "The view never went back to the first page.");
-    const before = pagesOf(second);
+    const before = second.pagePaths;
     await app.allowLocalSitesAsync([first.origin]);
     await app.viewPages.takeCommitsAsync();
 
@@ -153,7 +149,7 @@ test.describe("navigation", () => {
     await app.allowLocalSitesAsync([allowed.origin]);
     const page = await app.openPageAsync(allowed.url("/"));
     await expectAtAsync(app, allowed, "The view never showed the page.");
-    const before = pagesOf(allowed);
+    const before = allowed.pagePaths;
     await app.allowLocalSitesAsync([other.origin]);
     await app.viewPages.takeCommitsAsync();
 
