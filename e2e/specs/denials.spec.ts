@@ -41,7 +41,6 @@ const PRIVATE_TITLE = "Private";
 const DENIED = "denied";
 const NOT_ALLOWED = "rejected NotAllowedError";
 const NOT_FOUND = "rejected NotFoundError";
-const FAVICON = "/favicon.ico";
 const NOTICE_MESSAGE =".nol-browser-request-notice-message";
 const PAGE_STATE_HEADING = ".nol-browser-page-state-heading";
 const SECURITY_MODEL = new URL("../../documents/SECURITY-MODEL.md", import.meta.url);
@@ -138,10 +137,6 @@ async function expectNothingOpenedAsync(app: TestApp, before: Before, title: str
     .toEqual([]);
 }
 
-function pathsOf(server: FixtureServer): readonly string[] {
-  return server.requests.map(t => t.path).filter(t => t !== FAVICON);
-}
-
 test.describe("denied by default", () => {
   test("has one test for each item of the security model's list", () => {
     expect([...REFUSED_ASKS.map(t => t.title), ...OWN_TESTS].sort()).toEqual(documentedItems());
@@ -178,12 +173,12 @@ test.describe("denied by default", () => {
     const before = await beforeAsync(app);
 
     await app.viewPages.runAsync(`location.href = "/attachment"; "started"`);
-    await expect.poll(() => pathsOf(allowed), { message: "The view never asked for the attachment." }).toContain("/attachment");
+    await expect.poll(() => allowed.pagePaths, { message: "The view never asked for the attachment." }).toContain("/attachment");
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the attachment.").toHaveText(DOWNLOAD_NOTICE);
     await openAgainAsync(app, allowed);
 
     expect(await app.viewPages.runAsync(`window.clickAsync({ href: "/linked", download: ${JSON.stringify(name)} })`)).toBe("clicked");
-    await expect.poll(() => pathsOf(allowed), { message: "The view never asked for the linked download." }).toContain("/linked");
+    await expect.poll(() => allowed.pagePaths, { message: "The view never asked for the linked download." }).toContain("/linked");
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the linked download.").toHaveText(DOWNLOAD_NOTICE);
 
     await expectNothingOpenedAsync(app, before, "the downloads");
@@ -206,7 +201,7 @@ test.describe("denied by default", () => {
     await expect(app.window.locator(POPUP_SIGN), "The address bar never offered the targeted link's address.").toHaveAccessibleName("Pop-up blocked");
     expect(await app.viewPages.listAsync(), "The targeted link opened a page.").toEqual([new ViewPage(allowed.url("/again"), AGAIN_TITLE)]);
 
-    expect(pathsOf(allowed), "A refused window asked for its address.").toEqual(["/", "/again"]);
+    expect(allowed.pagePaths, "A refused window asked for its address.").toEqual(["/", "/again"]);
     await expectNothingOpenedAsync(app, before, "the new windows");
   });
 
@@ -230,7 +225,7 @@ test.describe("denied by default", () => {
 
     await expect.poll(() => app.viewPages.listAsync(), { message: "The view never showed the refused sign-in's page." }).toEqual([new ViewPage(allowed.url("/private"), PRIVATE_TITLE)]);
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the sign-in.").toHaveText(AUTHENTICATION_NOTICE);
-    expect(pathsOf(allowed).filter(t => t === "/private"), "The view asked for the private page again, as if it had credentials.").toEqual(["/private"]);
+    expect(allowed.pagePaths.filter(t => t === "/private"), "The view asked for the private page again, as if it had credentials.").toEqual(["/private"]);
     await expectNothingOpenedAsync(app, before, "the sign-in");
   });
 
@@ -245,7 +240,7 @@ test.describe("denied by default", () => {
     await expect(app.window.locator(PAGE_STATE_HEADING), "The pane never showed the untrusted certificate's load as failed.").toHaveText(`Can't reach secure.localhost:${secure.port}`);
     await expect(app.window.locator(NOTICE_MESSAGE), "The pane never said it refused the certificate.").toHaveText(CERTIFICATE_NOTICE);
     expect((await app.viewPages.takeCommitsAsync()).filter(t => t.startsWith(secure.origin)), "The view committed the page with the untrusted certificate.").toEqual([]);
-    expect(pathsOf(secure), "The page with the untrusted certificate was asked for.").toEqual([]);
+    expect(secure.pagePaths, "The page with the untrusted certificate was asked for.").toEqual([]);
     await expectNothingOpenedAsync(app, before, "the certificate error");
   });
 
@@ -262,7 +257,7 @@ test.describe("denied by default", () => {
     })()`);
 
     expect(element, "The page's <webview> element is a working view.").toBe("undefined undefined undefined");
-    expect(pathsOf(allowed), "The page's <webview> element asked for its page.").toEqual(["/"]);
+    expect(allowed.pagePaths, "The page's <webview> element asked for its page.").toEqual(["/"]);
     await expectNothingOpenedAsync(app, before, "the <webview> element");
   });
 });
