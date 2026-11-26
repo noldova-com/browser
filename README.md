@@ -98,8 +98,9 @@ These component spec files are accepted over a 100 millisecond median test:
 
 ### Flake proof
 
-The "Flake proof" workflow, `.github/workflows/flake-proof.yml`, calls the organization's shared flake proof, v2.34.0, which the `.github` repository's README describes under "Proving flakes"; it runs `npm test`, or another npm script it is given, many times over on the same runners, to prove a flaky test fixed or to hunt one.
+The "Flake proof" workflow, `.github/workflows/flake-proof.yml`, calls the organization's shared flake proof, v2.51.0, which the `.github` repository's README describes under "Proving flakes"; it runs `npm test`, or another npm script it is given, many times over on the same runners, to prove a flaky test fixed or to hunt one.
 A member starts it by hand, with the ref, the filter, the script, the npm scripts each job runs once after the build and before the runs, whether each run on Linux runs under a virtual display and a session bus, the number of runs and parallel jobs, and the targets, such as `linux-x64 windows-x64`.
+With `reports`, such as `_build/e2e` for `test:e2e`, each run's report and results go into the job's artifact, kept 3 days, so a failed end-to-end run keeps its Playwright trace; a passed run keeps none, as Playwright drops its trace.
 A flaky test's fix is proven by 10 runs of its test file alone, through the filter, which each run passes to `npm test` as test files from the repository root with forward slashes:
 
 ```bash

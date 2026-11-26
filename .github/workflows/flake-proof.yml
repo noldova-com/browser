@@ -47,6 +47,10 @@ on:
         description: The targets to run on, separated by spaces, from linux-x64, linux-arm64, windows-x64, windows-arm64, macos-x64 and macos-arm64
         type: string
         default: *default-targets
+      reports:
+        description: The folders the script writes its report and results to, separated by spaces, such as _build/e2e for test:e2e; each run's go to the artifact, kept 3 days
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -99,3 +103,5 @@ jobs:
       runs: ${{ inputs.runs }}
       jobs: ${{ inputs.jobs }}
       targets: ${{ inputs.targets }}
+      reports: ${{ inputs.reports }}
+      retention-days: ${{ inputs.reports != '' && '3' || '' }}
