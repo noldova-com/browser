@@ -98,8 +98,9 @@ These component spec files are accepted over a 100 millisecond median test:
 
 ### Flake proof
 
-The "Flake proof" workflow, `.github/workflows/flake-proof.yml`, calls the organization's shared flake proof, v2.34.0, which the `.github` repository's README describes under "Proving flakes"; it runs `npm test`, or another npm script it is given, many times over on the same runners, to prove a flaky test fixed or to hunt one.
+The "Flake proof" workflow, `.github/workflows/flake-proof.yml`, calls the organization's shared flake proof, v2.52.0, which the `.github` repository's README describes under "Proving flakes"; it runs `npm test`, or another npm script it is given, many times over on the same runners, to prove a flaky test fixed or to hunt one.
 A member starts it by hand, with the ref, the filter, the script, the npm scripts each job runs once after the build and before the runs, whether each run on Linux runs under a virtual display and a session bus, the number of runs and parallel jobs, and the targets, such as `linux-x64 windows-x64`.
+With `reports`, such as `_build/e2e` for `test:e2e`, each run's report and results go into the job's artifact, kept 3 days, so a failed end-to-end run keeps its Playwright trace; a passed run keeps none, as Playwright drops its trace.
 A flaky test's fix is proven by 10 runs of its test file alone, through the filter, which each run passes to `npm test` as test files from the repository root with forward slashes:
 
 ```bash
@@ -119,8 +120,8 @@ It publishes through npm's trusted publishing, with provenance, so no token is s
 - **It starts by hand only,** with two inputs: the version, `major.minor.patch` with no prerelease suffix, and the full hash of the commit on `main` to release.
 - **The version is the root `version.json`'s** at that commit, which the build stamps on every package.
   The build refuses to run when the root `package.json` holds another version, so a version pull request changes both.
-- **It calls the organization's shared npm release workflow,** `release-npm.yml` in `noldova-com/.github`, pinned to v2.34.0's commit, whose README says what each job does and with which permissions, in the `release` environment, which holds the publish approval.
-- **After the release, its dependents job** calls the organization's shared `update-dependents.yml`, v2.34.0, with the version and the commit, which proposes the version to the repositories that pin the module, as the shared workflow's README says.
+- **It calls the organization's shared npm release workflow,** `release-npm.yml` in `noldova-com/.github`, pinned to v2.52.0's commit, whose README says what each job does and with which permissions, in the `release` environment, which holds the publish approval.
+- **After the release, its dependents job** calls the organization's shared `update-dependents.yml`, v2.52.0, with the version and the commit, which proposes the version to the repositories that pin the module, as the shared workflow's README says.
 
 The shared workflow checks that the commit is on `main` and that its `version.json` holds the version, and tags the commit `v<version>` first, so a workflow change merged while the release waits for its approval can't leave the version untagged.
 Then it runs `npm ci` and `npm run build` on a clean checkout of it, and checks the archives in `_packages` before the approval.
