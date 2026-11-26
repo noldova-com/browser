@@ -51,6 +51,13 @@ It builds and tests the module, with `npm run peers:newest && npm run build` and
 A failing nightly run opens or updates an issue, so the job holds only `contents: read` and `issues: write`.
 The build's install of the packed packages names the version `node_modules` holds of each `@noldova/` package the root `package.json` pins, since an install otherwise takes the lockfile's version back, so the versions that run moved are kept.
 
+### Tests that need the foreground focus
+
+These end-to-end tests need the operating system's foreground focus, so they run last, one at a time, as [documents/TESTING.md](documents/TESTING.md#serial-tests) says:
+- `e2e/specs/focus.spec.ts`
+- `e2e/specs/keys.spec.ts`
+- `e2e/specs/agent-input-focus.spec.ts`
+
 ### Coverage
 
 `npm test` fails below 100% of the statements, lines, branches and functions of the production code under `src`, without these exclusions, each granted here with its reason:

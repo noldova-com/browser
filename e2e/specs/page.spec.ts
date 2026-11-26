@@ -11,7 +11,7 @@ import type { Locator, Page } from "playwright/test";
 import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { FixtureServer } from "../fixtures/fixture-servers.ts";
-import type { TestApp } from "../fixtures/test-app.ts";
+import { type TestApp, WindowSize } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 import { ViewRequest } from "../fixtures/view-requests.ts";
 
@@ -20,7 +20,7 @@ const PAGE_AREA = ".nol-browser-page-area";
 const STATE_HEADING = ".nol-browser-page-state-heading";
 const STATE_ACTION = ".nol-browser-page-state-action";
 const TAB_MENU = ".cdk-overlay-container nol-menu[data-place='desktop.tab']";
-const SIZES: readonly (readonly [number, number])[] = [[1000, 760], [720, 540]];
+const SIZES: readonly WindowSize[] = [new WindowSize(960, 640), new WindowSize(720, 540)];
 
 // A page with a field and a counter its own timer moves, so a test sees that the page kept its state and kept running.
 const PAGE = (title: string): string => `<!doctype html><title>${title}</title><body style="margin:0;height:3000px">`
@@ -48,9 +48,11 @@ async function shownViewsAsync(window: Page): Promise<readonly IShownView[]> {
       const box = element.getBoundingClientRect();
       return [box.x, box.y, box.width, box.height].map(t => Math.round(t));
     };
-    const shown = [...document.querySelectorAll(selector)].map(host => [host, host.querySelector("webview")] as const)
-      .filter((t): t is readonly [Element, HTMLElement] => t[1] !== null && t[1].checkVisibility({ visibilityProperty: true }));
-    return shown.map(([host, guest]) => {
+    const shown: IShownView[] = [];
+    for (const host of document.querySelectorAll(selector)) {
+      const guest = host.querySelector("webview");
+      if (guest === null || !guest.checkVisibility({ visibilityProperty: true }))
+        continue;
       // A view that moved has no address until its new page attaches, and its getURL throws until then.
       let url = "";
       try {
@@ -59,8 +61,9 @@ async function shownViewsAsync(window: Page): Promise<readonly IShownView[]> {
       catch {
         url = "";
       }
-      return { url, host: boxOf(host), guest: boxOf(guest) };
-    }).sort((a, b) => (a.host[0] ?? 0) - (b.host[0] ?? 0));
+      shown.push({ url, host: boxOf(host), guest: boxOf(guest) });
+    }
+    return shown.sort((a, b) => (a.host[0] ?? 0) - (b.host[0] ?? 0));
   }, VIEW);
 }
 
@@ -104,12 +107,23 @@ async function chooseRowAsync(window: Page, label: string, key: string = "Enter"
   throw new Error(`The menu has no row ${label}.`);
 }
 
-async function runTabMenuAsync(app: TestApp, instance: string, rows: readonly (readonly [string, string])[]): Promise<void> {
+// A row of the tab's menu, by the start of its label, and the key that chooses it: Enter runs it, and ArrowRight opens its submenu.
+class MenuRow {
+  public readonly label: string;
+  public readonly key: string;
+
+  public constructor(label: string, key: string) {
+    this.label = label;
+    this.key = key;
+  }
+}
+
+async function runTabMenuAsync(app: TestApp, instance: string, rows: readonly MenuRow[]): Promise<void> {
   await tabOf(app, instance).focus();
   await app.window.keyboard.press("Shift+F10");
   await expect(app.window.locator(TAB_MENU)).toBeVisible();
-  for (const [label, key] of rows)
-    await chooseRowAsync(app.window, label, key);
+  for (const row of rows)
+    await chooseRowAsync(app.window, row.label, row.key);
 }
 
 // Whether the element at the box's centre in the window belongs to the element the box is of, and that centre lies on a shown view.
@@ -136,16 +150,16 @@ test.describe("the page's view", () => {
     await app.allowLocalSitesAsync([docs.origin]);
     await openAsync(app, docs, "/", "One");
 
-    for (const [width, height] of SIZES) {
-      await app.resizeAsync(width, height);
-      await expectFollowedAsync(app, [docs.url("/")], `at ${String(width)} by ${String(height)}`);
+    for (const size of SIZES) {
+      await app.resizeAsync(size.width, size.height);
+      await expectFollowedAsync(app, [docs.url("/")], `at ${String(size.width)} by ${String(size.height)}`);
     }
   });
 
   test("follows its document to a group of its own and back, with its field and scroll kept, while the other page's view follows its own", async ({ app, servers }) => {
     const docs = await servers.startAsync("docs.localhost", { "/one": PAGE("One"), "/two": PAGE("Two") });
     await app.allowLocalSitesAsync([docs.origin]);
-    await app.resizeAsync(1000, 760);
+    await app.resizeAsync(960, 640);
     await openAsync(app, docs, "/two", "Two");
     const one = await openAsync(app, docs, "/one", "One");
     const full = await expectFollowedAsync(app, [docs.url("/one")], "before the split");
@@ -157,7 +171,7 @@ test.describe("the page's view", () => {
     // A moved view gets a new page, which Noldova Desktop restores from what the page last committed to its history.
     await expect.poll(() => app.viewPages.holdsPageStateAsync(docs.url("/one"), "kept"), { message: "The page never committed the typed text." }).toBe(true);
 
-    await runTabMenuAsync(app, one, [["Split", "ArrowRight"], ["Split right", "Enter"]]);
+    await runTabMenuAsync(app, one, [new MenuRow("Split", "ArrowRight"), new MenuRow("Split right", "Enter")]);
 
     const [left, right] = await expectFollowedAsync(app, [docs.url("/two"), docs.url("/one")], "after the split");
     expect([(right?.host[0] ?? 0) > (left?.host[0] ?? 0) + (left?.host[2] ?? 0) - 1, (right?.host[2] ?? 0) < (full[0]?.host[2] ?? 0)], "The split page isn't in a group to the right.")
@@ -167,7 +181,7 @@ test.describe("the page's view", () => {
     // The restored page's history holds no field value until the page commits again, about a second after the restore.
     await expect.poll(() => app.viewPages.holdsPageStateAsync(docs.url("/one"), "kept"), { message: "The restored page never committed the field's value." }).toBe(true);
 
-    await runTabMenuAsync(app, one, [["Move to previous group", "Enter"]]);
+    await runTabMenuAsync(app, one, [new MenuRow("Move to previous group", "Enter")]);
 
     const [back] = await expectFollowedAsync(app, [docs.url("/one")], "after the move back");
     expect(back?.host, "The page's view isn't where it was before the split.").toEqual(full[0]?.host);
