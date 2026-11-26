@@ -8,6 +8,7 @@
 
 import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
+import type { FixtureServer } from "../fixtures/fixture-servers.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
 import { ViewPage } from "../fixtures/view-pages.ts";
 
@@ -45,6 +46,10 @@ const STARTS: readonly INavigationStart[] = [
   { name: "the page's script", script: address => `location.href = ${address};` }
 ];
 
+function pagesOf(server: FixtureServer): readonly string[] {
+  return server.requests.map(t => t.path).filter(t => t !== "/favicon.ico");
+}
+
 async function expectPageAsync(app: TestApp, url: string, title: string, message: string): Promise<void> {
   await expect.poll(() => app.viewPages.listAsync(), { message }).toEqual([new ViewPage(url, title)]);
 }
@@ -81,17 +86,17 @@ test.describe("schemes", () => {
     const field = app.window.locator(ADDRESS_FIELD);
 
     for (const start of STARTS) {
-      const requests = allowed.requests.length;
+      const requests = pagesOf(allowed).length;
 
       await app.viewPages.runAsync(start.script(JSON.stringify(SRCDOC)));
 
       await expect(app.window.locator(PAGE_STATE_HEADING), `The pane never showed ${SRCDOC} from ${start.name} as refused.`).toHaveText(AppBrowser.saying(`doesn't open ${SRCDOC}`));
       await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
         .toEqual([[SRCDOC, false]]);
-      expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
+      expect(pagesOf(allowed).length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
       await app.window.getByRole("button", { name: "Reload", exact: true }).click();
       await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't name ${SRCDOC} after Reload, from ${start.name}.`).toHaveText(AppBrowser.saying(`doesn't open ${SRCDOC}`));
-      expect(allowed.requests.length, `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toBe(requests);
+      expect(pagesOf(allowed).length, `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toBe(requests);
 
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
