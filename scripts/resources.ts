@@ -702,7 +702,7 @@ export class Resources {
   }
 
   public static formatPeerMoved(dependency: string, version: string): string {
-    return `Moved ${dependency} to ${version}, the newest published version inside the packages' peer ranges.`;
+    return `Moved ${dependency} to ${version}, the newest version every context package has published inside the packages' peer ranges.`;
   }
 
   public static formatPeerMoveFailed(exitCode: number | null, output: string): string {
@@ -711,6 +711,10 @@ export class Resources {
 
   public static formatPeerNotMoved(dependency: string, installed: string, version: string): string {
     return `The root's node_modules holds ${dependency} ${installed} after the move, not ${version}.`;
+  }
+
+  public static formatPeerNoCommonVersion(dependencies: readonly string[]): string {
+    return `No version is published by all of ${dependencies.join(", ")} inside every package's peer range.`;
   }
 
   public static formatPeerNoVersion(dependency: string, ranges: readonly string[]): string {
