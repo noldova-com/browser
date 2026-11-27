@@ -6,6 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import "@noldova/context.core";
 import { AppBrowser } from "../fixtures/app-browser.ts";
 import { expect, test } from "../fixtures/app-test.ts";
 import type { TestApp } from "../fixtures/test-app.ts";
@@ -98,7 +99,7 @@ test.describe("schemes", () => {
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
       await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, `The allowed page didn't load again after ${SRCDOC} from ${start.name}.`);
-      const started = (await app.viewPages.readLogAsync()).slice(logged).map(t => / starts (\S+)$/.exec(t)?.[1]).filter(t => t !== undefined);
+      const started = (await app.viewPages.readLogAsync()).slice(logged).map(t => / starts (\S+)$/.exec(t)?.[1]).filter(t => !Object.isUndefined(t));
       expect(started, `${SRCDOC}'s reload from ${start.name} started a navigation.`).toEqual([allowed.url("/again")]);
       expect(allowed.pagePaths.slice(requests), `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toEqual(["/again"]);
       await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept the refusal after the allowed page loaded again, after ${SRCDOC} from ${start.name}.`).toHaveCount(0);
