@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -21,14 +21,9 @@ import { PackageLayout } from "../services/package-layout.ts";
 import { PeerMove } from "../services/peer-move.ts";
 import { ProcessRunner } from "../services/process-runner.ts";
 
-const PART = "src/noldova.browser.runtime";
+import { JsonFile } from "./json-file.fixture.ts";
 
-class JsonFile {
-  public static async writeAsync(file: string, json: object): Promise<void> {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(json));
-  }
-}
+const PART = "src/noldova.browser.runtime";
 
 class RegistryNpm extends NpmCommand {
   public readonly installs: (readonly string[])[] = [];

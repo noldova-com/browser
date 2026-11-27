@@ -18,19 +18,14 @@ import { NpmCommand } from "../services/npm-command.ts";
 import { PackageInstall } from "../services/package-install.ts";
 import { ProcessRunner } from "../services/process-runner.ts";
 
+import { JsonFile } from "./json-file.fixture.ts";
+
 class RecordingRunner extends ProcessRunner {
   public readonly calls: (readonly string[])[] = [];
 
   public override captureAsync(_command: string, commandArguments: readonly string[]): Promise<ProcessResult> {
     this.calls.push(commandArguments.slice(1));
     return Promise.resolve(new ProcessResult(0, "", ""));
-  }
-}
-
-class JsonFile {
-  public static async writeAsync(file: string, json: object): Promise<void> {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(json));
   }
 }
 
