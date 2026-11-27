@@ -18,6 +18,8 @@ import { NpmCommand } from "../services/npm-command.ts";
 import { PackageInstall } from "../services/package-install.ts";
 import { ProcessRunner } from "../services/process-runner.ts";
 
+import { JsonFile } from "./json-file.fixture.ts";
+
 class RecordingRunner extends ProcessRunner {
   public readonly calls: (readonly string[])[] = [];
 
@@ -27,32 +29,35 @@ class RecordingRunner extends ProcessRunner {
   }
 }
 
-describe("PackageInstall", () => {
-  const roots: string[] = [];
+class PackageInstallFixture {
+  private readonly roots: string[] = [];
 
-  async function writeJsonAsync(file: string, json: object): Promise<void> {
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(json));
-  }
-
-  async function makeRootAsync(packages: object): Promise<string> {
+  public async makeRootAsync(packages: object): Promise<string> {
     const root = await mkdtemp(path.join(tmpdir(), "package-install-"));
-    roots.push(root);
-    await writeJsonAsync(path.join(root, "package.json"), { devDependencies: { "@noldova/context.core": "0.0.10", "left-pad": "1.3.0" } });
-    await writeJsonAsync(path.join(root, "node_modules", "@noldova", "context.core", "package.json"), { version: "0.0.10" });
-    await writeJsonAsync(path.join(root, "package-lock.json"), { lockfileVersion: 3, packages });
+    this.roots.push(root);
+    await JsonFile.writeAsync(path.join(root, "package.json"), { devDependencies: { "@noldova/context.core": "0.0.10", "left-pad": "1.3.0" } });
+    await JsonFile.writeAsync(path.join(root, "node_modules", "@noldova", "context.core", "package.json"), { version: "0.0.10" });
+    await JsonFile.writeAsync(path.join(root, "package-lock.json"), { lockfileVersion: 3, packages });
     await mkdir(path.join(root, "_packages"));
     await writeFile(path.join(root, "_packages", "noldova-browser.protocol-0.0.4.tgz"), "");
     await writeFile(path.join(root, "_packages", "notes.txt"), "");
     return root;
   }
 
+  public async cleanAsync(): Promise<void> {
+    await Promise.all(this.roots.splice(0).map(t => rm(t, { recursive: true, force: true })));
+  }
+}
+
+describe("PackageInstall", () => {
+  const fixture = new PackageInstallFixture();
+
   afterEach(async () => {
-    await Promise.all(roots.splice(0).map(t => rm(t, { recursive: true, force: true })));
+    await fixture.cleanAsync();
   });
 
   it("installs the packed archives with the root's pins and each package the lockfile holds only as a peer at the version node_modules holds, a moved one too, leaving out one it doesn't hold", async () => {
-    const root = await makeRootAsync({
+    const root = await fixture.makeRootAsync({
       "": { name: "browser" },
       "node_modules/@noldova/context.core": { version: "0.0.10", dev: true },
       "node_modules/@noldova/context.collections": { version: "0.0.10", dev: true, peer: true },
@@ -61,8 +66,8 @@ describe("PackageInstall", () => {
       "node_modules/unversioned": { peer: true },
       "node_modules/left-pad": { version: "1.3.0" }
     });
-    await writeJsonAsync(path.join(root, "node_modules", "@noldova", "context.collections", "package.json"), { version: "0.0.11" });
-    await writeJsonAsync(path.join(root, "node_modules", "unversioned", "package.json"), { name: "unversioned" });
+    await JsonFile.writeAsync(path.join(root, "node_modules", "@noldova", "context.collections", "package.json"), { version: "0.0.11" });
+    await JsonFile.writeAsync(path.join(root, "node_modules", "unversioned", "package.json"), { name: "unversioned" });
     const runner = new RecordingRunner();
 
     await new PackageInstall(root, new NpmCommand(runner, { [Resources.npmPathVariable]: "npm-cli.js" })).installPackedAsync();
@@ -72,8 +77,8 @@ describe("PackageInstall", () => {
   });
 
   it("finds no peer in a lockfile without packages", async () => {
-    const root = await makeRootAsync({});
-    await writeJsonAsync(path.join(root, "package-lock.json"), { lockfileVersion: 3 });
+    const root = await fixture.makeRootAsync({});
+    await JsonFile.writeAsync(path.join(root, "package-lock.json"), { lockfileVersion: 3 });
 
     expect(await new PackageInstall(root, new NpmCommand(new RecordingRunner(), {})).readHeldPeersAsync()).toEqual([]);
   });
