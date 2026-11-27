@@ -89,13 +89,18 @@ test.describe("schemes", () => {
       await expect.poll(async () => (await app.viewPages.listAsync()).map(t => [t.url, t.isLoading]), { message: `The view didn't end ${SRCDOC} from ${start.name}.` })
         .toEqual([[SRCDOC, false]]);
       expect(allowed.pagePaths.length, `The allowed server received a request for ${SRCDOC} from ${start.name}.`).toBe(requests);
+      const logged = (await app.viewPages.readLogAsync()).length;
       await app.window.getByRole("button", { name: "Reload", exact: true }).click();
       await expect(app.window.locator(PAGE_STATE_HEADING), `The pane didn't name ${SRCDOC} after Reload, from ${start.name}.`).toHaveText(AppBrowser.saying(`doesn't open ${SRCDOC}`));
-      expect(allowed.pagePaths.length, `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toBe(requests);
 
+      // A refused reload changes nothing a test can wait for, so the next navigation is the barrier: the pane's calls reach the view in
+      // order, so a navigation the reload started, however late its request, starts before this one and stays in the view's log.
       await field.fill(allowed.url("/again"));
       await field.press("Enter");
       await expectPageAsync(app, allowed.url("/again"), ALLOWED_TITLE, `The allowed page didn't load again after ${SRCDOC} from ${start.name}.`);
+      const started = (await app.viewPages.readLogAsync()).slice(logged).map(t => / starts (\S+)$/.exec(t)?.[1]).filter(t => t !== undefined);
+      expect(started, `${SRCDOC}'s reload from ${start.name} started a navigation.`).toEqual([allowed.url("/again")]);
+      expect(allowed.pagePaths.slice(requests), `The allowed server received a request for ${SRCDOC}'s reload from ${start.name}.`).toEqual(["/again"]);
       await expect(app.window.locator(PAGE_STATE_HEADING), `The pane kept the refusal after the allowed page loaded again, after ${SRCDOC} from ${start.name}.`).toHaveCount(0);
     }
   });
